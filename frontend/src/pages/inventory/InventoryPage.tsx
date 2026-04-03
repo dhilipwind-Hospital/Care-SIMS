@@ -3,7 +3,6 @@ import { Package, AlertTriangle, BarChart3, Layers, ArrowDownUp, ArrowDown, Arro
 import toast from 'react-hot-toast';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
-import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import api from '../../lib/api';
 import Pagination from '../../components/ui/Pagination';

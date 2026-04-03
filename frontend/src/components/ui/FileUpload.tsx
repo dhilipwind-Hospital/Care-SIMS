@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Upload, X, FileText, Loader2 } from 'lucide-react';
+import { Upload, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../lib/api';
 

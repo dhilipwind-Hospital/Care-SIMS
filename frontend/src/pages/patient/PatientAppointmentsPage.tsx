@@ -104,7 +104,7 @@ export default function PatientAppointmentsPage() {
             <p className="text-teal-700 font-semibold mt-1">{selectedDateStr} at {selectedSlot}</p>
           )}
         </div>
-        <button onClick={() => { setBooked(false); setStep(1); setSelectedDoc(null); setSelectedDay(null); setSelectedSlot(null); setChiefComplaint(''); }}
+        <button onClick={() => { setBooked(false); setSelectedDoc(null); setSelectedDay(null); setSelectedSlot(null); setChiefComplaint(''); }}
           className="px-8 py-3 rounded-full text-white font-bold text-sm"
           style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
           Book Another Appointment

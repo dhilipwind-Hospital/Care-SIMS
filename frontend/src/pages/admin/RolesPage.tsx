@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Shield, Plus, Edit2, Trash2, Users, CheckSquare, Square, ChevronDown, ChevronUp, Lock, X } from 'lucide-react';
+import { Shield, Plus, Edit2, Trash2, Users, CheckSquare, Square, ChevronDown, ChevronUp, Lock } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import EmptyState from '../../components/ui/EmptyState';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';

@@ -21,7 +21,7 @@ const EMPTY_MONITORING = {
 
 export default function IcuPage() {
   const [beds, setBeds] = useState<any[]>([]);
-  const [dashboard, setDashboard] = useState<any>({});
+  const [, setDashboard] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ bedNumber: '', bedType: 'GENERAL_ICU', equipmentList: '' });

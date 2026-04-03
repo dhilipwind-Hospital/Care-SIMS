@@ -14,7 +14,7 @@ export default function MfaSetupPage() {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const isMfaEnabled = user?.mfaEnabled;
+  const isMfaEnabled = (user as any)?.mfaEnabled;
 
   const handleSetup = async () => {
     setLoading(true);

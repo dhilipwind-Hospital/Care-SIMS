@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Stethoscope, Search, Eye, X, CheckCircle, ClipboardList,
-  Clock, FileText, ChevronDown, ChevronUp, Users, Activity,
+  Clock, FileText, ChevronUp, Users, Activity,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../lib/api';

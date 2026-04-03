@@ -335,7 +335,7 @@ export default function DietPage() {
             </td>
           </tr>
         ))}</tbody></table>
-        {orders.length > 20 && <div className="p-3 border-t"><Pagination current={ordersPage} total={Math.ceil(orders.length / 20)} onPageChange={setOrdersPage} /></div>}
+        {orders.length > 20 && <div className="p-3 border-t"><Pagination page={ordersPage} totalPages={Math.ceil(orders.length / 20)} onPageChange={setOrdersPage} /></div>}
         </div>
       )}
       {tab === 'meals' && (
@@ -358,7 +358,7 @@ export default function DietPage() {
             </td>
           </tr>
         ))}</tbody></table>
-        {meals.length > 20 && <div className="p-3 border-t"><Pagination current={mealsPage} total={Math.ceil(meals.length / 20)} onPageChange={setMealsPage} /></div>}
+        {meals.length > 20 && <div className="p-3 border-t"><Pagination page={mealsPage} totalPages={Math.ceil(meals.length / 20)} onPageChange={setMealsPage} /></div>}
         </div>
       )}
     </div>

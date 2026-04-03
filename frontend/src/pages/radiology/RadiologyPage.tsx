@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
-  ScanLine, Clock, CheckCircle, XCircle, Pencil,
+  ScanLine, Clock, CheckCircle, Pencil,
   Eye, FileText, ShieldCheck, AlertTriangle, X, Trash2,
 } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';

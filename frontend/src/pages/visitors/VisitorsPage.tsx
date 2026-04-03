@@ -36,7 +36,6 @@ export default function VisitorsPage() {
 
   useEffect(() => { fetchVisitors(); fetchActiveCount(); }, []);
 
-  const checkedIn = visitors.filter(v => v.status === 'CHECKED_IN').length;
   const checkedOut = visitors.filter(v => v.status === 'CHECKED_OUT').length;
 
   const resetForm = () => {

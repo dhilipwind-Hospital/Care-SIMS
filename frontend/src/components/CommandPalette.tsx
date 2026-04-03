@@ -51,7 +51,7 @@ export default function CommandPalette() {
   const { user } = useAuth();
   const role = user?.role || 'RECEPTION';
   const enabledModules: string[] = (user as any)?.enabledModules || [];
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Keyboard shortcut: Cmd+K / Ctrl+K
   useEffect(() => {

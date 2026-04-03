@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FileText, RefreshCw, ChevronDown, ChevronUp, Calendar, Stethoscope, Pill, FlaskConical } from 'lucide-react';
+import { RefreshCw, ChevronDown, ChevronUp, Calendar, Stethoscope, Pill, FlaskConical } from 'lucide-react';
 import api from '../../lib/api';
 import { getUser } from '../../lib/auth';
 
