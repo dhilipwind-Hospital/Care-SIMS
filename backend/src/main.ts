@@ -24,10 +24,23 @@ async function bootstrap() {
   });
 
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5555',
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      const allowedOrigins = [
+        process.env.FRONTEND_URL || 'http://localhost:5555',
+        'http://localhost:5555',
+        'http://localhost:8081',
+        'http://localhost:19006',
+      ].filter(Boolean);
+      // Allow requests with no origin (mobile apps, Postman, server-to-server)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, true); // Allow all origins in production for now (mobile needs it)
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-Id', 'X-Access-Reason'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-Id', 'X-Access-Reason', 'X-Offline', 'X-Offline-Replay'],
   });
 
   // Ensure upload directories exist

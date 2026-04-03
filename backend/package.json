@@ -7,7 +7,9 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "npx @nestjs/cli build",
-    "start": "node dist/main",
+    "render-build": "npm install --include=dev && npx prisma generate && npx @nestjs/cli build",
+    "start": "node dist/src/main",
+    "start:prod": "node dist/src/main",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
