@@ -1,0 +1,12 @@
+import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+
+@Injectable()
+export class PlatformGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const { user } = context.switchToHttp().getRequest();
+    if (!user || user.type !== 'PLATFORM') {
+      throw new ForbiddenException('Platform admin access required');
+    }
+    return true;
+  }
+}

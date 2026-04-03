@@ -1,0 +1,214 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Primary brand colors — from .pen design tokens */
+  --hms-primary: #0F766E;
+  --hms-accent: #14B8A6;
+  --hms-success: #10B981;
+  --hms-warning: #F59E0B;
+  --hms-emergency: #EF4444;
+  --hms-critical: #DC2626;
+  --hms-urgent: #F97316;
+  --hms-info: #3B82F6;
+
+  /* Surface colors — matches .pen $--hms-clinical-* */
+  --hms-bg: #F7F8FA;
+  --hms-card: #FFFFFF;
+  --hms-border: #E2E8F0;
+  --hms-text: #0F172A;
+  --hms-muted: #64748B;
+
+  /* Additional surface tokens for dark mode support */
+  --hms-surface: #FFFFFF;
+  --hms-card-bg: #FFFFFF;
+  --hms-text-primary: #0F172A;
+  --hms-text-secondary: #64748B;
+  --hms-input-bg: #FFFFFF;
+  --hms-input-border: #D1D5DB;
+  --hms-hover: #F3F4F6;
+  --hms-table-header-bg: #F9FAFB;
+  --hms-table-row-border: #F3F4F6;
+  --hms-modal-bg: #FFFFFF;
+  --hms-badge-muted-bg: #F3F4F6;
+  --hms-badge-muted-text: #4B5563;
+
+  /* Sidebar — matches .pen $--sidebar* resolved values */
+  --sidebar-bg: #0C1B2A;
+  --sidebar-text: #94A3B8;
+  --sidebar-active-bg: rgba(20, 184, 166, 0.125);
+  --sidebar-active-text: #F1F5F9;
+  --sidebar-border: #1E3A5F;
+  --sidebar-width: 280px;
+
+  /* Radius — matches .pen --radius-* */
+  --radius-card: 16px;
+  --radius-pill: 999px;
+  --radius-m: 12px;
+
+  /* Shadow — matches .pen card effect */
+  --shadow-card: 0 4px 20px rgba(52, 89, 154, 0.08);
+
+  --topbar-height: 64px;
+}
+
+/* ─── Dark mode variable overrides ─── */
+:root.dark {
+  --hms-bg: #0F172A;
+  --hms-card: #1E293B;
+  --hms-border: #334155;
+  --hms-text: #F1F5F9;
+  --hms-muted: #94A3B8;
+
+  --hms-surface: #1E293B;
+  --hms-card-bg: #1E293B;
+  --hms-text-primary: #F1F5F9;
+  --hms-text-secondary: #94A3B8;
+  --hms-input-bg: #334155;
+  --hms-input-border: #475569;
+  --hms-hover: #334155;
+  --hms-table-header-bg: #1E293B;
+  --hms-table-row-border: #334155;
+  --hms-modal-bg: #1E293B;
+  --hms-badge-muted-bg: #334155;
+  --hms-badge-muted-text: #CBD5E1;
+
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--hms-bg);
+  color: var(--hms-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer components {
+  .btn-primary {
+    background: linear-gradient(135deg, var(--hms-accent, #0F766E), #14B8A6);
+    color: white;
+    font-weight: 600;
+    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
+    border-radius: 0.75rem;
+    transition: all 0.2s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+  .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  .btn-secondary {
+    background: white;
+    color: var(--hms-text, #1f2937);
+    font-weight: 500;
+    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--hms-border, #e5e7eb);
+  }
+  .btn-secondary:hover { background: #f9fafb; }
+
+  .btn-danger {
+    background: #ef4444;
+    color: white;
+    font-weight: 600;
+    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
+    border-radius: 0.75rem;
+  }
+  .btn-danger:hover { background: #dc2626; }
+
+  .btn-outline {
+    @apply border border-primary text-primary px-4 py-2 rounded-lg font-medium text-sm hover:bg-primary hover:text-white transition-colors;
+  }
+
+  /* Dark mode variants */
+  .dark .btn-secondary { background: var(--hms-card, #1f2937); border-color: var(--hms-border, #374151); color: var(--hms-text, #f3f4f6); }
+  .dark .btn-secondary:hover { background: var(--hms-input-bg, #374151); }
+  .card {
+    background: var(--hms-card-bg);
+    border: 1px solid var(--hms-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+  }
+  .kpi-card {
+    background: var(--hms-card-bg);
+    border: 1px solid var(--hms-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+    @apply p-5;
+  }
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  .badge-green { @apply badge bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300; }
+  .badge-amber { @apply badge bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300; }
+  .badge-blue  { @apply badge bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300; }
+  .badge-red   { @apply badge bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300; }
+  .badge-gray  { @apply badge dark:text-gray-300; background: var(--hms-badge-muted-bg); color: var(--hms-badge-muted-text); }
+  .badge-teal  { @apply badge bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300; }
+  .input {
+    @apply w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent;
+    background: var(--hms-input-bg);
+    border: 1px solid var(--hms-input-border);
+    color: var(--hms-text);
+  }
+  .input::placeholder {
+    color: var(--hms-muted);
+  }
+  .label {
+    @apply block text-xs font-medium mb-1;
+    color: var(--hms-text-secondary);
+  }
+  .table-th {
+    @apply text-xs font-semibold uppercase tracking-wider px-4 py-3 text-left;
+    color: var(--hms-muted);
+    background: var(--hms-table-header-bg);
+  }
+  .table-td {
+    @apply px-4 py-3 text-sm;
+    color: var(--hms-text);
+    border-top: 1px solid var(--hms-table-row-border);
+  }
+  .hms-card {
+    overflow: hidden;
+    background: var(--hms-card-bg);
+    border: 1px solid var(--hms-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+  }
+  .hms-input {
+    @apply w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent;
+    background: var(--hms-input-bg);
+    border: 1px solid var(--hms-input-border);
+    color: var(--hms-text);
+  }
+  .hms-input::placeholder {
+    color: var(--hms-muted);
+  }
+}
+
+/* ─── Global dark mode overrides for common Tailwind patterns ─── */
+/* These catch bg-white, bg-gray-50, text-gray-900 etc. used across pages */
+@layer utilities {
+  /* Ensure scrollbars look decent in dark mode */
+  .dark ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .dark ::-webkit-scrollbar-track {
+    background: #1E293B;
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background: #475569;
+    border-radius: 4px;
+  }
+}

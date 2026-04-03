@@ -1,0 +1,2092 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────────────────
+// PLATFORM LEVEL (public schema)
+// ─────────────────────────────────────────
+
+model PlatformUser {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  firstName    String   @map("first_name")
+  lastName     String   @map("last_name")
+  platformRole String   @default("SUPPORT") @map("platform_role")
+  mfaSecret    String?  @map("mfa_secret")
+  mfaEnabled   Boolean  @default(true) @map("mfa_enabled")
+  isActive     Boolean  @default(true) @map("is_active")
+  lastLogin    DateTime? @map("last_login")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  createdTenants    Tenant[]           @relation("CreatedBy")
+  platformAuditLogs PlatformAuditLog[]
+
+  @@map("platform_users")
+}
+
+model Tenant {
+  id                 String    @id @default(uuid())
+  slug               String    @unique
+  legalName          String    @map("legal_name")
+  tradeName          String?   @map("trade_name")
+  orgType            String    @map("org_type")
+  regNumber          String?   @map("reg_number")
+  gstNumber          String?   @map("gst_number")
+  panNumber          String?   @map("pan_number")
+  nabhNumber         String?   @map("nabh_number")
+  nablNumber         String?   @map("nabl_number")
+  primaryEmail       String    @map("primary_email")
+  primaryPhone       String    @map("primary_phone")
+  website            String?
+  logoUrl            String?   @map("logo_url")
+  subscriptionPlan   String    @default("STARTER") @map("subscription_plan")
+  subscriptionStatus String    @default("TRIAL") @map("subscription_status")
+  trialEndsAt        DateTime? @map("trial_ends_at")
+  billingEmail       String?   @map("billing_email")
+  timezone           String    @default("Asia/Kolkata")
+  currency           String    @default("INR")
+  country            String    @default("IN")
+  dateFormat         String    @default("DD/MM/YYYY") @map("date_format")
+  allowSelfRegistration Boolean @default(false) @map("allow_self_registration")
+  allowPatientPortal Boolean   @default(false) @map("allow_patient_portal")
+  maxLocations       Int       @default(1) @map("max_locations")
+  maxUsers           Int       @default(10) @map("max_users")
+  isActive           Boolean   @default(true) @map("is_active")
+  suspendedReason    String?   @map("suspended_reason")
+  suspendedAt        DateTime? @map("suspended_at")
+  createdById        String?   @map("created_by")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  createdBy     PlatformUser?        @relation("CreatedBy", fields: [createdById], references: [id])
+  locations     TenantLocation[]
+  features      OrganizationFeature[]
+  affiliations  DoctorOrgAffiliation[]
+
+  @@map("tenants")
+}
+
+model TenantLocation {
+  id                  String   @id @default(uuid())
+  tenantId            String   @map("tenant_id")
+  locationCode        String   @map("location_code")
+  name                String
+  type                String   @default("BRANCH")
+  addressLine1        String   @map("address_line1")
+  addressLine2        String?  @map("address_line2")
+  city                String
+  state               String
+  pinCode             String   @map("pin_code")
+  country             String   @default("IN")
+  phone               String?
+  email               String?
+  pharmacyLicenseNo   String?  @map("pharmacy_license_no")
+  labLicenseNo        String?  @map("lab_license_no")
+  gstin               String?
+  operatingHours      Json?    @map("operating_hours")
+  emergencyAvailable  Boolean  @default(false) @map("emergency_available")
+  timezone            String   @default("Asia/Kolkata")
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  tenant       Tenant                 @relation(fields: [tenantId], references: [id])
+  affiliations DoctorOrgAffiliation[]
+
+  @@unique([tenantId, locationCode])
+  @@map("tenant_locations")
+}
+
+model FeatureModule {
+  id               String   @id @default(uuid())
+  moduleId         String   @unique @map("module_id")
+  name             String
+  description      String?
+  category         String
+  applicableTypes  String[] @map("applicable_types")
+  minPlan          String   @default("STARTER") @map("min_plan")
+  isActive         Boolean  @default(true) @map("is_active")
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  orgFeatures OrganizationFeature[]
+
+  @@map("feature_modules")
+}
+
+model OrganizationFeature {
+  id         String    @id @default(uuid())
+  tenantId   String    @map("tenant_id")
+  moduleId   String    @map("module_id")
+  isEnabled  Boolean   @default(false) @map("is_enabled")
+  config     Json?
+  enabledById String?  @map("enabled_by")
+  enabledAt  DateTime? @map("enabled_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  tenant  Tenant        @relation(fields: [tenantId], references: [id])
+  module  FeatureModule @relation(fields: [moduleId], references: [moduleId])
+
+  @@unique([tenantId, moduleId])
+  @@map("organization_features")
+}
+
+model DoctorRegistry {
+  id                    String    @id @default(uuid())
+  email                 String    @unique
+  passwordHash          String    @map("password_hash")
+  mfaSecret             String?   @map("mfa_secret")
+  mfaEnabled            Boolean   @default(false) @map("mfa_enabled")
+  firstName             String    @map("first_name")
+  lastName              String    @map("last_name")
+  phone                 String    @unique
+  gender                String
+  dateOfBirth           DateTime  @map("date_of_birth")
+  photoUrl              String?   @map("photo_url")
+  aadhaarNumber         String?   @map("aadhaar_number")
+  aadhaarVerified       Boolean   @default(false) @map("aadhaar_verified")
+  primaryDegree         String    @map("primary_degree")
+  pgDegree              String?   @map("pg_degree")
+  pgSpecialization      String?   @map("pg_specialization")
+  university            String?
+  yearOfPassing         Int?      @map("year_of_passing")
+  experienceYears       Int?      @map("experience_years")
+  specialties           String[]
+  subspecialties        String[]
+  languages             String[]
+  certifications        Json?
+  medicalCouncil        String    @map("medical_council")
+  registrationNo        String    @map("registration_no")
+  registrationDate      DateTime  @map("registration_date")
+  registrationExpiry    DateTime? @map("registration_expiry")
+  regCertificateUrl     String?   @map("reg_certificate_url")
+  nmcId                 String?   @map("nmc_id")
+  additionalRegistrations Json?   @map("additional_registrations")
+  bio                   String?
+  linkedinUrl           String?   @map("linkedin_url")
+  ayphenStatus          String    @default("PENDING") @map("ayphen_status")
+  verifiedById          String?   @map("verified_by")
+  verifiedAt            DateTime? @map("verified_at")
+  rejectionReason       String?   @map("rejection_reason")
+  suspensionReason      String?   @map("suspension_reason")
+  suspendedAt           DateTime? @map("suspended_at")
+  lastLogin             DateTime? @map("last_login")
+  deviceTokens          Json?     @default("[]") @map("device_tokens")
+  apnsToken             String?   @map("apns_token")
+  fcmToken              String?   @map("fcm_token")
+  deviceType            String?   @map("device_type")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  affiliations DoctorOrgAffiliation[]
+
+  @@unique([medicalCouncil, registrationNo])
+  @@map("doctor_registry")
+}
+
+model DoctorOrgAffiliation {
+  id                  String    @id @default(uuid())
+  doctorId            String    @map("doctor_id")
+  tenantId            String    @map("tenant_id")
+  locationId          String?   @map("location_id")
+  designation         String?
+  employmentType      String    @map("employment_type")
+  departmentName      String?   @map("department_name")
+  availableDays       String[]  @map("available_days")
+  availableSlots      Json?     @map("available_slots")
+  slotDurationMinutes Int       @default(15) @map("slot_duration_minutes")
+  maxPatientsPerDay   Int?      @map("max_patients_per_day")
+  consultationFee     Decimal?  @map("consultation_fee") @db.Decimal(10, 2)
+  locationScope       String    @default("SINGLE") @map("location_scope")
+  allowedLocations    String[]  @map("allowed_locations")
+  crossLocationAccess Boolean   @default(false) @map("cross_location_access")
+  status              String    @default("INVITED")
+  invitedById         String?   @map("invited_by")
+  invitationSentAt    DateTime? @map("invitation_sent_at")
+  acceptedAt          DateTime? @map("accepted_at")
+  joinedAt            DateTime? @map("joined_at")
+  leftAt              DateTime? @map("left_at")
+  removalReason       String?   @map("removal_reason")
+  isActive            Boolean   @default(false) @map("is_active")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  doctor   DoctorRegistry @relation(fields: [doctorId], references: [id])
+  tenant   Tenant         @relation(fields: [tenantId], references: [id])
+  location TenantLocation? @relation(fields: [locationId], references: [id])
+
+  @@map("doctor_org_affiliations")
+}
+
+model PlatformAuditLog {
+  id          String   @id @default(uuid())
+  eventType   String   @map("event_type")
+  actorType   String   @map("actor_type")
+  actorId     String?  @map("actor_id")
+  actorEmail  String?  @map("actor_email")
+  targetType  String?  @map("target_type")
+  targetId    String?  @map("target_id")
+  targetName  String?  @map("target_name")
+  description String?
+  metadata    Json?
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  hash        String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  actor PlatformUser? @relation(fields: [actorId], references: [id])
+
+  @@map("platform_audit_logs")
+}
+
+// ─────────────────────────────────────────
+// TENANT LEVEL (stored in same DB, tenant_id scoped)
+// ─────────────────────────────────────────
+
+model TenantUser {
+  id                   String    @id @default(uuid())
+  tenantId             String    @map("tenant_id")
+  email                String
+  passwordHash         String    @map("password_hash")
+  mfaSecret            String?   @map("mfa_secret")
+  mfaEnabled           Boolean   @default(false) @map("mfa_enabled")
+  firstName            String    @map("first_name")
+  lastName             String    @map("last_name")
+  phone                String?
+  gender               String?
+  photoUrl             String?   @map("photo_url")
+  employeeId           String?   @map("employee_id")
+  roleId               String    @map("role_id")
+  primaryLocationId    String    @map("primary_location_id")
+  locationScope        String    @default("SINGLE") @map("location_scope")
+  allowedLocations     String[]  @map("allowed_locations")
+  doctorRegistryId     String?   @map("doctor_registry_id")
+  lastLogin            DateTime? @map("last_login")
+  passwordChangedAt    DateTime? @map("password_changed_at")
+  forcePasswordChange  Boolean   @default(true) @map("force_password_change")
+  isActive             Boolean   @default(true) @map("is_active")
+  deactivatedAt        DateTime? @map("deactivated_at")
+  registrationSource   String    @default("ADMIN_INVITE") @map("registration_source")
+  selfRegApprovedById  String?   @map("self_reg_approved_by")
+  selfRegApprovedAt    DateTime? @map("self_reg_approved_at")
+  createdById          String?   @map("created_by")
+  deviceTokens         Json?     @default("[]") @map("device_tokens")
+  apnsToken            String?   @map("apns_token")
+  fcmToken             String?   @map("fcm_token")
+  deviceType           String?   @map("device_type")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  role TenantRole @relation(fields: [roleId], references: [id])
+
+  @@unique([tenantId, email])
+  @@map("tenant_users")
+}
+
+model TenantRole {
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  name         String
+  description  String?
+  systemRoleId String?  @map("system_role_id")
+  isSystemRole Boolean  @default(false) @map("is_system_role")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdById  String?  @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  permissions  TenantRolePermission[]
+  specialFlags TenantRoleSpecialFlag[]
+  users        TenantUser[]
+
+  @@unique([tenantId, name])
+  @@map("tenant_roles")
+}
+
+model TenantRolePermission {
+  id       String @id @default(uuid())
+  roleId   String @map("role_id")
+  moduleId String @map("module_id")
+  resource String
+  action   String
+
+  role TenantRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, moduleId, resource, action])
+  @@map("tenant_role_permissions")
+}
+
+model TenantRoleSpecialFlag {
+  id        String  @id @default(uuid())
+  roleId    String  @map("role_id")
+  flag      String
+  isEnabled Boolean @default(true) @map("is_enabled")
+
+  role TenantRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, flag])
+  @@map("tenant_role_special_flags")
+}
+
+model Department {
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  locationId   String?  @map("location_id")
+  name         String
+  code         String
+  type         String?
+  headUserId   String?  @map("head_user_id")
+  phoneExt     String?  @map("phone_extension")
+  colorCode    String?  @map("color_code")
+  isActive     Boolean  @default(true) @map("is_active")
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([tenantId, locationId, code])
+  @@map("departments")
+}
+
+model Patient {
+  id               String    @id @default(uuid())
+  tenantId         String    @map("tenant_id")
+  patientId        String    @unique @map("patient_id")
+  locationId       String    @map("location_id")
+  registrationType String    @default("WALKIN") @map("registration_type")
+  firstName        String    @map("first_name")
+  lastName         String    @map("last_name")
+  dateOfBirth      DateTime? @map("date_of_birth")
+  ageYears         Int?      @map("age_years")
+  gender           String
+  bloodGroup       String?   @map("blood_group")
+  nationalId       String?   @map("national_id")
+  photoUrl         String?   @map("photo_url")
+  mobile           String
+  alternatePhone   String?   @map("alternate_phone")
+  email            String?
+  address          Json?
+  emergencyContact Json?     @map("emergency_contact")
+  allergies        String[]
+  allergyDetails   Json?     @map("allergy_details")
+  existingConditions String[] @map("existing_conditions")
+  currentMedications Json?   @map("current_medications")
+  pastSurgeries    String?   @map("past_surgeries")
+  familyHistory    String?   @map("family_history")
+  insurance        Json?
+  registeredById   String?   @map("registered_by")
+  isDeleted        Boolean   @default(false) @map("is_deleted")
+  deletedAt        DateTime? @map("deleted_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  queueTokens    QueueToken[]
+  appointments   Appointment[]
+  consultations  Consultation[]
+  prescriptions  Prescription[]
+  labOrders      LabOrder[]
+  triageRecords  TriageRecord[]
+  vitals         Vital[]
+  admissions     Admission[]
+  invoices       Invoice[]
+  accessLogs     PatientAccessLog[]
+
+  @@map("patients")
+}
+
+model QueueToken {
+  id                    String    @id @default(uuid())
+  tenantId              String    @map("tenant_id")
+  tokenNumber           Int       @map("token_number")
+  locationId            String    @map("location_id")
+  queueDate             DateTime  @map("queue_date") @db.Date
+  patientId             String    @map("patient_id")
+  appointmentId         String?   @map("appointment_id")
+  doctorId              String?   @map("doctor_id")
+  departmentId          String?   @map("department_id")
+  visitType             String    @default("NEW") @map("visit_type")
+  priority              String    @default("NORMAL")
+  status                String    @default("WAITING")
+  checkInTime           DateTime  @default(now()) @map("check_in_time")
+  calledTime            DateTime? @map("called_time")
+  consultStart          DateTime? @map("consult_start")
+  completedAt           DateTime? @map("completed_at")
+  estimatedWaitMinutes  Int?      @map("estimated_wait_minutes")
+  notes                 String?
+  createdById           String?   @map("created_by")
+  createdAt             DateTime  @default(now()) @map("created_at")
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@map("queue_tokens")
+}
+
+model Appointment {
+  id                 String    @id @default(uuid())
+  tenantId           String    @map("tenant_id")
+  locationId         String    @map("location_id")
+  patientId          String    @map("patient_id")
+  doctorId           String    @map("doctor_id")
+  departmentId       String?   @map("department_id")
+  appointmentDate    DateTime  @map("appointment_date") @db.Date
+  appointmentTime    String    @map("appointment_time")
+  durationMinutes    Int       @default(15) @map("duration_minutes")
+  type               String    @default("NEW")
+  source             String    @default("RECEPTION")
+  chiefComplaint     String?   @map("chief_complaint")
+  notes              String?
+  status             String    @default("SCHEDULED")
+  cancelledById      String?   @map("cancelled_by")
+  cancelledAt        DateTime? @map("cancelled_at")
+  cancellationReason String?   @map("cancellation_reason")
+  rescheduledFromId  String?   @map("rescheduled_from")
+  reminder24hSent    Boolean   @default(false) @map("reminder_sent_24h")
+  reminder1hSent     Boolean   @default(false) @map("reminder_sent_1h")
+  createdById        String?   @map("created_by")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@map("appointments")
+}
+
+model Consultation {
+  id                 String    @id @default(uuid())
+  tenantId           String    @map("tenant_id")
+  locationId         String    @map("location_id")
+  patientId          String    @map("patient_id")
+  doctorId           String    @map("doctor_id")
+  queueTokenId       String?   @map("queue_token_id")
+  appointmentId      String?   @map("appointment_id")
+  chiefComplaint     String    @map("chief_complaint")
+  historySubjective  String?   @map("history_subjective")
+  historyObjective   String?   @map("history_objective")
+  assessment         String?
+  plan               String?
+  examinationFindings Json?    @map("examination_findings")
+  vitalsSnapshot     Json?     @map("vitals_snapshot")
+  status             String    @default("DRAFT")
+  startedAt          DateTime  @default(now()) @map("started_at")
+  completedAt        DateTime? @map("completed_at")
+  isCrossLocation    Boolean   @default(false) @map("is_cross_location")
+  originalLocationId String?   @map("original_location_id")
+  accessReason       String?   @map("access_reason")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  patient   Patient                  @relation(fields: [patientId], references: [id])
+  diagnoses ConsultationDiagnosis[]
+  prescriptions Prescription[]
+
+  @@map("consultations")
+}
+
+model ConsultationDiagnosis {
+  id             String @id @default(uuid())
+  consultationId String @map("consultation_id")
+  icdCode        String? @map("icd_code")
+  description    String
+  type           String @default("PRIMARY")
+  sortOrder      Int    @default(0) @map("sort_order")
+
+  consultation Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+
+  @@map("consultation_diagnoses")
+}
+
+model Prescription {
+  id                String    @id @default(uuid())
+  tenantId          String    @map("tenant_id")
+  rxNumber          String    @unique @map("rx_number")
+  locationId        String    @map("location_id")
+  consultationId    String?   @map("consultation_id")
+  patientId         String    @map("patient_id")
+  doctorId          String    @map("doctor_id")
+  status            String    @default("PENDING")
+  validityDate      DateTime  @map("validity_date") @db.Date
+  notes             String?
+  issuedAt          DateTime  @default(now()) @map("issued_at")
+  sentToPharmacyAt  DateTime? @map("sent_to_pharmacy_at")
+  cancelledAt       DateTime? @map("cancelled_at")
+  cancelledById     String?   @map("cancelled_by")
+  cancellationReason String?  @map("cancellation_reason")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  patient      Patient              @relation(fields: [patientId], references: [id])
+  consultation Consultation?        @relation(fields: [consultationId], references: [id])
+  items        PrescriptionItem[]
+
+  @@map("prescriptions")
+}
+
+model PrescriptionItem {
+  id             String  @id @default(uuid())
+  prescriptionId String  @map("prescription_id")
+  drugId         String? @map("drug_id")
+  drugName       String  @map("drug_name")
+  genericName    String? @map("generic_name")
+  dosageForm     String? @map("dosage_form")
+  strength       String?
+  dosage         String?
+  frequency      String?
+  durationDays   Int?    @map("duration_days")
+  route          String?
+  instructions   String?
+  quantity       Decimal? @db.Decimal(10, 2)
+  refillsAllowed Int     @default(0) @map("refills_allowed")
+  isControlled   Boolean @default(false) @map("is_controlled")
+  status         String  @default("PENDING")
+  sortOrder      Int     @default(0) @map("sort_order")
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@map("prescription_items")
+}
+
+model LabOrder {
+  id            String    @id @default(uuid())
+  tenantId      String    @map("tenant_id")
+  orderNumber   String    @unique @map("order_number")
+  locationId    String    @map("location_id")
+  consultationId String?  @map("consultation_id")
+  patientId     String    @map("patient_id")
+  doctorId      String    @map("doctor_id")
+  priority      String    @default("ROUTINE")
+  fastingRequired Boolean @default(false) @map("fasting_required")
+  clinicalNotes String?   @map("clinical_notes")
+  status        String    @default("ORDERED")
+  orderedAt     DateTime  @default(now()) @map("ordered_at")
+
+  patient Patient        @relation(fields: [patientId], references: [id])
+  items   LabOrderItem[]
+  results LabResult[]
+
+  @@map("lab_orders")
+}
+
+model LabOrderItem {
+  id         String @id @default(uuid())
+  labOrderId String @map("lab_order_id")
+  testCode   String? @map("test_code")
+  testName   String @map("test_name")
+  category   String?
+  urgency    String @default("ROUTINE")
+  status     String @default("PENDING")
+
+  labOrder LabOrder @relation(fields: [labOrderId], references: [id], onDelete: Cascade)
+
+  @@map("lab_order_items")
+}
+
+model LabResult {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  labOrderId      String    @map("lab_order_id")
+  locationId      String    @map("location_id")
+  validatedById   String?   @map("validated_by")
+  validatedAt     DateTime? @map("validated_at")
+  isCritical      Boolean   @default(false) @map("is_critical")
+  criticalNotifiedAt DateTime? @map("critical_notified_at")
+  criticalAckById String?   @map("critical_ack_by")
+  notes           String?
+  status          String    @default("PENDING_VALIDATION")
+  amendedFromId   String?   @map("amended_from")
+  amendmentReason String?   @map("amendment_reason")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  labOrder LabOrder          @relation(fields: [labOrderId], references: [id])
+  items    LabResultItem[]
+
+  @@map("lab_results")
+}
+
+model LabResultItem {
+  id           String   @id @default(uuid())
+  labResultId  String   @map("lab_result_id")
+  testName     String   @map("test_name")
+  resultValue  String?  @map("result_value")
+  resultUnit   String?  @map("result_unit")
+  refRangeLow  Decimal? @map("ref_range_low") @db.Decimal(10, 3)
+  refRangeHigh Decimal? @map("ref_range_high") @db.Decimal(10, 3)
+  refRangeText String?  @map("ref_range_text")
+  flag         String?
+  method       String?
+  analyzer     String?
+  sortOrder    Int      @default(0) @map("sort_order")
+
+  labResult LabResult @relation(fields: [labResultId], references: [id], onDelete: Cascade)
+
+  @@map("lab_result_items")
+}
+
+model TriageRecord {
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
+  locationId       String   @map("location_id")
+  patientId        String   @map("patient_id")
+  queueTokenId     String?  @map("queue_token_id")
+  chiefComplaint   String   @map("chief_complaint")
+  symptoms         String[]
+  triageLevel      String   @map("triage_level")
+  vitalsOnArrival  Json?    @map("vitals_on_arrival")
+  painScore        Int?     @map("pain_score")
+  gcs              Int?
+  assignedDoctorId String?  @map("assigned_doctor_id")
+  assignedDeptId   String?  @map("assigned_dept_id")
+  triagedById      String   @map("triaged_by")
+  triageTime       DateTime @default(now()) @map("triage_time")
+  notes            String?
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@map("triage_records")
+}
+
+model Vital {
+  id             String   @id @default(uuid())
+  tenantId       String   @map("tenant_id")
+  locationId     String   @map("location_id")
+  patientId      String   @map("patient_id")
+  admissionId    String?  @map("admission_id")
+  consultationId String?  @map("consultation_id")
+  systolicBp     Int?     @map("systolic_bp")
+  diastolicBp    Int?     @map("diastolic_bp")
+  heartRate      Int?     @map("heart_rate")
+  respiratoryRate Int?    @map("respiratory_rate")
+  temperatureC   Decimal? @map("temperature_c") @db.Decimal(4, 1)
+  spo2           Decimal? @db.Decimal(4, 1)
+  weightKg       Decimal? @map("weight_kg") @db.Decimal(5, 1)
+  heightCm       Decimal? @map("height_cm") @db.Decimal(5, 1)
+  bloodGlucoseMg Decimal? @map("blood_glucose_mg") @db.Decimal(5, 1)
+  painScore      Int?     @map("pain_score")
+  gcs            Int?
+  hasAbnormal    Boolean  @default(false) @map("has_abnormal")
+  abnormalFields String[] @map("abnormal_fields")
+  recordedById   String   @map("recorded_by")
+  recordedAt     DateTime @default(now()) @map("recorded_at")
+  notes          String?
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@map("vitals")
+}
+
+model Ward {
+  id             String  @id @default(uuid())
+  tenantId       String  @map("tenant_id")
+  locationId     String  @map("location_id")
+  name           String
+  code           String
+  type           String
+  totalBeds      Int     @map("total_beds")
+  floor          Int?
+  phoneExtension String? @map("phone_extension")
+  chargeNurseId  String? @map("charge_nurse_id")
+  isIsolation    Boolean @default(false) @map("is_isolation")
+  isActive       Boolean @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  beds       Bed[]
+  admissions Admission[]
+
+  @@unique([tenantId, locationId, code])
+  @@map("wards")
+}
+
+model Bed {
+  id          String    @id @default(uuid())
+  tenantId    String    @map("tenant_id")
+  wardId      String    @map("ward_id")
+  bedNumber   String    @map("bed_number")
+  type        String    @default("GENERAL")
+  status      String    @default("AVAILABLE")
+  lastCleanedAt DateTime? @map("last_cleaned_at")
+
+  ward       Ward        @relation(fields: [wardId], references: [id])
+  admissions Admission[]
+
+  @@unique([wardId, bedNumber])
+  @@map("beds")
+}
+
+model Admission {
+  id                   String    @id @default(uuid())
+  tenantId             String    @map("tenant_id")
+  admissionNumber      String    @unique @map("admission_number")
+  locationId           String    @map("location_id")
+  patientId            String    @map("patient_id")
+  bedId                String?   @map("bed_id")
+  wardId               String?   @map("ward_id")
+  admittingDoctorId    String    @map("admitting_doctor_id")
+  departmentId         String?   @map("department_id")
+  admissionDate        DateTime  @default(now()) @map("admission_date")
+  admissionType        String    @default("PLANNED") @map("admission_type")
+  diagnosisOnAdmission String    @map("diagnosis_on_admission")
+  expectedDischargeDate DateTime? @map("expected_discharge_date") @db.Date
+  dischargeDate        DateTime? @map("discharge_date")
+  dischargeType        String?   @map("discharge_type")
+  dischargeDiagnosis   String?   @map("discharge_diagnosis")
+  dischargeSummary     String?   @map("discharge_summary")
+  status               String    @default("ACTIVE")
+  billingCleared       Boolean   @default(false) @map("billing_cleared")
+  pharmacyCleared      Boolean   @default(false) @map("pharmacy_cleared")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  patient Patient @relation(fields: [patientId], references: [id])
+  ward    Ward?   @relation(fields: [wardId], references: [id])
+  bed     Bed?    @relation(fields: [bedId], references: [id])
+
+  @@map("admissions")
+}
+
+model Invoice {
+  id               String    @id @default(uuid())
+  tenantId         String    @map("tenant_id")
+  invoiceNumber    String    @unique @map("invoice_number")
+  locationId       String    @map("location_id")
+  patientId        String    @map("patient_id")
+  admissionId      String?   @map("admission_id")
+  queueTokenId     String?   @map("queue_token_id")
+  doctorId         String?   @map("doctor_id")
+  departmentId     String?   @map("department_id")
+  invoiceType      String    @default("OPD") @map("invoice_type")
+  subtotal         Decimal   @default(0) @db.Decimal(12, 2)
+  discountAmount   Decimal   @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  discountReason   String?   @map("discount_reason")
+  discountApprovedById String? @map("discount_approved_by")
+  taxAmount        Decimal   @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  netTotal         Decimal   @default(0) @map("net_total") @db.Decimal(12, 2)
+  paidAmount       Decimal   @default(0) @map("paid_amount") @db.Decimal(12, 2)
+  status           String    @default("DRAFT")
+  insuranceProvider String?  @map("insurance_provider")
+  policyNumber     String?   @map("policy_number")
+  tpaName          String?   @map("tpa_name")
+  preAuthCode      String?   @map("pre_auth_code")
+  insuranceAmount  Decimal   @default(0) @map("insurance_amount") @db.Decimal(12, 2)
+  copayAmount      Decimal   @default(0) @map("copay_amount") @db.Decimal(12, 2)
+  claimStatus      String?   @map("claim_status")
+  dueDate          DateTime? @map("due_date") @db.Date
+  notes            String?
+  createdById      String    @map("created_by")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  patient   Patient           @relation(fields: [patientId], references: [id])
+  lineItems InvoiceLineItem[]
+  payments  Payment[]
+
+  @@map("invoices")
+}
+
+model InvoiceLineItem {
+  id          String  @id @default(uuid())
+  invoiceId   String  @map("invoice_id")
+  description String
+  category    String?
+  quantity    Decimal @default(1) @db.Decimal(8, 2)
+  unitPrice   Decimal @map("unit_price") @db.Decimal(10, 2)
+  discountPct Decimal @default(0) @map("discount_pct") @db.Decimal(5, 2)
+  taxPct      Decimal @default(0) @map("tax_pct") @db.Decimal(5, 2)
+  amount      Decimal @db.Decimal(10, 2)
+  referenceId String? @map("reference_id")
+  sortOrder   Int     @default(0) @map("sort_order")
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("invoice_line_items")
+}
+
+model Payment {
+  id              String   @id @default(uuid())
+  tenantId        String   @map("tenant_id")
+  invoiceId       String   @map("invoice_id")
+  amount          Decimal  @db.Decimal(12, 2)
+  paymentMethod   String   @map("payment_method")
+  referenceNumber String?  @map("reference_number")
+  bankName        String?  @map("bank_name")
+  paymentDate     DateTime @default(now()) @map("payment_date")
+  recordedById    String   @map("recorded_by")
+  notes           String?
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@map("payments")
+}
+
+model Drug {
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
+  brandName        String   @map("brand_name")
+  genericName      String?  @map("generic_name")
+  category         String?
+  dosageForm       String?  @map("dosage_form")
+  strength         String?
+  manufacturer     String?
+  hsnCode          String?  @map("hsn_code")
+  gstPct           Decimal  @default(12.00) @map("gst_pct") @db.Decimal(4, 2)
+  unitOfMeasure    String?  @map("unit_of_measure")
+  reorderLevel     Int      @default(50) @map("reorder_level")
+  maxStockLevel    Int      @default(500) @map("max_stock_level")
+  storageCondition String   @default("ROOM_TEMPERATURE") @map("storage_condition")
+  isControlled     Boolean  @default(false) @map("is_controlled")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  batches DrugBatch[]
+
+  @@map("drugs")
+}
+
+model DrugBatch {
+  id            String   @id @default(uuid())
+  tenantId      String   @map("tenant_id")
+  drugId        String   @map("drug_id")
+  locationId    String   @map("location_id")
+  batchNumber   String   @map("batch_number")
+  expiryDate    DateTime @map("expiry_date") @db.Date
+  quantityInStock Int    @default(0) @map("quantity_in_stock")
+  unitCost      Decimal? @map("unit_cost") @db.Decimal(10, 2)
+  shelfLocation String?  @map("shelf_location")
+  status        String   @default("ACTIVE")
+  receivedDate  DateTime? @map("received_date") @db.Date
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  drug Drug @relation(fields: [drugId], references: [id])
+
+  @@unique([tenantId, drugId, batchNumber])
+  @@map("drug_batches")
+}
+
+model PharmacyReturn {
+  id                String    @id @default(uuid())
+  tenantId          String    @map("tenant_id")
+  returnNumber      String    @unique @map("return_number")
+  locationId        String?   @map("location_id")
+  source            String    @default("PATIENT")
+  patientId         String?   @map("patient_id")
+  drugId            String?   @map("drug_id")
+  drugName          String    @map("drug_name")
+  batchNumber       String?   @map("batch_number")
+  quantityReturned  Int       @map("quantity_returned")
+  returnReason      String    @map("return_reason")
+  condition         String    @default("SEALED")
+  disposition       String    @default("RETURN_TO_STOCK")
+  status            String    @default("PENDING_REVIEW")
+  creditAmount      Decimal?  @map("credit_amount") @db.Decimal(10,2)
+  reviewedById      String?   @map("reviewed_by_id")
+  reviewedAt        DateTime? @map("reviewed_at")
+  reviewNotes       String?   @map("review_notes")
+  notes             String?
+  createdById       String?   @map("created_by_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@map("pharmacy_returns")
+}
+
+model OTRoom {
+  id            String  @id @default(uuid())
+  tenantId      String  @map("tenant_id")
+  locationId    String  @map("location_id")
+  name          String
+  type          String?
+  capacityClass String? @map("capacity_class")
+  isActive      Boolean @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  bookings  OTBooking[]
+  equipment OTEquipment[]
+
+  @@unique([tenantId, locationId, name])
+  @@map("ot_rooms")
+}
+
+model OTEquipment {
+  id                   String    @id @default(uuid())
+  tenantId             String    @map("tenant_id")
+  locationId           String?   @map("location_id")
+  name                 String
+  equipmentType        String    @map("equipment_type")
+  serialNumber         String?   @map("serial_number")
+  otRoomId             String?   @map("ot_room_id")
+  condition            String    @default("OPERATIONAL")
+  sterilizationStatus  String    @default("PENDING_STERILIZATION") @map("sterilization_status")
+  lastSterilizedAt     DateTime? @map("last_sterilized_at")
+  sterilizedById       String?   @map("sterilized_by_id")
+  nextSterilizationDue DateTime? @map("next_sterilization_due")
+  isActive             Boolean   @default(true) @map("is_active")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  otRoom OTRoom? @relation(fields: [otRoomId], references: [id])
+
+  @@map("ot_equipment")
+}
+
+model OTBooking {
+  id                   String    @id @default(uuid())
+  tenantId             String    @map("tenant_id")
+  bookingNumber        String    @unique @map("booking_number")
+  locationId           String    @map("location_id")
+  patientId            String    @map("patient_id")
+  admissionId          String?   @map("admission_id")
+  otRoomId             String    @map("ot_room_id")
+  primarySurgeonId     String    @map("primary_surgeon_id")
+  assistingSurgeons    String[]  @map("assisting_surgeons")
+  anesthetistId        String?   @map("anesthetist_id")
+  scrubNurseId         String?   @map("scrub_nurse_id")
+  departmentId         String?   @map("department_id")
+  procedureName        String    @map("procedure_name")
+  procedureCode        String?   @map("procedure_code")
+  surgeryType          String    @default("ELECTIVE") @map("surgery_type")
+  anesthesiaType       String?   @map("anesthesia_type")
+  scheduledDate        DateTime  @map("scheduled_date") @db.Date
+  scheduledStart       String    @map("scheduled_start")
+  expectedDurationMins Int       @map("expected_duration_mins")
+  actualStart          DateTime? @map("actual_start")
+  actualEnd            DateTime? @map("actual_end")
+  status               String    @default("SCHEDULED")
+  preOpChecklist       Json?     @map("pre_op_checklist")
+  intraOpNotes         String?   @map("intra_op_notes")
+  postOpNotes          String?   @map("post_op_notes")
+  bloodUnitsReserved   Int       @default(0) @map("blood_units_reserved")
+  notes                String?
+  createdById          String?   @map("created_by")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  otRoom OTRoom @relation(fields: [otRoomId], references: [id])
+
+  @@map("ot_bookings")
+}
+
+model OrgAuditLog {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  eventType   String   @map("event_type")
+  actorId     String   @map("actor_id")
+  actorName   String   @map("actor_name")
+  actorRole   String   @map("actor_role")
+  targetType  String?  @map("target_type")
+  targetId    String?  @map("target_id")
+  targetName  String?  @map("target_name")
+  locationId  String?  @map("location_id")
+  description String
+  oldValue    Json?    @map("old_value")
+  newValue    Json?    @map("new_value")
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  sessionId   String?  @map("session_id")
+  hash        String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("org_audit_logs")
+}
+
+model PatientAccessLog {
+  id                String   @id @default(uuid())
+  tenantId          String   @map("tenant_id")
+  patientId         String   @map("patient_id")
+  patientName       String   @map("patient_name")
+  eventType         String   @map("event_type")
+  actorId           String   @map("actor_id")
+  actorName         String   @map("actor_name")
+  actorRole         String   @map("actor_role")
+  actorLocationId   String?  @map("actor_location_id")
+  accessLocationId  String?  @map("access_location_id")
+  isCrossLocation   Boolean  @default(false) @map("is_cross_location")
+  resourceType      String?  @map("resource_type")
+  resourceId        String?  @map("resource_id")
+  accessReason      String?  @map("access_reason")
+  oldValue          Json?    @map("old_value")
+  newValue          Json?    @map("new_value")
+  ipAddress         String?  @map("ip_address")
+  sessionId         String?  @map("session_id")
+  hash              String
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@map("patient_access_logs")
+}
+
+model Notification {
+  id            String   @id @default(uuid())
+  tenantId      String   @map("tenant_id")
+  recipientId   String   @map("recipient_id")
+  type          String
+  title         String
+  message       String
+  locationId    String?  @map("location_id")
+  referenceType String?  @map("reference_type")
+  referenceId   String?  @map("reference_id")
+  priority      String   @default("NORMAL")
+  isRead        Boolean  @default(false) @map("is_read")
+  readAt        DateTime? @map("read_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, recipientId, isRead])
+  @@map("notifications")
+}
+
+model MedicationAdministration {
+  id                  String    @id @default(uuid())
+  tenantId            String    @map("tenant_id")
+  locationId          String    @map("location_id")
+  admissionId         String    @map("admission_id")
+  patientId           String    @map("patient_id")
+  prescriptionItemId  String?   @map("prescription_item_id")
+  drugName            String    @map("drug_name")
+  dosage              String
+  route               String
+  frequency           String
+  scheduledTime       DateTime  @map("scheduled_time")
+  administeredTime    DateTime? @map("administered_time")
+  administeredById    String?   @map("administered_by")
+  status              String    @default("SCHEDULED")
+  withheldReason      String?   @map("withheld_reason")
+  notes               String?
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId, admissionId])
+  @@map("medication_administrations")
+}
+
+// ─────────────────────────────────────────
+// PATIENT SELF-SERVICE PORTAL
+// ─────────────────────────────────────────
+
+// ─────────────────────────────────────────
+// VISITOR MANAGEMENT
+// ─────────────────────────────────────────
+
+model Visitor {
+  id               String    @id @default(uuid())
+  tenantId         String    @map("tenant_id")
+  locationId       String    @map("location_id")
+  patientId        String?   @map("patient_id")
+  admissionId      String?   @map("admission_id")
+  visitorName      String    @map("visitor_name")
+  relationship     String
+  phone            String
+  idType           String?   @map("id_type")
+  idNumber         String?   @map("id_number")
+  photoUrl         String?   @map("photo_url")
+  purpose          String    @default("VISIT")
+  checkInTime      DateTime  @default(now()) @map("check_in_time")
+  checkOutTime     DateTime? @map("check_out_time")
+  badgeNumber      String?   @map("badge_number")
+  escortRequired   Boolean   @default(false) @map("escort_required")
+  escortedById     String?   @map("escorted_by")
+  notes            String?
+  status           String    @default("CHECKED_IN")
+  createdById      String?   @map("created_by")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId, status])
+  @@map("visitors")
+}
+
+// ─────────────────────────────────────────
+// SHIFT HANDOVER
+// ─────────────────────────────────────────
+
+model ShiftHandover {
+  id               String    @id @default(uuid())
+  tenantId         String    @map("tenant_id")
+  locationId       String    @map("location_id")
+  wardId           String?   @map("ward_id")
+  departmentId     String?   @map("department_id")
+  shiftDate        DateTime  @map("shift_date") @db.Date
+  shiftType        String    @map("shift_type")
+  handoverFromId   String    @map("handover_from_id")
+  handoverFromName String    @map("handover_from_name")
+  handoverToId     String?   @map("handover_to_id")
+  handoverToName   String?   @map("handover_to_name")
+  patientSummary   Json?     @map("patient_summary")
+  criticalAlerts   String[]  @map("critical_alerts")
+  pendingTasks     Json?     @map("pending_tasks")
+  medicationNotes  String?   @map("medication_notes")
+  equipmentIssues  String?   @map("equipment_issues")
+  generalNotes     String?   @map("general_notes")
+  status           String    @default("DRAFT")
+  acknowledgedAt   DateTime? @map("acknowledged_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@index([tenantId, shiftDate])
+  @@map("shift_handovers")
+}
+
+// ─────────────────────────────────────────
+// HOUSEKEEPING
+// ─────────────────────────────────────────
+
+model HousekeepingTask {
+  id               String    @id @default(uuid())
+  tenantId         String    @map("tenant_id")
+  locationId       String    @map("location_id")
+  wardId           String?   @map("ward_id")
+  bedId            String?   @map("bed_id")
+  roomOrArea       String?   @map("room_or_area")
+  taskType         String    @map("task_type")
+  priority         String    @default("NORMAL")
+  description      String?
+  requestedById    String?   @map("requested_by")
+  requestedByName  String?   @map("requested_by_name")
+  assignedToId     String?   @map("assigned_to")
+  assignedToName   String?   @map("assigned_to_name")
+  scheduledAt      DateTime? @map("scheduled_at")
+  startedAt        DateTime? @map("started_at")
+  completedAt      DateTime? @map("completed_at")
+  verifiedById     String?   @map("verified_by")
+  verifiedAt       DateTime? @map("verified_at")
+  notes            String?
+  status           String    @default("PENDING")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@index([tenantId, status])
+  @@map("housekeeping_tasks")
+}
+
+// ─────────────────────────────────────────
+// DISCHARGE SUMMARY
+// ─────────────────────────────────────────
+
+model DischargeSummary {
+  id                    String    @id @default(uuid())
+  tenantId              String    @map("tenant_id")
+  locationId            String    @map("location_id")
+  admissionId           String    @map("admission_id")
+  patientId             String    @map("patient_id")
+  doctorId              String    @map("doctor_id")
+  admissionDate         DateTime  @map("admission_date")
+  dischargeDate         DateTime? @map("discharge_date")
+  diagnosisOnAdmission  String    @map("diagnosis_on_admission")
+  diagnosisOnDischarge  String?   @map("diagnosis_on_discharge")
+  proceduresPerformed   Json?     @map("procedures_performed")
+  treatmentGiven        String?   @map("treatment_given")
+  investigationSummary  String?   @map("investigation_summary")
+  conditionAtDischarge  String?   @map("condition_at_discharge")
+  dischargeMedications  Json?     @map("discharge_medications")
+  followUpInstructions  String?   @map("follow_up_instructions")
+  followUpDate          DateTime? @map("follow_up_date") @db.Date
+  dietaryAdvice         String?   @map("dietary_advice")
+  activityRestrictions  String?   @map("activity_restrictions")
+  status                String    @default("DRAFT")
+  preparedById          String?   @map("prepared_by")
+  approvedById          String?   @map("approved_by")
+  approvedAt            DateTime? @map("approved_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@unique([tenantId, admissionId])
+  @@map("discharge_summaries")
+}
+
+// ─────────────────────────────────────────
+// BLOOD BANK
+// ─────────────────────────────────────────
+
+model BloodDonor {
+  id               String    @id @default(uuid())
+  tenantId         String    @map("tenant_id")
+  locationId       String    @map("location_id")
+  donorId          String    @unique @map("donor_id")
+  firstName        String    @map("first_name")
+  lastName         String    @map("last_name")
+  dateOfBirth      DateTime  @map("date_of_birth")
+  gender           String
+  bloodGroup       String    @map("blood_group")
+  rhFactor         String    @map("rh_factor")
+  phone            String
+  email            String?
+  address          Json?
+  nationalId       String?   @map("national_id")
+  lastDonationDate DateTime? @map("last_donation_date")
+  totalDonations   Int       @default(0) @map("total_donations")
+  isEligible       Boolean   @default(true) @map("is_eligible")
+  deferralReason   String?   @map("deferral_reason")
+  deferralUntil    DateTime? @map("deferral_until")
+  isActive         Boolean   @default(true) @map("is_active")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  donations BloodDonation[]
+
+  @@index([tenantId, bloodGroup])
+  @@map("blood_donors")
+}
+
+model BloodDonation {
+  id                 String    @id @default(uuid())
+  tenantId           String    @map("tenant_id")
+  locationId         String    @map("location_id")
+  donorId            String    @map("donor_id")
+  donationNumber     String    @unique @map("donation_number")
+  donationType       String    @default("VOLUNTARY") @map("donation_type")
+  bagNumber          String    @map("bag_number")
+  collectionDate     DateTime  @default(now()) @map("collection_date")
+  volumeMl           Int       @default(450) @map("volume_ml")
+  bloodGroup         String    @map("blood_group")
+  rhFactor           String    @map("rh_factor")
+  hemoglobinGdl      Decimal?  @map("hemoglobin_gdl") @db.Decimal(4, 1)
+  screeningResult    String?   @map("screening_result")
+  hivStatus          String?   @map("hiv_status")
+  hbsAgStatus        String?   @map("hbs_ag_status")
+  hcvStatus          String?   @map("hcv_status")
+  vdrlStatus         String?   @map("vdrl_status")
+  malariaStatus      String?   @map("malaria_status")
+  componentsSeparated Boolean  @default(false) @map("components_separated")
+  expiryDate         DateTime  @map("expiry_date")
+  status             String    @default("COLLECTED")
+  collectedById      String?   @map("collected_by")
+  notes              String?
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  donor BloodDonor @relation(fields: [donorId], references: [id])
+
+  @@index([tenantId, bloodGroup, status])
+  @@map("blood_donations")
+}
+
+model BloodInventory {
+  id             String   @id @default(uuid())
+  tenantId       String   @map("tenant_id")
+  locationId     String   @map("location_id")
+  bagNumber      String   @map("bag_number")
+  component      String
+  bloodGroup     String   @map("blood_group")
+  rhFactor       String   @map("rh_factor")
+  volumeMl       Int      @map("volume_ml")
+  collectionDate DateTime @map("collection_date")
+  expiryDate     DateTime @map("expiry_date")
+  storageTemp    String?  @map("storage_temp")
+  status         String   @default("AVAILABLE")
+  reservedForId  String?  @map("reserved_for")
+  issuedToId     String?  @map("issued_to")
+  issuedAt       DateTime? @map("issued_at")
+  issuedById     String?  @map("issued_by")
+  crossMatchResult String? @map("cross_match_result")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([tenantId, bagNumber, component])
+  @@index([tenantId, bloodGroup, status])
+  @@map("blood_inventory")
+}
+
+model BloodTransfusion {
+  id                String    @id @default(uuid())
+  tenantId          String    @map("tenant_id")
+  locationId        String    @map("location_id")
+  patientId         String    @map("patient_id")
+  admissionId       String?   @map("admission_id")
+  bagNumber         String    @map("bag_number")
+  component         String
+  bloodGroup        String    @map("blood_group")
+  rhFactor          String    @map("rh_factor")
+  volumeMl          Int       @map("volume_ml")
+  crossMatchVerified Boolean  @default(false) @map("cross_match_verified")
+  crossMatchById    String?   @map("cross_match_by")
+  orderedById       String    @map("ordered_by")
+  startTime         DateTime? @map("start_time")
+  endTime           DateTime? @map("end_time")
+  reaction          String?
+  reactionDetails   String?   @map("reaction_details")
+  status            String    @default("ORDERED")
+  administeredById  String?   @map("administered_by")
+  notes             String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId, patientId])
+  @@map("blood_transfusions")
+}
+
+// ─────────────────────────────────────────
+// RADIOLOGY / IMAGING
+// ─────────────────────────────────────────
+
+model RadiologyOrder {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  orderNumber     String    @unique @map("order_number")
+  locationId      String    @map("location_id")
+  patientId       String    @map("patient_id")
+  doctorId        String    @map("doctor_id")
+  consultationId  String?   @map("consultation_id")
+  admissionId     String?   @map("admission_id")
+  modality        String
+  examType        String    @map("exam_type")
+  bodyPart        String    @map("body_part")
+  laterality      String?
+  priority        String    @default("ROUTINE")
+  clinicalHistory String?   @map("clinical_history")
+  contrast        Boolean   @default(false)
+  contrastAllergy Boolean   @default(false) @map("contrast_allergy")
+  pregnancyStatus String?   @map("pregnancy_status")
+  scheduledAt     DateTime? @map("scheduled_at")
+  performedAt     DateTime? @map("performed_at")
+  performedById   String?   @map("performed_by")
+  status          String    @default("ORDERED")
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  results RadiologyResult[]
+
+  @@index([tenantId, status])
+  @@map("radiology_orders")
+}
+
+model RadiologyResult {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  orderId         String    @map("order_id")
+  locationId      String    @map("location_id")
+  findings        String?
+  impression      String?
+  recommendation  String?
+  isCritical      Boolean   @default(false) @map("is_critical")
+  criticalNotifiedAt DateTime? @map("critical_notified_at")
+  imageUrls       String[]  @map("image_urls")
+  reportUrl       String?   @map("report_url")
+  reportedById    String?   @map("reported_by")
+  reportedAt      DateTime? @map("reported_at")
+  validatedById   String?   @map("validated_by")
+  validatedAt     DateTime? @map("validated_at")
+  status          String    @default("PENDING")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  order RadiologyOrder @relation(fields: [orderId], references: [id])
+
+  @@map("radiology_results")
+}
+
+// ─────────────────────────────────────────
+// INSURANCE / TPA
+// ─────────────────────────────────────────
+
+model InsurancePolicy {
+  id                String    @id @default(uuid())
+  tenantId          String    @map("tenant_id")
+  patientId         String    @map("patient_id")
+  providerName      String    @map("provider_name")
+  policyNumber      String    @map("policy_number")
+  groupNumber       String?   @map("group_number")
+  tpaName           String?   @map("tpa_name")
+  planType          String    @map("plan_type")
+  coverageAmount    Decimal   @map("coverage_amount") @db.Decimal(12, 2)
+  usedAmount        Decimal   @default(0) @map("used_amount") @db.Decimal(12, 2)
+  copayPercent      Decimal   @default(0) @map("copay_percent") @db.Decimal(5, 2)
+  deductible        Decimal   @default(0) @db.Decimal(10, 2)
+  startDate         DateTime  @map("start_date") @db.Date
+  endDate           DateTime  @map("end_date") @db.Date
+  primaryInsured    String?   @map("primary_insured")
+  relationship      String?
+  isActive          Boolean   @default(true) @map("is_active")
+  verifiedAt        DateTime? @map("verified_at")
+  verifiedById      String?   @map("verified_by")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  claims InsuranceClaim[]
+
+  @@index([tenantId, patientId])
+  @@map("insurance_policies")
+}
+
+model InsuranceClaim {
+  id                String    @id @default(uuid())
+  tenantId          String    @map("tenant_id")
+  claimNumber       String    @unique @map("claim_number")
+  policyId          String    @map("policy_id")
+  patientId         String    @map("patient_id")
+  admissionId       String?   @map("admission_id")
+  invoiceId         String?   @map("invoice_id")
+  claimType         String    @map("claim_type")
+  preAuthCode       String?   @map("pre_auth_code")
+  preAuthAmount     Decimal?  @map("pre_auth_amount") @db.Decimal(12, 2)
+  preAuthStatus     String?   @map("pre_auth_status")
+  preAuthDate       DateTime? @map("pre_auth_date")
+  claimAmount       Decimal   @map("claim_amount") @db.Decimal(12, 2)
+  approvedAmount    Decimal?  @map("approved_amount") @db.Decimal(12, 2)
+  settledAmount     Decimal?  @map("settled_amount") @db.Decimal(12, 2)
+  rejectionReason   String?   @map("rejection_reason")
+  submittedAt       DateTime? @map("submitted_at")
+  approvedAt        DateTime? @map("approved_at")
+  settledAt         DateTime? @map("settled_at")
+  documents         Json?
+  status            String    @default("DRAFT")
+  processedById     String?   @map("processed_by")
+  notes             String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  policy InsurancePolicy @relation(fields: [policyId], references: [id])
+
+  @@index([tenantId, status])
+  @@map("insurance_claims")
+}
+
+// ─────────────────────────────────────────
+// REFERRAL MANAGEMENT
+// ─────────────────────────────────────────
+
+model Referral {
+  id                 String    @id @default(uuid())
+  tenantId           String    @map("tenant_id")
+  referralNumber     String    @unique @map("referral_number")
+  locationId         String    @map("location_id")
+  patientId          String    @map("patient_id")
+  referringDoctorId  String    @map("referring_doctor_id")
+  referringDoctorName String   @map("referring_doctor_name")
+  referredToDoctorId String?   @map("referred_to_doctor_id")
+  referredToDoctorName String? @map("referred_to_doctor_name")
+  referredToDeptId   String?   @map("referred_to_dept_id")
+  referredToDeptName String?   @map("referred_to_dept_name")
+  referredToLocationId String? @map("referred_to_location_id")
+  referralType       String    @default("INTERNAL") @map("referral_type")
+  urgency            String    @default("ROUTINE")
+  reason             String
+  clinicalSummary    String?   @map("clinical_summary")
+  diagnosis          String?
+  appointmentId      String?   @map("appointment_id")
+  consultationNotes  String?   @map("consultation_notes")
+  status             String    @default("PENDING")
+  acceptedAt         DateTime? @map("accepted_at")
+  completedAt        DateTime? @map("completed_at")
+  declinedReason     String?   @map("declined_reason")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@index([tenantId, status])
+  @@map("referrals")
+}
+
+// ─────────────────────────────────────────
+// ICU MANAGEMENT
+// ─────────────────────────────────────────
+
+model IcuBed {
+  id             String   @id @default(uuid())
+  tenantId       String   @map("tenant_id")
+  locationId     String   @map("location_id")
+  wardId         String   @map("ward_id")
+  bedNumber      String   @map("bed_number")
+  icuType        String   @map("icu_type")
+  hasVentilator  Boolean  @default(false) @map("has_ventilator")
+  hasMonitor     Boolean  @default(true) @map("has_monitor")
+  hasDialysis    Boolean  @default(false) @map("has_dialysis")
+  status         String   @default("AVAILABLE")
+  currentPatientId String? @map("current_patient_id")
+  admittedAt     DateTime? @map("admitted_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([tenantId, wardId, bedNumber])
+  @@map("icu_beds")
+}
+
+model IcuMonitoring {
+  id              String   @id @default(uuid())
+  tenantId        String   @map("tenant_id")
+  locationId      String   @map("location_id")
+  admissionId     String   @map("admission_id")
+  patientId       String   @map("patient_id")
+  icuBedId        String   @map("icu_bed_id")
+  recordedAt      DateTime @default(now()) @map("recorded_at")
+  systolicBp      Int?     @map("systolic_bp")
+  diastolicBp     Int?     @map("diastolic_bp")
+  heartRate       Int?     @map("heart_rate")
+  respiratoryRate Int?     @map("respiratory_rate")
+  spo2            Decimal? @db.Decimal(4, 1)
+  temperatureC    Decimal? @map("temperature_c") @db.Decimal(4, 1)
+  gcs             Int?
+  pupilReaction   String?  @map("pupil_reaction")
+  ventilatorMode  String?  @map("ventilator_mode")
+  fio2            Decimal? @db.Decimal(4, 1)
+  peep            Decimal? @db.Decimal(4, 1)
+  tidalVolume     Int?     @map("tidal_volume")
+  centralVenousPressure Int? @map("cvp")
+  urineOutputMl   Int?     @map("urine_output_ml")
+  intakeOutputBalance Int? @map("io_balance")
+  bloodSugarMg    Decimal? @map("blood_sugar_mg") @db.Decimal(5, 1)
+  infusions       Json?
+  sedationScore   Int?     @map("sedation_score")
+  painScore       Int?     @map("pain_score")
+  nursesNotes     String?  @map("nurses_notes")
+  recordedById    String   @map("recorded_by")
+
+  @@index([tenantId, admissionId])
+  @@map("icu_monitoring")
+}
+
+// ─────────────────────────────────────────
+// TELEMEDICINE
+// ─────────────────────────────────────────
+
+model TeleconsultSession {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  sessionCode     String    @unique @map("session_code")
+  locationId      String    @map("location_id")
+  patientId       String    @map("patient_id")
+  doctorId        String    @map("doctor_id")
+  appointmentId   String?   @map("appointment_id")
+  consultationId  String?   @map("consultation_id")
+  sessionType     String    @default("VIDEO") @map("session_type")
+  scheduledAt     DateTime  @map("scheduled_at")
+  startedAt       DateTime? @map("started_at")
+  endedAt         DateTime? @map("ended_at")
+  durationMinutes Int?      @map("duration_minutes")
+  roomUrl         String?   @map("room_url")
+  recordingUrl    String?   @map("recording_url")
+  patientJoined   Boolean   @default(false) @map("patient_joined")
+  doctorJoined    Boolean   @default(false) @map("doctor_joined")
+  status          String    @default("SCHEDULED")
+  cancelledReason String?   @map("cancelled_reason")
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId, doctorId, status])
+  @@map("teleconsult_sessions")
+}
+
+// ─────────────────────────────────────────
+// DIALYSIS
+// ─────────────────────────────────────────
+
+model DialysisMachine {
+  id            String   @id @default(uuid())
+  tenantId      String   @map("tenant_id")
+  locationId    String   @map("location_id")
+  machineNumber String   @map("machine_number")
+  brand         String?
+  model         String?
+  serialNumber  String?  @map("serial_number")
+  lastServiceDate DateTime? @map("last_service_date")
+  nextServiceDate DateTime? @map("next_service_date")
+  status        String   @default("AVAILABLE")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  sessions DialysisSession[]
+
+  @@unique([tenantId, locationId, machineNumber])
+  @@map("dialysis_machines")
+}
+
+model DialysisSession {
+  id               String    @id @default(uuid())
+  tenantId         String    @map("tenant_id")
+  sessionNumber    String    @unique @map("session_number")
+  locationId       String    @map("location_id")
+  patientId        String    @map("patient_id")
+  doctorId         String    @map("doctor_id")
+  machineId        String    @map("machine_id")
+  admissionId      String?   @map("admission_id")
+  dialysisType     String    @default("HEMODIALYSIS") @map("dialysis_type")
+  scheduledDate    DateTime  @map("scheduled_date") @db.Date
+  scheduledTime    String    @map("scheduled_time")
+  durationMinutes  Int       @default(240) @map("duration_minutes")
+  accessType       String?   @map("access_type")
+  dialyzerType     String?   @map("dialyzer_type")
+  bloodFlowRate    Int?      @map("blood_flow_rate")
+  dialysateFlowRate Int?     @map("dialysate_flow_rate")
+  dryWeightKg      Decimal?  @map("dry_weight_kg") @db.Decimal(5, 1)
+  preWeightKg      Decimal?  @map("pre_weight_kg") @db.Decimal(5, 1)
+  postWeightKg     Decimal?  @map("post_weight_kg") @db.Decimal(5, 1)
+  ufGoalMl         Int?      @map("uf_goal_ml")
+  ufAchievedMl     Int?      @map("uf_achieved_ml")
+  preBp            String?   @map("pre_bp")
+  postBp           String?   @map("post_bp")
+  complications    String[]
+  heparinDose      String?   @map("heparin_dose")
+  startedAt        DateTime? @map("started_at")
+  endedAt          DateTime? @map("ended_at")
+  status           String    @default("SCHEDULED")
+  nurseId          String?   @map("nurse_id")
+  notes            String?
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  machine DialysisMachine @relation(fields: [machineId], references: [id])
+
+  @@index([tenantId, scheduledDate])
+  @@map("dialysis_sessions")
+}
+
+// ─────────────────────────────────────────
+// PHYSIOTHERAPY
+// ─────────────────────────────────────────
+
+model PhysiotherapyOrder {
+  id               String    @id @default(uuid())
+  tenantId         String    @map("tenant_id")
+  orderNumber      String    @unique @map("order_number")
+  locationId       String    @map("location_id")
+  patientId        String    @map("patient_id")
+  doctorId         String    @map("doctor_id")
+  admissionId      String?   @map("admission_id")
+  diagnosis        String
+  treatmentPlan    String    @map("treatment_plan")
+  frequency        String
+  totalSessions    Int       @map("total_sessions")
+  completedSessions Int      @default(0) @map("completed_sessions")
+  precautions      String?
+  goals            String?
+  status           String    @default("ACTIVE")
+  therapistId      String?   @map("therapist_id")
+  therapistName    String?   @map("therapist_name")
+  startDate        DateTime  @map("start_date") @db.Date
+  endDate          DateTime? @map("end_date") @db.Date
+  notes            String?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  sessions PhysiotherapySession[]
+
+  @@index([tenantId, status])
+  @@map("physiotherapy_orders")
+}
+
+model PhysiotherapySession {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  orderId         String    @map("order_id")
+  sessionNumber   Int       @map("session_number")
+  sessionDate     DateTime  @map("session_date") @db.Date
+  treatmentGiven  String    @map("treatment_given")
+  painBefore      Int?      @map("pain_before")
+  painAfter       Int?      @map("pain_after")
+  romBefore       String?   @map("rom_before")
+  romAfter        String?   @map("rom_after")
+  patientResponse String?   @map("patient_response")
+  homeExercises   String?   @map("home_exercises")
+  therapistId     String    @map("therapist_id")
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  order PhysiotherapyOrder @relation(fields: [orderId], references: [id])
+
+  @@map("physiotherapy_sessions")
+}
+
+// ─────────────────────────────────────────
+// AMBULANCE
+// ─────────────────────────────────────────
+
+model Ambulance {
+  id              String   @id @default(uuid())
+  tenantId        String   @map("tenant_id")
+  locationId      String   @map("location_id")
+  vehicleNumber   String   @map("vehicle_number")
+  vehicleType     String   @map("vehicle_type")
+  equipmentLevel  String   @default("BLS") @map("equipment_level")
+  driverName      String?  @map("driver_name")
+  driverPhone     String?  @map("driver_phone")
+  paramedicName   String?  @map("paramedic_name")
+  paramedicPhone  String?  @map("paramedic_phone")
+  insuranceExpiry DateTime? @map("insurance_expiry") @db.Date
+  fitnessExpiry   DateTime? @map("fitness_expiry") @db.Date
+  status          String   @default("AVAILABLE")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  trips AmbulanceTrip[]
+
+  @@unique([tenantId, vehicleNumber])
+  @@map("ambulances")
+}
+
+model AmbulanceTrip {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  tripNumber      String    @unique @map("trip_number")
+  ambulanceId     String    @map("ambulance_id")
+  patientId       String?   @map("patient_id")
+  patientName     String?   @map("patient_name")
+  patientPhone    String?   @map("patient_phone")
+  tripType        String    @map("trip_type")
+  pickupAddress   String    @map("pickup_address")
+  dropAddress     String    @map("drop_address")
+  dispatchTime    DateTime  @default(now()) @map("dispatch_time")
+  arrivalTime     DateTime? @map("arrival_time")
+  departureTime   DateTime? @map("departure_time")
+  completedTime   DateTime? @map("completed_time")
+  distanceKm      Decimal?  @map("distance_km") @db.Decimal(6, 1)
+  odometerStart   Int?      @map("odometer_start")
+  odometerEnd     Int?      @map("odometer_end")
+  condition       String?
+  vitalsEnRoute   Json?     @map("vitals_en_route")
+  treatmentGiven  String?   @map("treatment_given")
+  status          String    @default("DISPATCHED")
+  dispatchedById  String?   @map("dispatched_by")
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  ambulance Ambulance @relation(fields: [ambulanceId], references: [id])
+
+  @@index([tenantId, status])
+  @@map("ambulance_trips")
+}
+
+// ─────────────────────────────────────────
+// STAFF ATTENDANCE
+// ─────────────────────────────────────────
+
+model StaffAttendance {
+  id            String    @id @default(uuid())
+  tenantId      String    @map("tenant_id")
+  locationId    String    @map("location_id")
+  userId        String    @map("user_id")
+  userName      String    @map("user_name")
+  departmentId  String?   @map("department_id")
+  attendanceDate DateTime @map("attendance_date") @db.Date
+  shiftType     String    @map("shift_type")
+  clockIn       DateTime? @map("clock_in")
+  clockOut      DateTime? @map("clock_out")
+  breakMinutes  Int       @default(0) @map("break_minutes")
+  overtimeMinutes Int     @default(0) @map("overtime_minutes")
+  status        String    @default("PRESENT")
+  leaveType     String?   @map("leave_type")
+  leaveReason   String?   @map("leave_reason")
+  approvedById  String?   @map("approved_by")
+  notes         String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@unique([tenantId, userId, attendanceDate])
+  @@index([tenantId, attendanceDate])
+  @@map("staff_attendance")
+}
+
+// ─────────────────────────────────────────
+// INVENTORY (NON-PHARMA)
+// ─────────────────────────────────────────
+
+model InventoryItem {
+  id              String   @id @default(uuid())
+  tenantId        String   @map("tenant_id")
+  locationId      String   @map("location_id")
+  itemCode        String   @map("item_code")
+  name            String
+  category        String
+  subcategory     String?
+  unitOfMeasure   String   @map("unit_of_measure")
+  currentStock    Int      @default(0) @map("current_stock")
+  reorderLevel    Int      @default(10) @map("reorder_level")
+  maxStockLevel   Int      @default(100) @map("max_stock_level")
+  unitCost        Decimal? @map("unit_cost") @db.Decimal(10, 2)
+  supplier        String?
+  storageLocation String?  @map("storage_location")
+  isConsumable    Boolean  @default(true) @map("is_consumable")
+  isActive        Boolean  @default(true) @map("is_active")
+  lastRestockedAt DateTime? @map("last_restocked_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  transactions InventoryTransaction[]
+
+  @@unique([tenantId, locationId, itemCode])
+  @@map("inventory_items")
+}
+
+model InventoryTransaction {
+  id              String   @id @default(uuid())
+  tenantId        String   @map("tenant_id")
+  itemId          String   @map("item_id")
+  transactionType String   @map("transaction_type")
+  quantity        Int
+  referenceType   String?  @map("reference_type")
+  referenceId     String?  @map("reference_id")
+  departmentId    String?  @map("department_id")
+  remarks         String?
+  performedById   String   @map("performed_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  item InventoryItem @relation(fields: [itemId], references: [id])
+
+  @@index([tenantId, itemId])
+  @@map("inventory_transactions")
+}
+
+// ─────────────────────────────────────────
+// ASSET MANAGEMENT
+// ─────────────────────────────────────────
+
+model Asset {
+  id                String    @id @default(uuid())
+  tenantId          String    @map("tenant_id")
+  locationId        String    @map("location_id")
+  assetCode         String    @map("asset_code")
+  name              String
+  category          String
+  brand             String?
+  model             String?
+  serialNumber      String?   @map("serial_number")
+  purchaseDate      DateTime? @map("purchase_date") @db.Date
+  purchaseCost      Decimal?  @map("purchase_cost") @db.Decimal(12, 2)
+  warrantyExpiry    DateTime? @map("warranty_expiry") @db.Date
+  departmentId      String?   @map("department_id")
+  assignedToId      String?   @map("assigned_to")
+  assignedToName    String?   @map("assigned_to_name")
+  condition         String    @default("GOOD")
+  lastMaintenanceDate DateTime? @map("last_maintenance_date")
+  nextMaintenanceDate DateTime? @map("next_maintenance_date")
+  status            String    @default("ACTIVE")
+  disposalDate      DateTime? @map("disposal_date")
+  disposalReason    String?   @map("disposal_reason")
+  notes             String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  maintenanceLogs AssetMaintenance[]
+
+  @@unique([tenantId, assetCode])
+  @@map("assets")
+}
+
+model AssetMaintenance {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  assetId         String    @map("asset_id")
+  maintenanceType String    @map("maintenance_type")
+  description     String
+  performedById   String?   @map("performed_by")
+  performedByName String?   @map("performed_by_name")
+  vendor          String?
+  cost            Decimal?  @db.Decimal(10, 2)
+  scheduledDate   DateTime? @map("scheduled_date") @db.Date
+  completedDate   DateTime? @map("completed_date") @db.Date
+  nextDueDate     DateTime? @map("next_due_date") @db.Date
+  status          String    @default("SCHEDULED")
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  asset Asset @relation(fields: [assetId], references: [id])
+
+  @@map("asset_maintenance")
+}
+
+// ─────────────────────────────────────────
+// GRIEVANCE / FEEDBACK
+// ─────────────────────────────────────────
+
+model Grievance {
+  id               String    @id @default(uuid())
+  tenantId         String    @map("tenant_id")
+  ticketNumber     String    @unique @map("ticket_number")
+  locationId       String    @map("location_id")
+  complainantType  String    @map("complainant_type")
+  complainantName  String    @map("complainant_name")
+  complainantPhone String?   @map("complainant_phone")
+  complainantEmail String?   @map("complainant_email")
+  patientId        String?   @map("patient_id")
+  category         String
+  severity         String    @default("MEDIUM")
+  subject          String
+  description      String
+  departmentId     String?   @map("department_id")
+  assignedToId     String?   @map("assigned_to")
+  assignedToName   String?   @map("assigned_to_name")
+  resolution       String?
+  resolvedAt       DateTime? @map("resolved_at")
+  resolvedById     String?   @map("resolved_by")
+  satisfactionScore Int?     @map("satisfaction_score")
+  escalatedTo      String?   @map("escalated_to")
+  escalatedAt      DateTime? @map("escalated_at")
+  status           String    @default("OPEN")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@index([tenantId, status])
+  @@map("grievances")
+}
+
+// ─────────────────────────────────────────
+// INFECTION CONTROL
+// ─────────────────────────────────────────
+
+model InfectionControlRecord {
+  id               String    @id @default(uuid())
+  tenantId         String    @map("tenant_id")
+  locationId       String    @map("location_id")
+  recordType       String    @map("record_type")
+  patientId        String?   @map("patient_id")
+  admissionId      String?   @map("admission_id")
+  wardId           String?   @map("ward_id")
+  organism         String?
+  infectionSite    String?   @map("infection_site")
+  infectionType    String?   @map("infection_type")
+  isolationType    String?   @map("isolation_type")
+  onsetDate        DateTime? @map("onset_date")
+  cultureDate      DateTime? @map("culture_date")
+  antibioticSensitivity Json? @map("antibiotic_sensitivity")
+  isHai            Boolean   @default(false) @map("is_hai")
+  reportedById     String    @map("reported_by")
+  reportedByName   String    @map("reported_by_name")
+  actionsTaken     String?   @map("actions_taken")
+  outcome          String?
+  status           String    @default("ACTIVE")
+  resolvedAt       DateTime? @map("resolved_at")
+  notes            String?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@index([tenantId, status])
+  @@map("infection_control_records")
+}
+
+// ─────────────────────────────────────────
+// CONSENT MANAGEMENT
+// ─────────────────────────────────────────
+
+model ConsentForm {
+  id               String    @id @default(uuid())
+  tenantId         String    @map("tenant_id")
+  locationId       String    @map("location_id")
+  patientId        String    @map("patient_id")
+  admissionId      String?   @map("admission_id")
+  consentType      String    @map("consent_type")
+  procedureName    String?   @map("procedure_name")
+  description      String
+  risks            String?
+  alternatives     String?
+  consentGivenBy   String    @map("consent_given_by")
+  relationship     String?
+  witnessName      String?   @map("witness_name")
+  witnessId        String?   @map("witness_id")
+  doctorId         String    @map("doctor_id")
+  doctorName       String    @map("doctor_name")
+  signatureUrl     String?   @map("signature_url")
+  consentDate      DateTime  @default(now()) @map("consent_date")
+  revokedAt        DateTime? @map("revoked_at")
+  revokedReason    String?   @map("revoked_reason")
+  status           String    @default("SIGNED")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId, patientId])
+  @@map("consent_forms")
+}
+
+// ─────────────────────────────────────────
+// DIET / NUTRITION
+// ─────────────────────────────────────────
+
+model DietOrder {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  locationId      String    @map("location_id")
+  patientId       String    @map("patient_id")
+  admissionId     String    @map("admission_id")
+  wardId          String?   @map("ward_id")
+  bedId           String?   @map("bed_id")
+  doctorId        String    @map("doctor_id")
+  dietType        String    @map("diet_type")
+  caloricTarget   Int?      @map("caloric_target")
+  proteinTarget   Int?      @map("protein_target")
+  restrictions    String[]
+  allergies       String[]
+  preferences     String?
+  specialInstructions String? @map("special_instructions")
+  npoStatus       Boolean   @default(false) @map("npo_status")
+  npoReason       String?   @map("npo_reason")
+  startDate       DateTime  @default(now()) @map("start_date")
+  endDate         DateTime? @map("end_date")
+  status          String    @default("ACTIVE")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  meals DietMeal[]
+
+  @@index([tenantId, admissionId])
+  @@map("diet_orders")
+}
+
+model DietMeal {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  orderId         String    @map("order_id")
+  mealType        String    @map("meal_type")
+  mealDate        DateTime  @map("meal_date") @db.Date
+  items           Json
+  servedAt        DateTime? @map("served_at")
+  servedById      String?   @map("served_by")
+  consumedPercent Int?      @map("consumed_percent")
+  refusalReason   String?   @map("refusal_reason")
+  notes           String?
+  status          String    @default("PLANNED")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  order DietOrder @relation(fields: [orderId], references: [id])
+
+  @@map("diet_meals")
+}
+
+// ─────────────────────────────────────────
+// MORTUARY
+// ─────────────────────────────────────────
+
+model MortuaryRecord {
+  id                String    @id @default(uuid())
+  tenantId          String    @map("tenant_id")
+  locationId        String    @map("location_id")
+  recordNumber      String    @unique @map("record_number")
+  patientId         String?   @map("patient_id")
+  admissionId       String?   @map("admission_id")
+  deceasedName      String    @map("deceased_name")
+  age               Int?
+  gender            String
+  dateOfDeath       DateTime  @map("date_of_death")
+  timeOfDeath       String?   @map("time_of_death")
+  causeOfDeath      String?   @map("cause_of_death")
+  attendingDoctorId String?   @map("attending_doctor_id")
+  pronouncedById    String?   @map("pronounced_by")
+  deathCertificateNo String?  @map("death_certificate_no")
+  unitNumber        String?   @map("unit_number")
+  receivedAt        DateTime  @default(now()) @map("received_at")
+  releasedAt        DateTime? @map("released_at")
+  releasedTo        String?   @map("released_to")
+  releasedToRelation String?  @map("released_to_relation")
+  releasedToId      String?   @map("released_to_id")
+  policeNotified    Boolean   @default(false) @map("police_notified")
+  autopsyRequired   Boolean   @default(false) @map("autopsy_required")
+  autopsyStatus     String?   @map("autopsy_status")
+  embalmed          Boolean   @default(false)
+  status            String    @default("IN_CUSTODY")
+  notes             String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@index([tenantId, status])
+  @@map("mortuary_records")
+}
+
+model PatientAccount {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  firstName    String    @map("first_name")
+  lastName     String    @map("last_name")
+  phone        String?
+  dateOfBirth  DateTime? @map("date_of_birth")
+  gender       String?
+  bloodGroup   String?   @map("blood_group")
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLogin    DateTime? @map("last_login")
+  deviceTokens Json?     @default("[]") @map("device_tokens")
+  apnsToken    String?   @map("apns_token")
+  fcmToken     String?   @map("fcm_token")
+  deviceType   String?   @map("device_type")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("patient_accounts")
+}
