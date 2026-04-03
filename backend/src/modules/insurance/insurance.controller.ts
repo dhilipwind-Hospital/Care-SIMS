@@ -7,7 +7,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { RequireFeature } from '../../common/decorators/require-feature.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-@ApiTags('Insurance') @ApiBearerAuth('access-token') @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard) @RequireFeature('MOD_BILL_INS') @Roles('SYS_ORG_ADMIN','SYS_BILLING_CLERK')
+@ApiTags('Insurance') @ApiBearerAuth('access-token') @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard) @RequireFeature('MOD_BILL_INS') @Roles('SYS_ORG_ADMIN','SYS_BILLING','SYS_BILLING_MANAGER','SYS_BILLING_CLERK','SYS_RECEPTIONIST','SYS_INSURANCE_EXEC')
 @Controller('insurance')
 export class InsuranceController {
   constructor(private svc: InsuranceService) {}

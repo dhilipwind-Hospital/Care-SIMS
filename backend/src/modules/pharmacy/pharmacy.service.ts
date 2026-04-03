@@ -90,12 +90,15 @@ export class PharmacyService {
     return batches.filter(b => Number(b.quantityInStock) <= Number(b.drug.reorderLevel));
   }
 
-  async getExpiryAlerts(tenantId: string, locationId: string, daysAhead = 90) {
-    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() + daysAhead);
+  async getExpiryAlerts(tenantId: string, locationId?: string, daysAhead = 90) {
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() + Number(daysAhead) || 90);
+    const where: any = { tenantId, expiryDate: { lte: cutoff }, quantityInStock: { gt: 0 } };
+    if (locationId) where.locationId = locationId;
     return this.prisma.drugBatch.findMany({
-      where: { tenantId, locationId, expiryDate: { lte: cutoff }, quantityInStock: { gt: 0 } },
+      where,
       include: { drug: { select: { brandName: true, genericName: true } } },
       orderBy: { expiryDate: 'asc' },
+      take: 500,
     });
   }
 

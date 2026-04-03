@@ -3,12 +3,15 @@ import { getToken, getRefreshToken, setToken, setRefreshToken, clearAll } from '
 
 import { Platform } from 'react-native';
 
-// Use local IP for physical device, localhost for simulators/web
-const API_BASE_URL = Platform.select({
+// Production API (Render) — switch to localhost for local dev
+const USE_PRODUCTION = true;
+const PRODUCTION_URL = 'https://care-sims.onrender.com/api';
+const LOCAL_URL = Platform.select({
   ios: 'http://172.20.10.8:6666/api',
   android: 'http://172.20.10.8:6666/api',
   default: 'http://localhost:6666/api',
 })!;
+const API_BASE_URL = USE_PRODUCTION ? PRODUCTION_URL : LOCAL_URL;
 
 const api = axios.create({
   baseURL: API_BASE_URL,

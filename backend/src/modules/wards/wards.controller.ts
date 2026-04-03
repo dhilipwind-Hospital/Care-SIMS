@@ -15,7 +15,7 @@ import { CreateBedDto } from './dto/create-bed.dto';
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
 @RequireFeature('MOD_WARD')
-@Roles('SYS_ORG_ADMIN', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR')
+@Roles('SYS_ORG_ADMIN', 'SYS_NURSE', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR')
 @Controller('wards')
 export class WardsController {
   constructor(private svc: WardsService) {}

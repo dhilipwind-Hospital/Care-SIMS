@@ -16,7 +16,7 @@ import { DischargeDto } from './dto/discharge.dto';
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
 @RequireFeature('MOD_ADMISSION')
-@Roles('SYS_ORG_ADMIN', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_RECEPTIONIST', 'SYS_FRONT_OFFICE')
+@Roles('SYS_ORG_ADMIN', 'SYS_NURSE', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_RECEPTIONIST', 'SYS_FRONT_OFFICE')
 @Controller('admissions')
 export class AdmissionsController {
   constructor(private svc: AdmissionsService) {}

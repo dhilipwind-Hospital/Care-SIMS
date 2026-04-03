@@ -12,7 +12,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
 @RequireFeature('MOD_MED_ADMIN')
-@Roles('SYS_ORG_ADMIN', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE', 'SYS_PHARMACIST', 'SYS_PHARMACY_INCHARGE')
+@Roles('SYS_ORG_ADMIN', 'SYS_NURSE', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE', 'SYS_PHARMACIST', 'SYS_PHARMACY_INCHARGE')
 @Controller('medication-admin')
 export class MedicationAdminController {
   constructor(private svc: MedicationAdminService) {}
