@@ -2,6 +2,22 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../../database/prisma.service';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
+import { sendEmail } from '../../common/utils/mailer';
+
+function emailTemplate(title: string, body: string): string {
+  return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+  <div style="background:linear-gradient(135deg,#0F766E,#14B8A6);padding:20px;border-radius:12px 12px 0 0;">
+    <h1 style="color:white;margin:0;font-size:20px;">Ayphen HMS</h1>
+  </div>
+  <div style="padding:24px;background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
+    <h2 style="color:#1f2937;margin:0 0 16px;">${title}</h2>
+    <p style="color:#4b5563;line-height:1.6;">${body}</p>
+  </div>
+  <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:16px;">
+    This is an automated message from Ayphen HMS. Do not reply.
+  </p>
+</div>`;
+}
 
 const DEFAULT_FEATURES: Record<string, string[]> = {
   CLINIC: ['MOD_PAT_REG','MOD_PAT_SELF_BOOK','MOD_PAT_RECORDS','MOD_QUEUE','MOD_APPT','MOD_WALKIN','MOD_CONSULT','MOD_RX','MOD_LAB_ORD','MOD_VITALS','MOD_LAB_BASIC','MOD_BILL_OPD','MOD_GST','MOD_REPORTS','MOD_AUDIT'],
@@ -238,6 +254,16 @@ export class PlatformService {
       data: { ayphenStatus: 'VERIFIED', verifiedById: adminId, verifiedAt: new Date() },
     });
     await this.logPlatformEvent('DOCTOR_VERIFIED', adminId, 'DOCTOR', id, `${doctor.firstName} ${doctor.lastName}`, 'Doctor verified');
+
+    // Non-blocking verification approval email
+    if (doctor.email) {
+      sendEmail(
+        doctor.email,
+        'Doctor Verification Approved - Ayphen HMS',
+        emailTemplate('Verification Approved', `Dear Dr. ${doctor.firstName} ${doctor.lastName},<br><br>Congratulations! Your doctor profile has been verified on Ayphen HMS.<br><br>You can now be affiliated with organizations on the platform. Your verified status grants you full access to clinical features.<br><br>Thank you for being part of Ayphen HMS.`),
+      ).catch((err) => console.error('Failed to send doctor verification email:', err));
+    }
+
     return doctor;
   }
 
@@ -247,6 +273,16 @@ export class PlatformService {
       data: { ayphenStatus: 'REJECTED', rejectionReason: reason },
     });
     await this.logPlatformEvent('DOCTOR_REJECTED', adminId, 'DOCTOR', id, `${doctor.firstName} ${doctor.lastName}`, `Rejected: ${reason}`);
+
+    // Non-blocking rejection email
+    if (doctor.email) {
+      sendEmail(
+        doctor.email,
+        'Doctor Verification Update - Ayphen HMS',
+        emailTemplate('Verification Update', `Dear Dr. ${doctor.firstName} ${doctor.lastName},<br><br>We regret to inform you that your doctor verification request has not been approved.<br><br><strong>Reason:</strong> ${reason}<br><br>If you believe this was in error or have additional documentation, please contact the platform administrator for further assistance.`),
+      ).catch((err) => console.error('Failed to send doctor rejection email:', err));
+    }
+
     return doctor;
   }
 

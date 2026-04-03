@@ -1,6 +1,22 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { generateSequentialId } from '../../common/utils/id-generator';
+import { sendEmail } from '../../common/utils/mailer';
+
+function emailTemplate(title: string, body: string): string {
+  return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+  <div style="background:linear-gradient(135deg,#0F766E,#14B8A6);padding:20px;border-radius:12px 12px 0 0;">
+    <h1 style="color:white;margin:0;font-size:20px;">Ayphen HMS</h1>
+  </div>
+  <div style="padding:24px;background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
+    <h2 style="color:#1f2937;margin:0 0 16px;">${title}</h2>
+    <p style="color:#4b5563;line-height:1.6;">${body}</p>
+  </div>
+  <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:16px;">
+    This is an automated message from Ayphen HMS. Do not reply.
+  </p>
+</div>`;
+}
 
 @Injectable()
 export class BillingService {
@@ -55,11 +71,25 @@ export class BillingService {
   }
 
   async finalizeInvoice(tenantId: string, id: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const invoice = await this.prisma.$transaction(async (tx) => {
       const inv = await tx.invoice.findFirst({ where: { id, tenantId }, include: { lineItems: true, payments: true, patient: true } });
       if (!inv) throw new NotFoundException('Invoice not found');
-      return tx.invoice.update({ where: { id }, data: { status: 'FINALIZED' } });
+      const updated = await tx.invoice.update({ where: { id }, data: { status: 'FINALIZED' }, include: { patient: true } });
+      return updated;
     });
+
+    // Non-blocking email notification to patient
+    const patient = invoice.patient as any;
+    if (patient?.email) {
+      const invDate = new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
+      sendEmail(
+        patient.email,
+        `Invoice #${invoice.invoiceNumber} - Ayphen HMS`,
+        emailTemplate('Invoice Generated', `Dear ${patient.firstName} ${patient.lastName},<br><br>Your invoice has been finalized with the following details:<br><br><strong>Invoice Number:</strong> ${invoice.invoiceNumber}<br><strong>Amount:</strong> ₹${Number(invoice.netTotal).toFixed(2)}<br><strong>Date:</strong> ${invDate}<br><br>Please contact the billing desk for payment options or any queries regarding this invoice.`),
+      ).catch((err) => console.error('Failed to send invoice email:', err));
+    }
+
+    return invoice;
   }
 
   async recordPayment(tenantId: string, invoiceId: string, dto: any, recordedById: string) {

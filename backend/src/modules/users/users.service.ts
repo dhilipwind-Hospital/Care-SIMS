@@ -1,6 +1,22 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import * as bcrypt from 'bcryptjs';
+import { sendEmail } from '../../common/utils/mailer';
+
+function emailTemplate(title: string, body: string): string {
+  return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+  <div style="background:linear-gradient(135deg,#0F766E,#14B8A6);padding:20px;border-radius:12px 12px 0 0;">
+    <h1 style="color:white;margin:0;font-size:20px;">Ayphen HMS</h1>
+  </div>
+  <div style="padding:24px;background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
+    <h2 style="color:#1f2937;margin:0 0 16px;">${title}</h2>
+    <p style="color:#4b5563;line-height:1.6;">${body}</p>
+  </div>
+  <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:16px;">
+    This is an automated message from Ayphen HMS. Do not reply.
+  </p>
+</div>`;
+}
 
 @Injectable()
 export class UsersService {
@@ -68,6 +84,14 @@ export class UsersService {
       include: { role: true },
     });
     const { passwordHash, mfaSecret, ...safe } = user as any;
+
+    // Non-blocking welcome email to new user
+    sendEmail(
+      dto.email,
+      'Welcome to Ayphen HMS',
+      emailTemplate('Welcome to Ayphen HMS', `Dear ${dto.firstName} ${dto.lastName || ''},<br><br>Your account has been created on Ayphen HMS.<br><br><strong>Email:</strong> ${dto.email}<br><strong>Role:</strong> ${(user as any).role?.name || 'Staff'}<br><br>${!dto.password ? `<strong>Temporary Password:</strong> ${password}<br><br>Please change your password upon first login.<br>` : ''}<br>Login at: <a href="${process.env.FRONTEND_URL || 'https://app.ayphenhms.com'}">${process.env.FRONTEND_URL || 'https://app.ayphenhms.com'}</a>`),
+    ).catch((err) => console.error('Failed to send welcome email:', err));
+
     return { ...safe, tempPassword: dto.password ? undefined : password };
   }
 
@@ -144,7 +168,7 @@ export class UsersService {
   }
 
   async approveSelfReg(tenantId: string, id: string, roleId: string, locationId: string, approvedById: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const approved = await this.prisma.$transaction(async (tx) => {
       const user = await tx.tenantUser.findFirst({ where: { id, tenantId } });
       if (!user) throw new NotFoundException('User not found');
       const role = await tx.tenantRole.findFirst({ where: { id: roleId, tenantId } });
@@ -154,14 +178,37 @@ export class UsersService {
         data: { isActive: true, roleId, primaryLocationId: locationId, selfRegApprovedById: approvedById, selfRegApprovedAt: new Date() },
       });
     });
+
+    // Non-blocking approval email
+    if ((approved as any).email) {
+      sendEmail(
+        (approved as any).email,
+        'Account Approved - Ayphen HMS',
+        emailTemplate('Account Approved', `Dear ${(approved as any).firstName} ${(approved as any).lastName || ''},<br><br>Great news! Your registration request has been approved. Your account is now active.<br><br>You can now log in at: <a href="${process.env.FRONTEND_URL || 'https://app.ayphenhms.com'}">${process.env.FRONTEND_URL || 'https://app.ayphenhms.com'}</a><br><br>Welcome aboard!`),
+      ).catch((err) => console.error('Failed to send approval email:', err));
+    }
+
+    return approved;
   }
 
   async rejectSelfReg(tenantId: string, id: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const rejected = await this.prisma.$transaction(async (tx) => {
       const user = await tx.tenantUser.findFirst({ where: { id, tenantId } });
       if (!user) throw new NotFoundException('User not found');
-      return tx.tenantUser.delete({ where: { id } });
+      await tx.tenantUser.delete({ where: { id } });
+      return user;
     });
+
+    // Non-blocking rejection email
+    if ((rejected as any).email) {
+      sendEmail(
+        (rejected as any).email,
+        'Registration Update - Ayphen HMS',
+        emailTemplate('Registration Update', `Dear ${(rejected as any).firstName} ${(rejected as any).lastName || ''},<br><br>We regret to inform you that your registration request has not been approved at this time.<br><br>If you believe this was in error or would like more information, please contact the organization administrator directly.<br><br>Thank you for your interest.`),
+      ).catch((err) => console.error('Failed to send rejection email:', err));
+    }
+
+    return { message: 'Self-registration request rejected' };
   }
 
   async selfRegister(dto: any) {
