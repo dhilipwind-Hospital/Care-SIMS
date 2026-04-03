@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://care-sims-api.onrender.com/api/:path*"
+      "destination": "https://care-sims.onrender.com/api/:path*"
     },
     {
       "source": "/(.*)",
