@@ -340,23 +340,29 @@ import VitalsScreen from '../screens/nurse/VitalsScreen';
 import WardsScreen from '../screens/nurse/WardsScreen';
 import AdmissionsScreen from '../screens/nurse/AdmissionsScreen';
 import MARScreen from '../screens/nurse/MARScreen';
+import IcuScreen from '../screens/nurse/IcuScreen';
 
 function TriageStackScreen() { return <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="TriageMain" component={TriageScreen} /></Stack.Navigator>; }
 function VitalsStackScreen() { return <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="VitalsMain" component={VitalsScreen} /></Stack.Navigator>; }
-function WardsStackScreen() { return <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="WardsMain" component={WardsScreen} /></Stack.Navigator>; }
+function WardsStackScreen() { return <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="WardsMain" component={WardsScreen} /><Stack.Screen name="AdmissionsMain" component={AdmissionsScreen} /></Stack.Navigator>; }
 function AdmissionsStackScreen() { return <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="AdmissionsMain" component={AdmissionsScreen} /></Stack.Navigator>; }
 function MARStackScreen() { return <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="MARMain" component={MARScreen} /></Stack.Navigator>; }
+function IcuStackScreen() { return <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="IcuMain" component={IcuScreen} /></Stack.Navigator>; }
 
 // ─── Reception Tab Stacks ───────────────────────────────────────────
 import QueueScreen from '../screens/reception/QueueScreen';
 import ReceptionPatientsScreen from '../screens/reception/ReceptionPatientsScreen';
 import ReceptionAppointmentsScreen from '../screens/reception/ReceptionAppointmentsScreen';
 import ReceptionBillingScreen from '../screens/reception/BillingScreen';
+import VisitorsScreen from '../screens/reception/VisitorsScreen';
+import AmbulanceScreen from '../screens/reception/AmbulanceScreen';
 
-function ReceptionQueueStackScreen() { return <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="QueueMain" component={QueueScreen} /></Stack.Navigator>; }
+function ReceptionQueueStackScreen() { return <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="QueueMain" component={QueueScreen} /><Stack.Screen name="AmbulanceMain" component={AmbulanceScreen} /></Stack.Navigator>; }
 function ReceptionPatientsStackScreen() { return <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="PatientsMain" component={ReceptionPatientsScreen} /></Stack.Navigator>; }
 function ReceptionAppointmentsStackScreen() { return <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="AppointmentsMain" component={ReceptionAppointmentsScreen} /></Stack.Navigator>; }
 function ReceptionBillingStackScreen() { return <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="BillingMain" component={ReceptionBillingScreen} /></Stack.Navigator>; }
+function VisitorsStackScreen() { return <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="VisitorsMain" component={VisitorsScreen} /></Stack.Navigator>; }
+function AmbulanceStackScreen() { return <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="AmbulanceMain" component={AmbulanceScreen} /></Stack.Navigator>; }
 
 // ─── OT Tab Stacks ──────────────────────────────────────────────────
 import OTBookingsScreen from '../screens/ot/OTBookingsScreen';
@@ -440,6 +446,9 @@ function getTabIcon(routeName: string, focused: boolean): IoniconsName {
     Organizations: { active: 'business', inactive: 'business-outline' },
     Doctors: { active: 'people', inactive: 'people-outline' },
     Audit: { active: 'shield', inactive: 'shield-outline' },
+    Visitors: { active: 'person-add', inactive: 'person-add-outline' },
+    Ambulance: { active: 'medical', inactive: 'medical-outline' },
+    ICU: { active: 'pulse', inactive: 'pulse-outline' },
   };
 
   const iconSet = icons[routeName];
@@ -500,7 +509,7 @@ function NurseTabs() {
       <Tab.Screen name="Triage" component={TriageStackScreen} />
       <Tab.Screen name="Vitals" component={VitalsStackScreen} />
       <Tab.Screen name="Wards" component={WardsStackScreen} />
-      <Tab.Screen name="Admissions" component={AdmissionsStackScreen} />
+      <Tab.Screen name="ICU" component={IcuStackScreen} />
       <Tab.Screen name="Profile" component={SettingsStackScreen} />
     </Tab.Navigator>
   );
@@ -511,7 +520,7 @@ function ReceptionTabs() {
     <Tab.Navigator screenOptions={tabScreenOptions}>
       <Tab.Screen name="Queue" component={ReceptionQueueStackScreen} />
       <Tab.Screen name="Patients" component={ReceptionPatientsStackScreen} />
-      <Tab.Screen name="Appointments" component={ReceptionAppointmentsStackScreen} />
+      <Tab.Screen name="Visitors" component={VisitorsStackScreen} />
       <Tab.Screen name="Billing" component={ReceptionBillingStackScreen} />
       <Tab.Screen name="Profile" component={SettingsStackScreen} />
     </Tab.Navigator>

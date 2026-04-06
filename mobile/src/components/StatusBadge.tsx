@@ -6,7 +6,8 @@ import { fontSize, fontWeight } from '../theme/typography';
 type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'default';
 
 interface StatusBadgeProps {
-  label: string;
+  label?: string | null;
+  status?: string | null;
   variant?: BadgeVariant;
 }
 
@@ -27,11 +28,15 @@ export function getStatusVariant(status: string): BadgeVariant {
   return 'default';
 }
 
-export default function StatusBadge({ label, variant = 'default' }: StatusBadgeProps) {
-  const c = variantColors[variant];
+export default function StatusBadge({ label, status, variant }: StatusBadgeProps) {
+  // Accept either label or status prop
+  const text = label || status || 'Unknown';
+  const safeText = String(text).replace(/_/g, ' ');
+  const finalVariant: BadgeVariant = variant || (status ? getStatusVariant(status) : (label ? getStatusVariant(label) : 'default'));
+  const c = variantColors[finalVariant];
   return (
     <View style={[styles.badge, { backgroundColor: c.bg }]}>
-      <Text style={[styles.text, { color: c.text }]}>{label.replace(/_/g, ' ')}</Text>
+      <Text style={[styles.text, { color: c.text }]}>{safeText}</Text>
     </View>
   );
 }
