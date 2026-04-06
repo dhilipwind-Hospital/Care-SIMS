@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import api from '../lib/api';
 import {
   setToken,
@@ -10,10 +10,31 @@ import {
 } from '../lib/storage';
 import {
   registerForPushNotifications,
-  unregisterPushNotifications,
-  addNotificationListeners,
+  getStoredPushToken,
+  clearStoredPushToken,
 } from '../lib/notifications';
+import { Platform } from 'react-native';
 import { User, LoginResponse, LoginType, DoctorAffiliation } from '../types';
+
+async function sendDeviceTokenToBackend(token: string) {
+  try {
+    await api.post('/auth/device-token', {
+      deviceToken: token,
+      deviceType: Platform.OS, // 'ios' | 'android'
+      apnsToken: Platform.OS === 'ios' ? token : undefined,
+    });
+  } catch (e) {
+    console.warn('[auth] Failed to register device token with backend:', e);
+  }
+}
+
+async function removeDeviceTokenFromBackend(token: string) {
+  try {
+    await api.delete('/auth/device-token', { data: { deviceToken: token } });
+  } catch (e) {
+    console.warn('[auth] Failed to unregister device token:', e);
+  }
+}
 
 interface AuthContextType {
   user: User | null;
@@ -34,45 +55,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [affiliations, setAffiliations] = useState<DoctorAffiliation[] | null>(null);
   const [pushToken, setPushToken] = useState<string | null>(null);
-  const notificationCleanupRef = useRef<(() => void) | null>(null);
 
   // Check stored auth on mount
   useEffect(() => {
     checkAuth();
   }, []);
 
-  // Set up push notification listeners when user is authenticated
+  // When a user becomes authenticated, ensure the device token is registered
+  // with the backend. Foreground/tap notification listeners are wired up via
+  // the useNotifications() hook in App.tsx.
   useEffect(() => {
-    if (user) {
-      // Register for push notifications
-      registerForPushNotifications().then((token) => {
-        if (token) setPushToken(token);
-      });
+    if (!user) return;
+    let cancelled = false;
 
-      // Add notification listeners
-      const cleanup = addNotificationListeners(
-        (notification) => {
-          // Handle received notification (app in foreground)
-          console.log('Notification received:', notification.request.content.title);
-        },
-        (response) => {
-          // Handle notification tap — navigate to relevant screen
-          const data = response.notification.request.content.data;
-          if (data?.screen) {
-            // Navigation will be handled by the navigation container via deep linking
-            console.log('Notification tapped, target screen:', data.screen);
-          }
-        },
-      );
-      notificationCleanupRef.current = cleanup;
-
-      return () => {
-        if (notificationCleanupRef.current) {
-          notificationCleanupRef.current();
-          notificationCleanupRef.current = null;
+    (async () => {
+      try {
+        // Reuse a cached token if available, otherwise request a fresh one.
+        let token = await getStoredPushToken();
+        if (!token) {
+          token = await registerForPushNotifications();
         }
-      };
-    }
+        if (cancelled) return;
+        if (token) {
+          setPushToken(token);
+          await sendDeviceTokenToBackend(token);
+        }
+      } catch (e) {
+        console.warn('[auth] push registration failed:', e);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   async function checkAuth() {
@@ -186,6 +201,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await setUser(normalizedUser);
       setUserState(normalizedUser);
       setAffiliations(null);
+
+      // Register for push notifications and send token to backend.
+      // Fire and forget — login should not block on push setup.
+      (async () => {
+        try {
+          const token = await registerForPushNotifications();
+          if (token) {
+            setPushToken(token);
+            await sendDeviceTokenToBackend(token);
+          }
+        } catch (e) {
+          console.warn('[auth] post-login push registration failed:', e);
+        }
+      })();
+
       return data;
     },
     [],
@@ -203,19 +233,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     // Unregister push token from backend
-    if (pushToken) {
-      try {
-        await unregisterPushNotifications(pushToken);
-      } catch {
-        // Ignore if this fails — still log out locally
-      }
+    const tokenToRemove = pushToken ?? (await getStoredPushToken());
+    if (tokenToRemove) {
+      await removeDeviceTokenFromBackend(tokenToRemove);
+      await clearStoredPushToken();
       setPushToken(null);
-    }
-
-    // Clean up notification listeners
-    if (notificationCleanupRef.current) {
-      notificationCleanupRef.current();
-      notificationCleanupRef.current = null;
     }
 
     await clearAll();

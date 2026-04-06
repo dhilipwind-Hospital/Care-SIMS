@@ -405,6 +405,8 @@ function PlatformAuditStackScreen() { return <Stack.Navigator screenOptions={{ h
 // ─── Shared Tab Stacks ──────────────────────────────────────────────
 import NotificationsScreen from '../screens/shared/NotificationsScreen';
 import SettingsScreen from '../screens/shared/SettingsScreen';
+import ScannerScreen from '../screens/shared/ScannerScreen';
+import CameraScreen from '../screens/shared/CameraScreen';
 
 function NotificationsStackScreen() { return <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="NotificationsMain" component={NotificationsScreen} /></Stack.Navigator>; }
 function SettingsStackScreen() { return <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="SettingsMain" component={SettingsScreen} /></Stack.Navigator>; }
@@ -644,6 +646,9 @@ function AuthNavigator() {
   );
 }
 
+// ─── Root Stack (modal screens accessible across the app) ───────────
+const RootStack = createNativeStackNavigator();
+
 // ─── Main App Navigator ──────────────────────────────────────────────
 export default function AppNavigator() {
   const { isLoading, isAuthenticated, user, affiliations } = useAuth();
@@ -668,5 +673,19 @@ export default function AppNavigator() {
   }
 
   const TabsComponent = getRoleBasedTabs(user?.role);
-  return <TabsComponent />;
+  return (
+    <RootStack.Navigator screenOptions={{ headerShown: false }}>
+      <RootStack.Screen name="MainTabs" component={TabsComponent} />
+      <RootStack.Screen
+        name="Scanner"
+        component={ScannerScreen}
+        options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+      />
+      <RootStack.Screen
+        name="Camera"
+        component={CameraScreen}
+        options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+      />
+    </RootStack.Navigator>
+  );
 }

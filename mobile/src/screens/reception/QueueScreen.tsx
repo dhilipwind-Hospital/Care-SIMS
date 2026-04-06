@@ -16,6 +16,7 @@ import { borderRadius, shadow } from '../../theme';
 import { KpiCard, StatusBadge, getStatusVariant, EmptyState, Button, Input, BottomSheet } from '../../components';
 import api from '../../lib/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -56,6 +57,7 @@ interface DoctorOption {
 /* ------------------------------------------------------------------ */
 
 export default function QueueScreen() {
+  const navigation = useNavigation<any>();
   const [tokens, setTokens] = useState<QueueToken[]>([]);
   const [stats, setStats] = useState<QueueStats>({ waiting: 0, called: 0, inConsult: 0, completed: 0 });
   const [loading, setLoading] = useState(true);
@@ -165,6 +167,29 @@ export default function QueueScreen() {
     setShowDoctorPicker(false);
   };
 
+  const handleScanWristband = (data: string) => {
+    // Open the issue token modal and run a lookup
+    setShowModal(true);
+    setPatientQuery(data);
+    // Try to resolve the scanned ID directly
+    api
+      .get('/patients', { params: { q: data } })
+      .then(({ data: res }) => {
+        const list = Array.isArray(res) ? res : res.data ?? res.items ?? [];
+        if (list.length === 1) {
+          setSelectedPatient({
+            id: list[0].id,
+            name: list[0].name ?? `${list[0].firstName ?? ''} ${list[0].lastName ?? ''}`.trim(),
+            patientId: list[0].patientId,
+          });
+          setPatientResults([]);
+        } else {
+          setPatientResults(list.slice(0, 8));
+        }
+      })
+      .catch(() => {});
+  };
+
   const handleIssueToken = async () => {
     if (!selectedPatient) {
       Alert.alert('Validation', 'Please select a patient');
@@ -258,6 +283,20 @@ export default function QueueScreen() {
         ListEmptyComponent={<EmptyState icon="people-outline" title="Queue is empty" subtitle="Issue a token to get started" />}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       />
+
+      {/* Scan Wristband Button */}
+      <TouchableOpacity
+        style={styles.scanFab}
+        accessibilityLabel="Scan patient wristband"
+        onPress={() =>
+          navigation.navigate('Scanner', {
+            onScan: (data: string) => handleScanWristband(data),
+          })
+        }
+        activeOpacity={0.8}
+      >
+        <Ionicons name="scan" size={22} color={colors.primary} />
+      </TouchableOpacity>
 
       {/* Issue Token Button */}
       <TouchableOpacity style={styles.fab} onPress={() => setShowModal(true)} activeOpacity={0.8}>
@@ -426,6 +465,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     ...shadow.md,
+  },
+  scanFab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 92,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadow.sm,
   },
   formLabel: {
     ...typography.label,

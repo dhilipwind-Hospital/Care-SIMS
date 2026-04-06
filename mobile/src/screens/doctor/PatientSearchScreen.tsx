@@ -4,6 +4,7 @@ import {
   FlatList,
   ActivityIndicator,
   StyleSheet,
+  TouchableOpacity,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -74,14 +75,32 @@ export default function PatientSearchScreen() {
       <View style={styles.container}>
       <Header title="Patients" />
       <View style={styles.searchWrap}>
-        <Input
-          placeholder="Search by name, ID, or phone..."
-          value={query}
-          onChangeText={onChangeText}
-          leftIcon={<Ionicons name="search" size={18} color={colors.textTertiary} />}
-          autoCapitalize="none"
-          returnKeyType="search"
-        />
+        <View style={styles.searchRow}>
+          <View style={{ flex: 1 }}>
+            <Input
+              placeholder="Search by name, ID, or phone..."
+              value={query}
+              onChangeText={onChangeText}
+              leftIcon={<Ionicons name="search" size={18} color={colors.textTertiary} />}
+              autoCapitalize="none"
+              returnKeyType="search"
+            />
+          </View>
+          <TouchableOpacity
+            style={styles.scanBtn}
+            accessibilityLabel="Scan patient barcode"
+            onPress={() => {
+              navigation.navigate('Scanner', {
+                onScan: (data: string) => {
+                  setQuery(data);
+                  search(data);
+                },
+              });
+            }}
+          >
+            <Ionicons name="scan" size={22} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
       {loading ? (
         <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
@@ -114,6 +133,21 @@ const styles = StyleSheet.create({
   searchWrap: {
     paddingHorizontal: spacing.base,
     paddingTop: spacing.md,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  scanBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   loader: {
     marginTop: 40,

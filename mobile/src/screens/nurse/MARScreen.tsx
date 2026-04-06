@@ -13,6 +13,8 @@ import { typography, fontSize, fontWeight } from '../../theme/typography';
 import { borderRadius, shadow } from '../../theme';
 import { EmptyState, Button } from '../../components';
 import api from '../../lib/api';
+import { offlinePatch } from '../../lib/offlineApi';
+import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 /* ------------------------------------------------------------------ */
@@ -108,10 +110,22 @@ export default function MARScreen() {
           onPress: async () => {
             setAdministeringId(record.id);
             try {
-              await api.patch(`/medication-admin/${record.id}/administer`, {
-                administeredAt: new Date().toISOString(),
-                fiveRightsVerified: true,
-              });
+              const result = await offlinePatch(
+                `/medication-admin/${record.id}/administer`,
+                {
+                  administeredAt: new Date().toISOString(),
+                  fiveRightsVerified: true,
+                },
+              );
+              if (result._offline) {
+                Toast.show({
+                  type: 'info',
+                  text1: 'Saved offline',
+                  text2: 'Administration will sync when online',
+                });
+              } else {
+                Toast.show({ type: 'success', text1: 'Medication administered' });
+              }
               fetchRecords();
             } catch {
               Alert.alert('Error', 'Failed to administer medication');

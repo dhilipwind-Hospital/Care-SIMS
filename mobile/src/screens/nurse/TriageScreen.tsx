@@ -16,6 +16,8 @@ import { typography, fontSize, fontWeight } from '../../theme/typography';
 import { borderRadius, shadow } from '../../theme';
 import { StatusBadge, EmptyState, Button, Input, BottomSheet } from '../../components';
 import api from '../../lib/api';
+import { offlinePost } from '../../lib/offlineApi';
+import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 /* ------------------------------------------------------------------ */
@@ -143,7 +145,7 @@ export default function TriageScreen() {
     }
     setSubmitting(true);
     try {
-      await api.post('/triage', {
+      const result = await offlinePost('/triage', {
         patientId: selectedPatient.id,
         triageLevel: selectedLevel,
         chiefComplaint: chiefComplaint.trim(),
@@ -157,6 +159,15 @@ export default function TriageScreen() {
           painScore: painScore ? Number(painScore) : undefined,
         },
       });
+      if (result._offline) {
+        Toast.show({
+          type: 'info',
+          text1: 'Saved offline',
+          text2: 'Triage will sync when connection returns',
+        });
+      } else {
+        Toast.show({ type: 'success', text1: 'Triage recorded' });
+      }
       setShowForm(false);
       resetForm();
       fetchRecords();

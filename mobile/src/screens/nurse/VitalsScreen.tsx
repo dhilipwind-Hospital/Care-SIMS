@@ -15,6 +15,8 @@ import { typography, fontSize, fontWeight } from '../../theme/typography';
 import { borderRadius, shadow } from '../../theme';
 import { Button, Input, PatientCard } from '../../components';
 import api from '../../lib/api';
+import { offlinePost } from '../../lib/offlineApi';
+import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 /* ------------------------------------------------------------------ */
@@ -136,7 +138,7 @@ export default function VitalsScreen() {
     }
     setSubmitting(true);
     try {
-      await api.post('/vitals', {
+      const result = await offlinePost('/vitals', {
         patientId: selectedPatient.id,
         bpSystolic: systolic ? Number(systolic) : undefined,
         bpDiastolic: diastolic ? Number(diastolic) : undefined,
@@ -148,7 +150,15 @@ export default function VitalsScreen() {
         painScore: painScore ? Number(painScore) : undefined,
         bloodGlucose: bloodGlucose ? Number(bloodGlucose) : undefined,
       });
-      Alert.alert('Success', 'Vitals recorded successfully');
+      if (result._offline) {
+        Toast.show({
+          type: 'info',
+          text1: 'Saved offline',
+          text2: 'Vitals will sync when connection returns',
+        });
+      } else {
+        Toast.show({ type: 'success', text1: 'Vitals recorded successfully' });
+      }
       resetForm();
       fetchHistory(selectedPatient.id);
     } catch {

@@ -177,13 +177,28 @@ export default function ReceptionPatientsScreen({ navigation }: { navigation?: a
       <View style={styles.container}>
       {/* Search */}
       <View style={styles.searchWrap}>
-        <Input
-          placeholder="Search patients..."
-          value={search}
-          onChangeText={setSearch}
-          leftIcon={<Ionicons name="search-outline" size={18} color={colors.textTertiary} />}
-          containerStyle={{ marginBottom: 0 }}
-        />
+        <View style={styles.searchRow}>
+          <View style={{ flex: 1 }}>
+            <Input
+              placeholder="Search patients..."
+              value={search}
+              onChangeText={setSearch}
+              leftIcon={<Ionicons name="search-outline" size={18} color={colors.textTertiary} />}
+              containerStyle={{ marginBottom: 0 }}
+            />
+          </View>
+          <TouchableOpacity
+            style={styles.scanBtn}
+            accessibilityLabel="Scan patient barcode"
+            onPress={() => {
+              navigation?.navigate('Scanner', {
+                onScan: (data: string) => setSearch(data),
+              });
+            }}
+          >
+            <Ionicons name="scan" size={22} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -250,6 +265,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 4,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  scanBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   list: {
     padding: 16,
