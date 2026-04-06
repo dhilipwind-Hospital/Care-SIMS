@@ -112,8 +112,7 @@ export default function InvoicesScreen() {
       {STATUS_FILTERS.map((filter) => {
         const isActive = activeFilter === filter;
         return (
-          <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-            <TouchableOpacity
+          <TouchableOpacity
             key={filter}
             style={[styles.chip, isActive && styles.chipActive]}
             onPress={() => setActiveFilter(filter)}
@@ -122,7 +121,6 @@ export default function InvoicesScreen() {
               {filter}
             </Text>
           </TouchableOpacity>
-          </SafeAreaView>
         );
       })}
     </View>
@@ -133,8 +131,7 @@ export default function InvoicesScreen() {
     const amount = item.totalAmount ?? item.netTotal ?? 0;
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <TouchableOpacity
+      <TouchableOpacity
         style={styles.card}
         onPress={() => navigation.navigate('InvoiceDetail', { invoiceId: item.id })}
         activeOpacity={0.7}
@@ -152,7 +149,6 @@ export default function InvoicesScreen() {
           <StatusBadge label={item.status} variant={getStatusVariant(item.status)} />
         </View>
       </TouchableOpacity>
-      </SafeAreaView>
     );
   };
 

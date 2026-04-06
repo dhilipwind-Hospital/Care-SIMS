@@ -117,8 +117,7 @@ export default function WardsScreen() {
       {row.map((bed) => {
         const bg = BED_COLOR[bed.status] ?? colors.textTertiary;
         return (
-          <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-            <TouchableOpacity
+          <TouchableOpacity
             key={bed.id}
             style={[styles.bedCell, { backgroundColor: bg + '20', borderColor: bg }]}
             onPress={() => handleBedPress(bed)}
@@ -127,7 +126,6 @@ export default function WardsScreen() {
             <View style={[styles.bedDot, { backgroundColor: bg }]} />
             <Text style={[styles.bedNumber, { color: bg }]}>{bed.bedNumber}</Text>
           </TouchableOpacity>
-          </SafeAreaView>
         );
       })}
       {/* fill empty slots for alignment */}

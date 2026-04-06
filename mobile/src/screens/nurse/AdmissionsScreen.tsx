@@ -101,8 +101,7 @@ export default function AdmissionsScreen() {
     const isActive = item.status?.toUpperCase() === 'ACTIVE';
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <View style={[styles.card, shadow.sm]}>
+      <View style={[styles.card, shadow.sm]}>
         <View style={styles.cardTop}>
           <View style={styles.cardInfo}>
             <Text style={styles.name}>{name}</Text>
@@ -124,7 +123,6 @@ export default function AdmissionsScreen() {
           />
         )}
       </View>
-      </SafeAreaView>
     );
   };
 

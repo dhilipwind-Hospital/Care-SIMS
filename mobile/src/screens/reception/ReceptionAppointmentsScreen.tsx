@@ -199,8 +199,7 @@ export default function ReceptionAppointmentsScreen() {
     const isScheduled = item.status?.toUpperCase() === 'SCHEDULED';
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <View style={[styles.card, shadow.sm]}>
+      <View style={[styles.card, shadow.sm]}>
         <View style={styles.cardTop}>
           <View style={styles.cardInfo}>
             <Text style={styles.name}>{patientName}</Text>
@@ -224,7 +223,6 @@ export default function ReceptionAppointmentsScreen() {
           </View>
         </View>
       </View>
-      </SafeAreaView>
     );
   };
 

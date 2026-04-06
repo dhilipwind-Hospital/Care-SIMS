@@ -132,8 +132,7 @@ export default function PharmacyReturnsScreen() {
     const isActionLoading = actionLoadingId === item.id;
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <View style={styles.card}>
+      <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.cardInfo}>
             <Text style={styles.returnNum}>
@@ -179,7 +178,6 @@ export default function PharmacyReturnsScreen() {
           </View>
         )}
       </View>
-      </SafeAreaView>
     );
   };
 

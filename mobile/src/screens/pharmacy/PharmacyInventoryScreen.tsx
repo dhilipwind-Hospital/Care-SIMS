@@ -119,8 +119,7 @@ export default function PharmacyInventoryScreen() {
     const batches = item.batches ?? [];
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <TouchableOpacity
+      <TouchableOpacity
         style={[styles.card, low && styles.cardLow]}
         onPress={() => toggleExpand(item.id)}
         activeOpacity={0.7}
@@ -173,7 +172,6 @@ export default function PharmacyInventoryScreen() {
           </View>
         )}
       </TouchableOpacity>
-      </SafeAreaView>
     );
   };
 

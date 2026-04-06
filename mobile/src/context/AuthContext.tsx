@@ -85,9 +85,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Validate token by calling /auth/me
       try {
-        const { data } = await api.get<User>('/auth/me');
-        await setUser(data);
-        setUserState(data);
+        const { data } = await api.get<any>('/auth/me');
+        // Use stored user (which has normalized role) as base, merge with fresh /auth/me data
+        const storedUser = await getUser();
+        const merged = { ...data, role: storedUser?.role || data.role };
+        await setUser(merged);
+        setUserState(merged);
       } catch {
         // Token invalid, try stored user as fallback (refresh interceptor may fix it)
         const storedUser = await getUser();
@@ -155,10 +158,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (accessToken) await setToken(accessToken);
       if (refreshToken) await setRefreshToken(refreshToken);
 
-      // Normalize user object with role
+      // Normalize role from backend systemRoleId / platformRole to mobile role keys
+      const normalizeRole = (u: any): string => {
+        if (type === 'PATIENT') return 'PATIENT';
+        if (type === 'DOCTOR') return 'DOCTOR';
+        // Platform users
+        if (u.platformRole === 'PLATFORM_OWNER') return 'PLATFORM_OWNER';
+        if (u.platformRole === 'PLATFORM_ADMIN') return 'PLATFORM_ADMIN';
+        if (u.type === 'PLATFORM') return 'PLATFORM_ADMIN';
+        // Tenant users — map systemRoleId to mobile role
+        const sysRole = u.role?.systemRoleId || u.systemRoleId || u.role?.name || '';
+        if (sysRole.includes('DOCTOR')) return 'DOCTOR';
+        if (sysRole.includes('NURSE')) return 'NURSE';
+        if (sysRole.includes('PHARMA')) return 'PHARMACY';
+        if (sysRole.includes('LAB')) return 'LAB';
+        if (sysRole.includes('OT')) return 'OT';
+        if (sysRole.includes('BILLING')) return 'BILLING';
+        if (sysRole.includes('RECEPTION') || sysRole.includes('FRONT_OFFICE')) return 'RECEPTION';
+        if (sysRole.includes('ORG_ADMIN') || sysRole.includes('ADMIN')) return 'ADMIN';
+        return 'ADMIN'; // default
+      };
+
       const normalizedUser = {
         ...userObj,
-        role: userObj.role || userObj.platformRole || userObj.systemRoleId || 'ADMIN',
+        role: normalizeRole(userObj),
       };
       await setUser(normalizedUser);
       setUserState(normalizedUser);

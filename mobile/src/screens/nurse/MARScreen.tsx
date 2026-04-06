@@ -132,8 +132,7 @@ export default function MARScreen() {
     const isActionable = ['OVERDUE', 'DUE_NOW'].includes(item.status?.toUpperCase());
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <View style={[styles.card, shadow.sm, { backgroundColor: bg, borderLeftColor: border, borderLeftWidth: border !== 'transparent' ? 3 : 0 }]}>
+      <View style={[styles.card, shadow.sm, { backgroundColor: bg, borderLeftColor: border, borderLeftWidth: border !== 'transparent' ? 3 : 0 }]}>
         <View style={styles.cardTop}>
           <View style={styles.cardInfo}>
             <Text style={styles.patientName}>{name}</Text>
@@ -160,7 +159,6 @@ export default function MARScreen() {
           />
         )}
       </View>
-      </SafeAreaView>
     );
   };
 

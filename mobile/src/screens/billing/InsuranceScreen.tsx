@@ -137,8 +137,7 @@ export default function InsuranceScreen() {
   const renderPolicy = ({ item }: { item: InsurancePolicy }) => {
     const patientName = item.patient?.name ?? item.patientName ?? 'Unknown';
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <View style={styles.card}>
+      <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.providerWrap}>
             <Ionicons name="shield-checkmark-outline" size={18} color={colors.primary} />
@@ -155,7 +154,6 @@ export default function InsuranceScreen() {
           <Text style={styles.infoValue}>{patientName}</Text>
         </View>
       </View>
-      </SafeAreaView>
     );
   };
 
@@ -164,8 +162,7 @@ export default function InsuranceScreen() {
     const isLoading = actionLoading === item.id;
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <View style={styles.card}>
+      <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.providerWrap}>
             <Ionicons name="document-text-outline" size={18} color={colors.primary} />
@@ -206,7 +203,6 @@ export default function InsuranceScreen() {
           />
         )}
       </View>
-      </SafeAreaView>
     );
   };
 

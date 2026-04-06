@@ -118,8 +118,7 @@ export default function OTBookingsScreen() {
     const isActionLoading = actionLoading === item.id;
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <View style={styles.card}>
+      <View style={styles.card}>
         <View style={styles.cardHeader}>
           <Text style={styles.procedureName} numberOfLines={1}>
             {item.procedureName ?? 'Procedure'}
@@ -166,7 +165,6 @@ export default function OTBookingsScreen() {
           />
         )}
       </View>
-      </SafeAreaView>
     );
   };
 

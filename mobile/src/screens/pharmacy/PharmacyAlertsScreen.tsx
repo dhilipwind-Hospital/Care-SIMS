@@ -157,8 +157,7 @@ export default function PharmacyAlertsScreen() {
     const exBg = getExpiryBg(days);
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <View style={[styles.card, { backgroundColor: exBg, borderLeftColor: exColor, borderLeftWidth: 3 }]}>
+      <View style={[styles.card, { backgroundColor: exBg, borderLeftColor: exColor, borderLeftWidth: 3 }]}>
         <View style={styles.cardRow}>
           <View style={styles.cardInfo}>
             <Text style={styles.drugName}>{ex.drugName ?? ex.name ?? 'Unknown'}</Text>
@@ -175,7 +174,6 @@ export default function PharmacyAlertsScreen() {
           </View>
         </View>
       </View>
-      </SafeAreaView>
     );
   };
 

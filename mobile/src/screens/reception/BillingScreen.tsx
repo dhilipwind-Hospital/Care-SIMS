@@ -132,8 +132,7 @@ export default function BillingScreen() {
     const lineItems = item.lineItems ?? item.items ?? [];
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <View style={[styles.card, shadow.sm]}>
+      <View style={[styles.card, shadow.sm]}>
         <TouchableOpacity style={styles.cardTop} onPress={() => toggleExpand(item.id)} activeOpacity={0.7}>
           <View style={styles.cardInfo}>
             <Text style={styles.invoiceNum}>{item.invoiceNumber}</Text>
@@ -193,7 +192,6 @@ export default function BillingScreen() {
           </View>
         )}
       </View>
-      </SafeAreaView>
     );
   };
 
@@ -254,15 +252,13 @@ export default function BillingScreen() {
           {PAYMENT_METHODS.map((m) => {
             const active = payMethod === m;
             return (
-              <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-                <TouchableOpacity
+              <TouchableOpacity
                 key={m}
                 style={[styles.methodChip, active && styles.methodChipActive]}
                 onPress={() => setPayMethod(m)}
               >
                 <Text style={[styles.methodText, active && styles.methodTextActive]}>{m}</Text>
               </TouchableOpacity>
-              </SafeAreaView>
             );
           })}
         </View>

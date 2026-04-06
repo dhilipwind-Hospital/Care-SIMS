@@ -85,8 +85,7 @@ export default function PatientLabReportsScreen() {
     const count = item.testCount ?? results.length;
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <TouchableOpacity
+      <TouchableOpacity
         style={styles.card}
         activeOpacity={0.7}
         onPress={() => setExpandedId(isExpanded ? null : item.id)}
@@ -125,8 +124,7 @@ export default function PatientLabReportsScreen() {
                   const flagColor = getFlagColor(r.flag);
                   const isCritical = r.flag?.toUpperCase() === 'CRITICAL';
                   return (
-                    <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-                      <View
+                    <View
                       key={r.id ?? i}
                       style={[styles.tableRow, isCritical && styles.criticalRow]}
                     >
@@ -139,7 +137,6 @@ export default function PatientLabReportsScreen() {
                         {r.flag ?? '--'}
                       </Text>
                     </View>
-                    </SafeAreaView>
                   );
                 })}
               </View>
@@ -147,7 +144,6 @@ export default function PatientLabReportsScreen() {
           </View>
         )}
       </TouchableOpacity>
-      </SafeAreaView>
     );
   };
 

@@ -102,8 +102,7 @@ export default function LabOrdersScreen() {
       {STATUS_FILTERS.map((filter) => {
         const isActive = activeFilter === filter;
         return (
-          <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-            <TouchableOpacity
+          <TouchableOpacity
             key={filter}
             style={[styles.chip, isActive && styles.chipActive]}
             onPress={() => setActiveFilter(filter)}
@@ -112,7 +111,6 @@ export default function LabOrdersScreen() {
               {filter.replace(/_/g, ' ')}
             </Text>
           </TouchableOpacity>
-          </SafeAreaView>
         );
       })}
     </View>
@@ -123,8 +121,7 @@ export default function LabOrdersScreen() {
     const testCount = item.testCount ?? item.tests?.length ?? 0;
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <TouchableOpacity
+      <TouchableOpacity
         style={styles.card}
         onPress={() => navigation.navigate('LabOrderDetail', { orderId: item.id })}
         activeOpacity={0.7}
@@ -147,7 +144,6 @@ export default function LabOrdersScreen() {
           </View>
         </View>
       </TouchableOpacity>
-      </SafeAreaView>
     );
   };
 

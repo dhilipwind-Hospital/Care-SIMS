@@ -117,8 +117,7 @@ export default function NotificationsScreen() {
     const isExpanded = selectedId === item.id;
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <TouchableOpacity
+      <TouchableOpacity
         style={[styles.card, !isRead && styles.cardUnread, shadow.sm]}
         onPress={() => handleTap(item)}
         activeOpacity={0.7}
@@ -142,7 +141,6 @@ export default function NotificationsScreen() {
           </View>
         </View>
       </TouchableOpacity>
-      </SafeAreaView>
     );
   };
 

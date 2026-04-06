@@ -49,7 +49,12 @@ export default function DoctorQueueScreen() {
     if (!silent) setLoading(true);
     try {
       const { data } = await api.get(`/queue/doctor/${user.id}`);
-      const list = Array.isArray(data) ? data : data.tokens ?? data.data ?? [];
+      // Handle multiple response shapes: array | { data: [...] } | { tokens: [...] } | { data: { tokens: [...] } }
+      let list: any[] = [];
+      if (Array.isArray(data)) list = data;
+      else if (Array.isArray(data?.data)) list = data.data;
+      else if (Array.isArray(data?.tokens)) list = data.tokens;
+      else if (Array.isArray(data?.data?.tokens)) list = data.data.tokens;
       setTokens(list);
     } catch (err: any) {
       Toast.show({ type: 'error', text1: err?.response?.data?.message ?? 'Failed to load queue' });
@@ -122,8 +127,7 @@ export default function DoctorQueueScreen() {
     const isActionLoading = actionLoading === item.id;
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <View style={styles.tokenCard}>
+      <View style={styles.tokenCard}>
         <View style={styles.tokenHeader}>
           <View style={styles.tokenNumberWrap}>
             <Text style={styles.tokenNumber}>#{item.tokenNumber}</Text>
@@ -169,7 +173,6 @@ export default function DoctorQueueScreen() {
           </View>
         )}
       </View>
-      </SafeAreaView>
     );
   };
 

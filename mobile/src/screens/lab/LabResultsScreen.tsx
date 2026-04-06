@@ -125,8 +125,7 @@ export default function LabResultsScreen() {
     const isReported = item.status === 'REPORTED' || item.status === 'RESULTED';
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <View style={styles.card}>
+      <View style={styles.card}>
         <TouchableOpacity style={styles.cardHeader} onPress={() => toggleExpand(item.id)} activeOpacity={0.7}>
           <View style={styles.cardInfo}>
             <Text style={styles.orderNum}>{item.orderNumber ?? `#${item.id.slice(0, 6)}`}</Text>
@@ -196,7 +195,6 @@ export default function LabResultsScreen() {
           />
         )}
       </View>
-      </SafeAreaView>
     );
   };
 

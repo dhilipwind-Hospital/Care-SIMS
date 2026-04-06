@@ -91,8 +91,7 @@ export default function PatientBillingScreen() {
     const total = item.amount ?? item.totalAmount;
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <TouchableOpacity
+      <TouchableOpacity
         style={styles.card}
         activeOpacity={0.7}
         onPress={() => setExpandedId(isExpanded ? null : item.id)}
@@ -155,7 +154,6 @@ export default function PatientBillingScreen() {
           </View>
         )}
       </TouchableOpacity>
-      </SafeAreaView>
     );
   };
 

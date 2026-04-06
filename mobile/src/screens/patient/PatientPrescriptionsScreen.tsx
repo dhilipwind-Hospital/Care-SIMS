@@ -78,8 +78,7 @@ export default function PatientPrescriptionsScreen() {
     const meds = item.items ?? item.medications ?? [];
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <TouchableOpacity
+      <TouchableOpacity
         style={styles.card}
         activeOpacity={0.7}
         onPress={() => setExpandedId(isExpanded ? null : item.id)}
@@ -129,7 +128,6 @@ export default function PatientPrescriptionsScreen() {
           </View>
         )}
       </TouchableOpacity>
-      </SafeAreaView>
     );
   };
 

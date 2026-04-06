@@ -104,8 +104,7 @@ export default function OTEquipmentScreen() {
       item.condition === 'POOR' ? 'danger' : 'default';
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <View style={styles.card}>
+      <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.nameWrap}>
             <Ionicons name="hardware-chip-outline" size={18} color={colors.primary} />
@@ -154,7 +153,6 @@ export default function OTEquipmentScreen() {
           />
         )}
       </View>
-      </SafeAreaView>
     );
   };
 

@@ -200,8 +200,7 @@ export default function QueueScreen() {
     const doctor = item.doctor?.name ?? item.doctorName ?? '--';
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <View style={[styles.card, shadow.sm]}>
+      <View style={[styles.card, shadow.sm]}>
         <View style={styles.tokenCircle}>
           <Text style={styles.tokenNumber}>{item.tokenNumber}</Text>
         </View>
@@ -212,7 +211,6 @@ export default function QueueScreen() {
         </View>
         <StatusBadge label={item.status} variant={getStatusVariant(item.status)} />
       </View>
-      </SafeAreaView>
     );
   };
 
@@ -333,15 +331,13 @@ export default function QueueScreen() {
             const active = priority === p;
             const c = p === 'EMERGENCY' ? colors.danger : p === 'URGENT' ? colors.warning : colors.primary;
             return (
-              <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-                <TouchableOpacity
+              <TouchableOpacity
                 key={p}
                 style={[styles.priorityChip, { borderColor: c }, active && { backgroundColor: c }]}
                 onPress={() => setPriority(p)}
               >
                 <Text style={[styles.priorityText, { color: active ? colors.white : c }]}>{p}</Text>
               </TouchableOpacity>
-              </SafeAreaView>
             );
           })}
         </View>

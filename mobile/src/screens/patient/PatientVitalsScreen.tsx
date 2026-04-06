@@ -96,15 +96,13 @@ export default function PatientVitalsScreen() {
     // Skip first item if it's the same as latest (shown in header)
     if (index === 0 && latest) return null;
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
-        <View style={styles.historyRow}>
+      <View style={styles.historyRow}>
         <Text style={styles.historyDate}>{formatDate(item.date ?? item.createdAt)}</Text>
         <Text style={styles.historyCell}>{item.bloodPressure ?? '--'}</Text>
         <Text style={styles.historyCell}>{item.heartRate ?? '--'}</Text>
         <Text style={styles.historyCell}>{item.spO2 != null ? `${item.spO2}%` : '--'}</Text>
         <Text style={styles.historyCell}>{item.temperature != null ? `${item.temperature}\u00B0` : '--'}</Text>
       </View>
-      </SafeAreaView>
     );
   };
 
