@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Users, Building2, BarChart3, Activity, UserCheck } from 'lucide-react';
+import { Users, Building2, BarChart3, Activity, UserCheck, Shield, MapPin, Search, Settings as SettingsIcon, Hospital } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import { SkeletonKpiRow } from '../../components/ui/Skeleton';
@@ -32,22 +32,24 @@ export default function AdminDashboard() {
       )}
 
       <div className="grid grid-cols-2 gap-4">
-        <QuickModule title="Users" link="/app/admin/users" desc="Manage staff accounts and roles" icon="👥" />
-        <QuickModule title="Roles & Permissions" link="/app/admin/roles" desc="Configure role-based access control" icon="🔐" />
-        <QuickModule title="Departments" link="/app/admin/departments" desc="Configure hospital departments" icon="🏥" />
-        <QuickModule title="Locations" link="/app/admin/locations" desc="Manage branches and satellite clinics" icon="📍" />
-        <QuickModule title="Reports" link="/app/admin/reports" desc="View analytics and reports" icon="📊" />
-        <QuickModule title="Audit Logs" link="/app/admin/audit" desc="Review system activity" icon="🔍" />
-        <QuickModule title="Organization Settings" link="/app/admin/settings" desc="Profile, compliance, and branding" icon="⚙️" />
+        <QuickModule title="Users" link="/app/admin/users" desc="Manage staff accounts and roles" Icon={Users} />
+        <QuickModule title="Roles & Permissions" link="/app/admin/roles" desc="Configure role-based access control" Icon={Shield} />
+        <QuickModule title="Departments" link="/app/admin/departments" desc="Configure hospital departments" Icon={Hospital} />
+        <QuickModule title="Locations" link="/app/admin/locations" desc="Manage branches and satellite clinics" Icon={MapPin} />
+        <QuickModule title="Reports" link="/app/admin/reports" desc="View analytics and reports" Icon={BarChart3} />
+        <QuickModule title="Audit Logs" link="/app/admin/audit" desc="Review system activity" Icon={Search} />
+        <QuickModule title="Organization Settings" link="/app/admin/settings" desc="Profile, compliance, and branding" Icon={SettingsIcon} />
       </div>
     </div>
   );
 }
 
-function QuickModule({ title, desc, icon, link }: { title: string; desc: string; icon: string; link: string }) {
+function QuickModule({ title, desc, Icon, link }: { title: string; desc: string; Icon: React.ElementType; link: string }) {
   return (
     <a href={link} className="hms-card p-5 flex items-center gap-4 hover:border-teal-300 hover:shadow-md transition-all group">
-      <div className="w-12 h-12 rounded-xl bg-teal-50 flex items-center justify-center text-2xl group-hover:bg-teal-100 transition-colors">{icon}</div>
+      <div className="w-12 h-12 rounded-xl bg-teal-50 flex items-center justify-center group-hover:bg-teal-100 transition-colors">
+        <Icon size={22} className="text-teal-700" />
+      </div>
       <div>
         <div className="font-semibold text-gray-900">{title}</div>
         <div className="text-sm text-gray-500">{desc}</div>

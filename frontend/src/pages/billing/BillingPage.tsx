@@ -97,9 +97,14 @@ export default function BillingPage() {
   };
 
   const handleFinalize = async (id: string) => {
-    await api.patch(`/billing/invoices/${id}/finalize`);
-    fetchInvoices();
-    if (selected?.id === id) { const { data } = await api.get(`/billing/invoices/${id}`); setSelected(data); }
+    try {
+      await api.patch(`/billing/invoices/${id}/finalize`);
+      toast.success('Invoice finalized');
+      fetchInvoices();
+      if (selected?.id === id) { const { data } = await api.get(`/billing/invoices/${id}`); setSelected(data); }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to finalize invoice');
+    }
   };
 
   const handlePay = async (id: string) => {
@@ -115,8 +120,13 @@ export default function BillingPage() {
 
   const handleCancel = async (id: string) => {
     if (!window.confirm('Cancel this invoice?')) return;
-    await api.patch(`/billing/invoices/${id}/cancel`);
-    fetchInvoices(); setSelected(null);
+    try {
+      await api.patch(`/billing/invoices/${id}/cancel`);
+      toast.success('Invoice cancelled');
+      fetchInvoices(); setSelected(null);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to cancel invoice');
+    }
   };
 
   const openDetail = async (id: string) => {

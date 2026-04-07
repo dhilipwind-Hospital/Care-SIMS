@@ -1,7 +1,7 @@
 import axios, { type CancelTokenSource } from 'axios';
 import toast from 'react-hot-toast';
 
-const api = axios.create({ baseURL: '/api' });
+const api = axios.create({ baseURL: '/api', timeout: 30000 });
 
 let isRefreshing = false;
 let failedQueue: Array<{ resolve: (token: string) => void; reject: (err: any) => void }> = [];
