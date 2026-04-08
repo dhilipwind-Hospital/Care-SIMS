@@ -60,24 +60,30 @@ export async function generateSequentialId<T>(
     callback,
   } = opts;
 
-  return prisma.$transaction(
-    async (tx: Prisma.TransactionClient) => {
-      // Use raw SQL to atomically extract the max numeric suffix from existing IDs.
-      // The regex '[0-9]+$' captures trailing digits.  COALESCE handles the empty-table case.
-      const result: any[] = await tx.$queryRawUnsafe(
-        `SELECT COALESCE(MAX(CAST(SUBSTRING("${idColumn}" FROM '[0-9]+$') AS INTEGER)), 0) + 1 AS "nextVal"
-         FROM "${table}"
-         WHERE "${tenantColumn}" = $1`,
-        tenantId,
-      );
-
-      const nextVal = Number(result[0]?.nextVal ?? 1);
-      const nextId = `${prefix}${String(nextVal).padStart(padLength, '0')}`;
-
-      return callback(tx, nextId);
-    },
-    {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    },
-  );
+  // NOTE: Serializable isolation is incompatible with the Supabase transaction
+  // pooler (pgBouncer) used in production. Use the default READ COMMITTED level
+  // and rely on a unique constraint + small retry loop to handle races.
+  const MAX_RETRIES = 3;
+  let lastErr: any;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      return await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        const result: any[] = await tx.$queryRawUnsafe(
+          `SELECT COALESCE(MAX(CAST(SUBSTRING("${idColumn}" FROM '[0-9]+$') AS INTEGER)), 0) + 1 AS "nextVal"
+           FROM "${table}"
+           WHERE "${tenantColumn}" = $1`,
+          tenantId,
+        );
+        const nextVal = Number(result[0]?.nextVal ?? 1) + attempt; // bump on retry
+        const nextId = `${prefix}${String(nextVal).padStart(padLength, '0')}`;
+        return callback(tx, nextId);
+      });
+    } catch (err: any) {
+      lastErr = err;
+      // Retry only on unique-constraint races
+      if (err?.code === 'P2002') continue;
+      throw err;
+    }
+  }
+  throw lastErr;
 }
