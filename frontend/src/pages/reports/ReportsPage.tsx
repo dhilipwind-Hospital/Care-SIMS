@@ -4,11 +4,18 @@ import {
   Users, DollarSign, Activity, TrendingUp, BedDouble,
   Clock, CalendarRange, FileText, Stethoscope, HeartPulse,
 } from 'lucide-react';
+import {
+  PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
+} from 'recharts';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import EmptyState from '../../components/ui/EmptyState';
 import { SkeletonKpiRow } from '../../components/ui/Skeleton';
 import api from '../../lib/api';
+
+// Chart colors matching the Ayphen HMS palette
+const CHART_COLORS = ['#0F766E', '#3B82F6', '#EC4899', '#8B5CF6', '#F59E0B', '#10B981', '#EF4444', '#14B8A6'];
 
 /* ── types ─────────────────────────────────────────────── */
 
@@ -162,61 +169,77 @@ function PatientsTab({ from, to }: { from: string; to: string }) {
             <KpiCard label="Other" value={otherCount} icon={Users} color="#8B5CF6" />
           </div>
 
-          {/* Gender breakdown */}
+          {/* Gender Distribution — Pie Chart + Table */}
           {data.byGender.length > 0 && (
-            <div className="hms-card">
-              <div className="px-5 py-4 border-b border-gray-100">
-                <h3 className="text-sm font-semibold text-gray-700">Gender Distribution</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="hms-card p-5">
+                <h3 className="text-sm font-semibold text-gray-700 mb-4">Gender Distribution</h3>
+                <ResponsiveContainer width="100%" height={260}>
+                  <PieChart>
+                    <Pie
+                      data={data.byGender.map(g => ({ name: capitalize(g.gender), value: g._count }))}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={(entry: any) => `${entry.name}: ${entry.value}`}
+                      outerRadius={90}
+                      innerRadius={45}
+                      dataKey="value"
+                    >
+                      {data.byGender.map((_, i) => (
+                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
-                    <th className="px-5 py-3 text-left font-semibold">Gender</th>
-                    <th className="px-5 py-3 text-right font-semibold">Count</th>
-                    <th className="px-5 py-3 text-right font-semibold">Percentage</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.byGender.map(row => (
-                    <tr key={row.gender} className="border-t border-gray-50 hover:bg-gray-50/50 transition">
-                      <td className="px-5 py-3 text-sm text-gray-800 font-medium">{capitalize(row.gender)}</td>
-                      <td className="px-5 py-3 text-sm text-gray-700 text-right">{row._count}</td>
-                      <td className="px-5 py-3 text-sm text-gray-500 text-right">
-                        {data.total > 0 ? ((row._count / data.total) * 100).toFixed(1) : 0}%
-                      </td>
+              <div className="hms-card">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h3 className="text-sm font-semibold text-gray-700">Breakdown</h3>
+                </div>
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+                      <th className="px-5 py-3 text-left font-semibold">Gender</th>
+                      <th className="px-5 py-3 text-right font-semibold">Count</th>
+                      <th className="px-5 py-3 text-right font-semibold">%</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {data.byGender.map((row, i) => (
+                      <tr key={row.gender} className="border-t border-gray-50 hover:bg-gray-50/50 transition">
+                        <td className="px-5 py-3 text-sm font-medium">
+                          <span className="inline-flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-full" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
+                            {capitalize(row.gender)}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-sm text-gray-700 text-right">{row._count}</td>
+                        <td className="px-5 py-3 text-sm text-gray-500 text-right">
+                          {data.total > 0 ? ((row._count / data.total) * 100).toFixed(1) : 0}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
-          {/* Registration type breakdown */}
+          {/* Registration type — Bar Chart */}
           {data.byRegistrationType.length > 0 && (
-            <div className="hms-card">
-              <div className="px-5 py-4 border-b border-gray-100">
-                <h3 className="text-sm font-semibold text-gray-700">Registration Type</h3>
-              </div>
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
-                    <th className="px-5 py-3 text-left font-semibold">Type</th>
-                    <th className="px-5 py-3 text-right font-semibold">Count</th>
-                    <th className="px-5 py-3 text-right font-semibold">Percentage</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.byRegistrationType.map(row => (
-                    <tr key={row.registrationType} className="border-t border-gray-50 hover:bg-gray-50/50 transition">
-                      <td className="px-5 py-3 text-sm text-gray-800 font-medium">{capitalize(row.registrationType)}</td>
-                      <td className="px-5 py-3 text-sm text-gray-700 text-right">{row._count}</td>
-                      <td className="px-5 py-3 text-sm text-gray-500 text-right">
-                        {data.total > 0 ? ((row._count / data.total) * 100).toFixed(1) : 0}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="hms-card p-5">
+              <h3 className="text-sm font-semibold text-gray-700 mb-4">Registration Type Distribution</h3>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={data.byRegistrationType.map(r => ({ name: capitalize(r.registrationType), count: r._count }))}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#6B7280' }} />
+                  <YAxis tick={{ fontSize: 12, fill: '#6B7280' }} />
+                  <RechartsTooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                  <Bar dataKey="count" fill="#0F766E" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           )}
         </>
@@ -255,6 +278,37 @@ function RevenueTab({ from, to }: { from: string; to: string }) {
             <KpiCard label="Outstanding" value={currency(data.outstanding)} icon={DollarSign} color="#EF4444" />
             <KpiCard label="Invoices" value={data.invoiceCount} icon={FileText} color="#3B82F6" />
           </div>
+
+          {/* Revenue Bar Chart */}
+          {data.totalBilled > 0 && (
+            <div className="hms-card p-5">
+              <h3 className="text-sm font-semibold text-gray-700 mb-4">Revenue Breakdown</h3>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart
+                  data={[
+                    { name: 'Billed', amount: data.totalBilled, fill: '#0F766E' },
+                    { name: 'Collected', amount: data.totalCollected, fill: '#10B981' },
+                    { name: 'Outstanding', amount: data.outstanding, fill: '#EF4444' },
+                  ]}
+                  layout="vertical"
+                  margin={{ left: 20 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 12, fill: '#6B7280' }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+                  <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: '#6B7280' }} width={90} />
+                  <RechartsTooltip
+                    contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }}
+                    formatter={(value: any) => currency(value)}
+                  />
+                  <Bar dataKey="amount" radius={[0, 8, 8, 0]}>
+                    {[0, 1, 2].map((i) => (
+                      <Cell key={i} fill={['#0F766E', '#10B981', '#EF4444'][i]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
 
           {/* Revenue summary table */}
           <div className="hms-card">
@@ -435,6 +489,35 @@ function IpdTab({ from, to }: { from: string; to: string }) {
             <KpiCard label="Currently Admitted" value={data.currentlyAdmitted} icon={Activity} color="#F59E0B" />
             <KpiCard label="Discharged" value={data.discharged} icon={TrendingUp} color="#10B981" />
           </div>
+
+          {/* IPD Pie Chart */}
+          {data.total > 0 && (
+            <div className="hms-card p-5">
+              <h3 className="text-sm font-semibold text-gray-700 mb-4">Admission Status Distribution</h3>
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: 'Currently Admitted', value: data.currentlyAdmitted },
+                      { name: 'Discharged', value: data.discharged },
+                    ]}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={(entry: any) => `${entry.name}: ${entry.value}`}
+                    outerRadius={90}
+                    innerRadius={45}
+                    dataKey="value"
+                  >
+                    <Cell fill="#F59E0B" />
+                    <Cell fill="#10B981" />
+                  </Pie>
+                  <RechartsTooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
 
           {/* Admission breakdown table */}
           <div className="hms-card">

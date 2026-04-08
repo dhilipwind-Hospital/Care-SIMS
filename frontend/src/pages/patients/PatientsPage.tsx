@@ -6,6 +6,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
 import ExportButton from '../../components/ui/ExportButton';
 import api from '../../lib/api';
+import { LineChart, Line, ResponsiveContainer, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend } from 'recharts';
 
 const EMPTY_FORM = {
   firstName: '', middleName: '', lastName: '',
@@ -769,7 +770,37 @@ export default function PatientsPage() {
                     <div className="space-y-3">
                       {(historyData.vitals || []).length === 0 ? (
                         <EmptyState icon={<Activity size={24} className="text-gray-400" />} title="No vitals" description="No vital sign records found for this patient." />
-                      ) : historyData.vitals.map((v: any) => (
+                      ) : (
+                        <>
+                          {/* Vital Signs Trend Chart */}
+                          {historyData.vitals.length >= 2 && (
+                            <div className="bg-white rounded-xl p-4 border border-gray-100 mb-3">
+                              <h4 className="text-sm font-semibold text-gray-700 mb-3">Vital Signs Trend</h4>
+                              <ResponsiveContainer width="100%" height={220}>
+                                <LineChart
+                                  data={[...historyData.vitals].reverse().map((v: any) => ({
+                                    date: new Date(v.recordedAt || v.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
+                                    heartRate: v.heartRate ? Number(v.heartRate) : null,
+                                    systolic: v.systolicBp ? Number(v.systolicBp) : null,
+                                    diastolic: v.diastolicBp ? Number(v.diastolicBp) : null,
+                                    spO2: v.spo2 || v.oxygenSaturation ? Number(v.spo2 || v.oxygenSaturation) : null,
+                                    temp: v.temperatureC || v.temperature ? Number(v.temperatureC || v.temperature) : null,
+                                  }))}
+                                >
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6B7280' }} />
+                                  <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} />
+                                  <RechartsTooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                                  <Line type="monotone" dataKey="heartRate" name="Heart Rate" stroke="#EF4444" strokeWidth={2} connectNulls dot={{ r: 3 }} />
+                                  <Line type="monotone" dataKey="systolic" name="Sys BP" stroke="#0F766E" strokeWidth={2} connectNulls dot={{ r: 3 }} />
+                                  <Line type="monotone" dataKey="diastolic" name="Dia BP" stroke="#14B8A6" strokeWidth={2} connectNulls dot={{ r: 3 }} />
+                                  <Line type="monotone" dataKey="spO2" name="SpO2" stroke="#3B82F6" strokeWidth={2} connectNulls dot={{ r: 3 }} />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </div>
+                          )}
+                          {historyData.vitals.map((v: any) => (
                         <div key={v.id} className="bg-gray-50 rounded-xl p-4 border border-gray-100">
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-sm font-semibold text-gray-900">Vital Signs</span>
@@ -785,6 +816,8 @@ export default function PatientsPage() {
                           </div>
                         </div>
                       ))}
+                        </>
+                      )}
                     </div>
                   )}
 

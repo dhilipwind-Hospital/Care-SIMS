@@ -21,6 +21,10 @@ export default function TopBar({ title, subtitle, actions }: Props) {
   const [langMenuOpen, setLangMenuOpen] = useState(false);
 
   useEffect(() => {
+    document.title = `${title} · Ayphen HMS`;
+  }, [title]);
+
+  useEffect(() => {
     let mounted = true;
     api.get('/notifications', { params: { unreadOnly: true, limit: 1 } })
       .then(({ data }) => {
