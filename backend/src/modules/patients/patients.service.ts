@@ -27,17 +27,6 @@ export class PatientsService {
   }
 
   async create(tenantId: string, dto: any, registeredById: string) {
-    try {
-      return await this._createImpl(tenantId, dto, registeredById);
-    } catch (err: any) {
-      // Temporarily surface the real error for debugging
-      throw new (await import('@nestjs/common')).BadRequestException(
-        `Patient create failed: ${err?.message || String(err)}`,
-      );
-    }
-  }
-
-  private async _createImpl(tenantId: string, dto: any, registeredById: string) {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
     const prefix = `${(tenant?.slug?.slice(0, 4) || 'PAT').toUpperCase()}-`;
 
