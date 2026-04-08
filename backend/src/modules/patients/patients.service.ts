@@ -29,6 +29,76 @@ export class PatientsService {
   async create(tenantId: string, dto: any, registeredById: string) {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
     const prefix = `${(tenant?.slug?.slice(0, 4) || 'PAT').toUpperCase()}-`;
+
+    // Resolve locationId — fall back to user's primary location if not provided
+    let locationId = dto.locationId;
+    if (!locationId) {
+      const user = await this.prisma.tenantUser.findUnique({ where: { id: registeredById } });
+      locationId = user?.primaryLocationId || undefined;
+    }
+    if (!locationId) {
+      const loc = await this.prisma.tenantLocation.findFirst({ where: { tenantId } });
+      locationId = loc?.id;
+    }
+    if (!locationId) throw new Error('No location available for patient registration');
+
+    // Map frontend fields (phone, addressLine*, etc.) to schema shape
+    const mobile = dto.mobile || dto.phone;
+    if (!mobile) throw new Error('Mobile/phone number is required');
+
+    // Build structured address JSON if any address fields present
+    let addressJson: any = undefined;
+    if (dto.address && typeof dto.address === 'object') {
+      addressJson = dto.address;
+    } else if (dto.addressLine1 || dto.addressLine2 || dto.city || dto.state || dto.pinCode) {
+      addressJson = {
+        line1: dto.addressLine1 || undefined,
+        line2: dto.addressLine2 || undefined,
+        city: dto.city || undefined,
+        state: dto.state || undefined,
+        pinCode: dto.pinCode || undefined,
+      };
+    } else if (typeof dto.address === 'string' && dto.address.trim()) {
+      addressJson = { line1: dto.address };
+    }
+
+    // Build emergency contact JSON
+    let emergencyContactJson: any = undefined;
+    if (dto.emergencyContact && typeof dto.emergencyContact === 'object') {
+      emergencyContactJson = dto.emergencyContact;
+    } else if (dto.emergencyContactName || dto.emergencyContactPhone || dto.emergencyRelationship) {
+      emergencyContactJson = {
+        name: dto.emergencyContactName || undefined,
+        phone: dto.emergencyContactPhone || undefined,
+        relationship: dto.emergencyRelationship || undefined,
+      };
+    }
+
+    // Allergies: accept array OR comma-separated string
+    const allergiesArray: string[] = Array.isArray(dto.allergies)
+      ? dto.allergies
+      : (typeof dto.knownAllergies === 'string' && dto.knownAllergies.trim()
+          ? dto.knownAllergies.split(',').map((s: string) => s.trim()).filter(Boolean)
+          : []);
+
+    // Existing conditions: array OR comma-separated string
+    const existingConditionsArray: string[] = Array.isArray(dto.existingConditions)
+      ? dto.existingConditions
+      : (typeof dto.preExistingConditions === 'string' && dto.preExistingConditions.trim()
+          ? dto.preExistingConditions.split(',').map((s: string) => s.trim()).filter(Boolean)
+          : []);
+
+    // Insurance JSON
+    let insuranceJson: any = undefined;
+    if (dto.insurance && typeof dto.insurance === 'object') {
+      insuranceJson = dto.insurance;
+    } else if (dto.insuranceProvider || dto.policyNumber) {
+      insuranceJson = {
+        provider: dto.insuranceProvider || undefined,
+        policyNumber: dto.policyNumber || undefined,
+      };
+    }
+
     return generateSequentialId(this.prisma, {
       table: 'Patient',
       idColumn: 'patientId',
@@ -38,26 +108,25 @@ export class PatientsService {
         return tx.patient.create({
           data: {
             tenantId, patientId,
-            locationId: dto.locationId,
+            locationId,
             registrationType: dto.registrationType || 'WALKIN',
-            firstName: dto.firstName, lastName: dto.lastName,
+            firstName: dto.firstName,
+            lastName: dto.lastName || '',
             dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : null,
             ageYears: dto.ageYears,
-            gender: dto.gender,
+            gender: dto.gender || 'OTHER',
             bloodGroup: dto.bloodGroup,
-            nationalId: dto.nationalId,
-            mobile: dto.mobile,
+            nationalId: dto.nationalId || dto.idNumber,
+            mobile,
             alternatePhone: dto.alternatePhone,
             email: dto.email,
-            address: dto.address,
-            emergencyContact: dto.emergencyContact,
-            allergies: dto.allergies || [],
-            allergyDetails: dto.allergyDetails,
-            existingConditions: dto.existingConditions || [],
-            currentMedications: dto.currentMedications,
+            address: addressJson,
+            emergencyContact: emergencyContactJson,
+            allergies: allergiesArray,
+            existingConditions: existingConditionsArray,
             pastSurgeries: dto.pastSurgeries,
             familyHistory: dto.familyHistory,
-            insurance: dto.insurance,
+            insurance: insuranceJson,
             registeredById,
           },
         });
