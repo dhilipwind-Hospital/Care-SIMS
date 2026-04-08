@@ -117,6 +117,43 @@ export class BillingService {
     });
   }
 
+  async emailInvoice(tenantId: string, id: string, overrideEmail?: string) {
+    const invoice = await this.prisma.invoice.findFirst({
+      where: { id, tenantId },
+      include: { lineItems: true, patient: true },
+    });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    const patient = invoice.patient as any;
+    const to = overrideEmail || patient?.email;
+    if (!to) throw new BadRequestException('No email address available for this patient');
+
+    const invDate = new Date(invoice.createdAt).toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
+    const itemsHtml = (invoice.lineItems || []).map((li: any) =>
+      `<tr><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${li.description}</td><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:right;">${li.quantity}</td><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:right;">₹${Number(li.unitPrice).toFixed(2)}</td><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:right;">₹${Number(li.amount).toFixed(2)}</td></tr>`
+    ).join('');
+    const body = `Dear ${patient?.firstName || ''} ${patient?.lastName || ''},<br><br>Please find your invoice details below:<br><br>
+      <strong>Invoice Number:</strong> ${invoice.invoiceNumber}<br>
+      <strong>Date:</strong> ${invDate}<br>
+      <strong>Status:</strong> ${invoice.status}<br><br>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead><tr style="background:#f3f4f6;"><th style="padding:6px 8px;text-align:left;">Item</th><th style="padding:6px 8px;text-align:right;">Qty</th><th style="padding:6px 8px;text-align:right;">Rate</th><th style="padding:6px 8px;text-align:right;">Amount</th></tr></thead>
+        <tbody>${itemsHtml}</tbody>
+      </table>
+      <div style="margin-top:12px;text-align:right;">
+        <div>Subtotal: ₹${Number(invoice.subtotal).toFixed(2)}</div>
+        <div>Discount: ₹${Number(invoice.discountAmount).toFixed(2)}</div>
+        <div>Tax: ₹${Number(invoice.taxAmount).toFixed(2)}</div>
+        <div style="font-size:16px;font-weight:bold;color:#0F766E;margin-top:6px;">Net Total: ₹${Number(invoice.netTotal).toFixed(2)}</div>
+        <div>Paid: ₹${Number(invoice.paidAmount).toFixed(2)}</div>
+        <div>Balance: ₹${(Number(invoice.netTotal) - Number(invoice.paidAmount)).toFixed(2)}</div>
+      </div>
+      <br>Please contact the billing desk for any queries.`;
+
+    const ok = await sendEmail(to, `Invoice #${invoice.invoiceNumber} - Ayphen HMS`, emailTemplate('Your Invoice', body));
+    if (!ok) throw new BadRequestException('Email service is not configured. Contact administrator.');
+    return { sent: true, to };
+  }
+
   async addLineItem(tenantId: string, invoiceId: string, dto: any) {
     return this.prisma.$transaction(async (tx) => {
       const inv = await tx.invoice.findFirst({ where: { id: invoiceId, tenantId }, include: { lineItems: true, payments: true, patient: true } });

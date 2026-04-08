@@ -48,8 +48,8 @@ export default function PharmacyPage() {
 
       // Fetch pharmacy revenue
       api.get('/reports/dashboard').then(({ data }) => {
-        const rev = data?.pharmacyRevenue ?? data?.revenueToday;
-        if (rev != null) setRevenueToday(`₹${Number(rev).toLocaleString('en-IN')}`);
+        const rev = data?.pharmacyRevenue ?? data?.todayRevenue ?? 0;
+        setRevenueToday(`₹${Number(rev).toLocaleString('en-IN')}`);
       }).catch((err) => { console.error('Failed to fetch pharmacy revenue:', err); });
       const all: any[] = rxRes.data.data || [];
       const pending = all.filter((r: any) =>

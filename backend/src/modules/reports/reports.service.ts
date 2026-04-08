@@ -11,7 +11,7 @@ export class ReportsService {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const [
       totalPatients, todayQueue, activeAdmissions, pendingLabOrders,
-      todayAppointments, pendingPrescriptions,
+      todayAppointments, pendingPrescriptions, pharmacyRevenueAgg, todayRevenueAgg,
     ] = await Promise.all([
       this.prisma.patient.count({ where }),
       this.prisma.queueToken.count({ where: { ...where, createdAt: { gte: today } } }),
@@ -19,8 +19,18 @@ export class ReportsService {
       this.prisma.labOrder.count({ where: { ...where, status: { in: ['ORDERED', 'COLLECTED', 'IN_PROGRESS'] } } }),
       this.prisma.appointment.count({ where: { ...where, appointmentDate: { gte: today } } }),
       this.prisma.prescription.count({ where: { ...where, status: 'SENT_TO_PHARMACY' } }),
+      this.prisma.invoice.aggregate({
+        where: { ...where, invoiceType: 'PHARMACY', status: { in: ['PAID', 'PARTIAL'] }, createdAt: { gte: today } },
+        _sum: { paidAmount: true },
+      }),
+      this.prisma.invoice.aggregate({
+        where: { ...where, status: { in: ['PAID', 'PARTIAL'] }, createdAt: { gte: today } },
+        _sum: { paidAmount: true },
+      }),
     ]);
-    return { totalPatients, todayQueue, activeAdmissions, pendingLabOrders, todayAppointments, pendingPrescriptions };
+    const pharmacyRevenue = Number(pharmacyRevenueAgg._sum.paidAmount ?? 0);
+    const todayRevenue = Number(todayRevenueAgg._sum.paidAmount ?? 0);
+    return { totalPatients, todayQueue, activeAdmissions, pendingLabOrders, todayAppointments, pendingPrescriptions, pharmacyRevenue, todayRevenue };
   }
 
   async getPatientReport(tenantId: string, query: any) {

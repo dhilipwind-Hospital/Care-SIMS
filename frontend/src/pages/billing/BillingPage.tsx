@@ -397,11 +397,17 @@ export default function BillingPage() {
                   </button>
                 )}
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     if (!selected) return;
                     const email = selected.patient?.email;
                     if (!email) { toast.error('Patient does not have an email on file'); return; }
-                    toast.error('Email service is not yet configured. Contact your administrator.');
+                    const t = toast.loading('Sending invoice...');
+                    try {
+                      const { data } = await api.post(`/billing/invoices/${selected.id}/email`);
+                      toast.success(`Invoice sent to ${data.to}`, { id: t });
+                    } catch (err: any) {
+                      toast.error(err.response?.data?.message || 'Failed to send invoice email', { id: t });
+                    }
                   }}
                   className="py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 transition-all">
                   Email Invoice

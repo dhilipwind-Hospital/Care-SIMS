@@ -46,5 +46,6 @@ export class BillingController {
   @Patch('invoices/:id/finalize') finalize(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.finalizeInvoice(tid, id); }
   @Post('invoices/:id/payments') pay(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: RecordPaymentDto, @CurrentUser('sub') uid: string) { return this.svc.recordPayment(tid, id, body, uid); }
   @Patch('invoices/:id/cancel') cancel(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body('reason') reason: string) { return this.svc.cancelInvoice(tid, id, reason); }
+  @Post('invoices/:id/email') email(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body('email') overrideEmail?: string) { return this.svc.emailInvoice(tid, id, overrideEmail); }
   @Post('invoices/:id/line-items') addItem(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: AddLineItemDto) { return this.svc.addLineItem(tid, id, body); }
 }
