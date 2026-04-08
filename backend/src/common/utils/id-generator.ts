@@ -46,6 +46,41 @@ export interface SeqIdOptions<T> {
   callback: (tx: Prisma.TransactionClient, nextId: string) => Promise<T>;
 }
 
+/** Convert PascalCase/camelCase to snake_case and pluralize simply. */
+function camelToSnake(s: string): string {
+  return s.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+}
+
+/** Map Prisma model name to actual DB table name (via @@map convention: snake_case plural). */
+function modelToTable(model: string): string {
+  const snake = camelToSnake(model);
+  // Handle known irregular/non-pluralizing tables
+  const overrides: Record<string, string> = {
+    patient: 'patients',
+    invoice: 'invoices',
+    admission: 'admissions',
+    grievance: 'grievances',
+    prescription: 'prescriptions',
+    referral: 'referrals',
+    lab_order: 'lab_orders',
+    radiology_order: 'radiology_orders',
+    physiotherapy_order: 'physiotherapy_orders',
+    ambulance_trip: 'ambulance_trips',
+    pharmacy_return: 'pharmacy_returns',
+    o_t_booking: 'ot_bookings', // OTBooking → o_t_booking via naive conversion
+    ot_booking: 'ot_bookings',
+    dialysis_session: 'dialysis_sessions',
+    mortuary_record: 'mortuary_records',
+    insurance_claim: 'insurance_claims',
+    teleconsult_session: 'teleconsult_sessions',
+    blood_donor: 'blood_donors',
+    blood_donation: 'blood_donations',
+  };
+  if (overrides[snake]) return overrides[snake];
+  // Default: append 's' if not already pluralized
+  return snake.endsWith('s') ? snake : snake + 's';
+}
+
 export async function generateSequentialId<T>(
   prisma: any,
   opts: SeqIdOptions<T>,
@@ -60,6 +95,10 @@ export async function generateSequentialId<T>(
     callback,
   } = opts;
 
+  const dbTable = modelToTable(table);
+  const dbIdColumn = camelToSnake(idColumn);
+  const dbTenantColumn = camelToSnake(tenantColumn);
+
   // NOTE: Serializable isolation is incompatible with the Supabase transaction
   // pooler (pgBouncer) used in production. Use the default READ COMMITTED level
   // and rely on a unique constraint + small retry loop to handle races.
@@ -69,9 +108,9 @@ export async function generateSequentialId<T>(
     try {
       return await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         const result: any[] = await tx.$queryRawUnsafe(
-          `SELECT COALESCE(MAX(CAST(SUBSTRING("${idColumn}" FROM '[0-9]+$') AS INTEGER)), 0) + 1 AS "nextVal"
-           FROM "${table}"
-           WHERE "${tenantColumn}" = $1`,
+          `SELECT COALESCE(MAX(CAST(SUBSTRING("${dbIdColumn}" FROM '[0-9]+$') AS INTEGER)), 0) + 1 AS "nextVal"
+           FROM "${dbTable}"
+           WHERE "${dbTenantColumn}" = $1`,
           tenantId,
         );
         const nextVal = Number(result[0]?.nextVal ?? 1) + attempt; // bump on retry
