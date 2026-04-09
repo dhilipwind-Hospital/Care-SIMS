@@ -4,9 +4,13 @@ import { Menu } from 'lucide-react';
 import Sidebar from './Sidebar';
 import SessionTimeoutWarning from '../ui/SessionTimeoutWarning';
 import CommandPalette from '../CommandPalette';
+import { useAuth } from '../../context/AuthContext';
 
 export default function AppLayout() {
+  const { user } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const isPlatform = user?.role === 'PLATFORM_OWNER' || user?.role === 'PLATFORM_ADMIN';
+  const brandName = isPlatform ? 'Ayphen HMS' : (user?.tenantName || 'Hospital');
 
   return (
     <div className="flex h-screen" style={{ background: 'var(--hms-bg)' }}>
@@ -23,7 +27,7 @@ export default function AppLayout() {
           >
             <Menu size={20} aria-hidden="true" />
           </button>
-          <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">Ayphen HMS</span>
+          <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{brandName}</span>
         </div>
 
         <main className="flex-1 overflow-y-auto" role="main">

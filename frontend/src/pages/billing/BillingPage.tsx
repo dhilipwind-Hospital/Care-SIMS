@@ -9,11 +9,13 @@ import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
 import ExportButton from '../../components/ui/ExportButton';
 import api from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 
 const EMPTY_FORM = { patientId: '', invoiceType: 'OPD', notes: '' };
 const EMPTY_ITEM = { description: '', category: 'CONSULTATION', quantity: 1, unitPrice: '', taxPercent: 0 };
 
 export default function BillingPage() {
+  const { user } = useAuth();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [totalInvoices, setTotalInvoices] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -179,12 +181,15 @@ export default function BillingPage() {
     const lineRows = (selected.lineItems || []).map((it: any, i: number) =>
       `<tr><td style="padding:8px 12px;border-bottom:1px solid #eee">${i + 1}</td><td style="padding:8px 12px;border-bottom:1px solid #eee">${it.description}</td><td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:center">${it.quantity}</td><td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:right">₹${Number(it.unitPrice || 0).toLocaleString('en-IN')}</td><td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:right">₹${Number(it.amount || it.unitPrice * it.quantity).toLocaleString('en-IN')}</td></tr>`
     ).join('');
+    const orgName = user?.tenantName || 'Hospital';
+    const orgContact = [user?.tenantPrimaryPhone, user?.tenantPrimaryEmail].filter(Boolean).join(' · ');
+    const orgLogoImg = user?.tenantLogoUrl ? `<img src="${user.tenantLogoUrl}" alt="${orgName}" style="height:48px;max-width:180px;object-fit:contain;margin-bottom:4px" />` : '';
     const html = `<!DOCTYPE html><html><head><title>Invoice ${selected.invoiceNumber}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:0;padding:40px;color:#1a1a1a}table{width:100%;border-collapse:collapse}.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:20px;border-bottom:3px solid #0F766E}.logo{font-size:24px;font-weight:800;color:#0F766E}.inv-title{font-size:28px;font-weight:800;color:#0F766E;text-align:right}.meta{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:28px}.meta-box{background:#f8fafa;padding:16px;border-radius:8px}.meta-box h4{margin:0 0 8px;font-size:12px;text-transform:uppercase;color:#6b7280;letter-spacing:0.5px}.meta-box p{margin:2px 0;font-size:14px}th{background:#f3f4f6;padding:10px 12px;text-align:left;font-size:12px;text-transform:uppercase;color:#6b7280;letter-spacing:0.5px}.totals{margin-top:16px;text-align:right}.totals .row{display:flex;justify-content:flex-end;gap:40px;padding:4px 0;font-size:14px}.totals .grand{font-size:18px;font-weight:800;border-top:2px solid #0F766E;padding-top:8px;margin-top:8px;color:#0F766E}.footer{margin-top:48px;text-align:center;font-size:12px;color:#9ca3af;border-top:1px solid #eee;padding-top:16px}@media print{body{padding:20px}}</style></head><body>
-      <div class="header"><div><div class="logo">Ayphen HMS</div><div style="font-size:13px;color:#6b7280;margin-top:4px">Hospital Management System</div></div><div><div class="inv-title">INVOICE</div><div style="font-size:13px;color:#6b7280;text-align:right;margin-top:4px">${selected.invoiceNumber}</div></div></div>
+      <div class="header"><div>${orgLogoImg}<div class="logo">${orgName}</div>${orgContact ? `<div style="font-size:12px;color:#6b7280;margin-top:4px">${orgContact}</div>` : ''}</div><div><div class="inv-title">INVOICE</div><div style="font-size:13px;color:#6b7280;text-align:right;margin-top:4px">${selected.invoiceNumber}</div></div></div>
       <div class="meta"><div class="meta-box"><h4>Bill To</h4><p style="font-weight:600">${selected.patient?.firstName || ''} ${selected.patient?.lastName || ''}</p><p>Patient ID: ${selected.patient?.patientId || '—'}</p><p>${selected.patient?.phone || ''}</p></div><div class="meta-box"><h4>Invoice Details</h4><p>Date: ${selected.createdAt ? new Date(selected.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</p><p>Type: ${selected.invoiceType || 'OPD'}</p><p>Status: ${selected.status}</p>${selected.doctor ? `<p>Doctor: Dr. ${selected.doctor.firstName} ${selected.doctor.lastName}</p>` : ''}</div></div>
       <table><thead><tr><th>#</th><th>Description</th><th style="text-align:center">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amount</th></tr></thead><tbody>${lineRows || '<tr><td colspan="5" style="padding:20px;text-align:center;color:#9ca3af">No line items</td></tr>'}</tbody></table>
       <div class="totals"><div class="row"><span>Subtotal:</span><span>₹${Number(selected.subtotal || 0).toLocaleString('en-IN')}</span></div>${selected.discountAmount ? `<div class="row" style="color:#10B981"><span>Discount:</span><span>-₹${Number(selected.discountAmount).toLocaleString('en-IN')}</span></div>` : ''}${selected.taxAmount ? `<div class="row"><span>Tax:</span><span>₹${Number(selected.taxAmount).toLocaleString('en-IN')}</span></div>` : ''}<div class="row grand"><span>Total:</span><span>₹${Number(selected.netTotal || 0).toLocaleString('en-IN')}</span></div>${Number(selected.paidAmount) > 0 ? `<div class="row" style="color:#10B981"><span>Paid:</span><span>₹${Number(selected.paidAmount).toLocaleString('en-IN')}</span></div><div class="row" style="font-weight:700"><span>Balance Due:</span><span>₹${balance.toLocaleString('en-IN')}</span></div>` : ''}</div>
-      <div class="footer"><p>Thank you for choosing Ayphen HMS</p><p>This is a computer-generated invoice.</p></div>
+      <div class="footer"><p>Thank you for choosing ${orgName}</p><p>This is a computer-generated invoice.</p></div>
       <script>window.onload=function(){window.print();}<\/script></body></html>`;
     printWin.document.write(html);
     printWin.document.close();

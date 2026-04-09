@@ -10,6 +10,7 @@ import Pagination from '../../components/ui/Pagination';
 import ExportButton from '../../components/ui/ExportButton';
 import api from '../../lib/api';
 import { formatTime, formatDateTime } from '../../lib/format';
+import { useAuth } from '../../context/AuthContext';
 
 const PAGE_SIZE = 20;
 
@@ -22,6 +23,7 @@ const FLAG_OPTIONS = [
 ];
 
 export default function LabPage() {
+  const { user } = useAuth();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
@@ -161,6 +163,9 @@ export default function LabPage() {
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${r.isCritical ? '<span style="color:#dc2626;font-weight:700">CRITICAL</span>' : 'Normal'}</td>
       </tr>`
     ).join('');
+    const orgName = user?.tenantName || 'Hospital';
+    const orgContact = [user?.tenantPrimaryPhone, user?.tenantPrimaryEmail].filter(Boolean).join(' · ');
+    const orgLogoImg = user?.tenantLogoUrl ? `<img src="${user.tenantLogoUrl}" alt="${orgName}" style="height:40px;max-width:160px;object-fit:contain;margin-bottom:4px" />` : '';
     const html = `<!DOCTYPE html><html><head><title>Lab Report — ${o.orderNumber}</title>
       <style>body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:40px;color:#1f2937}
       .header{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #0f766e;padding-bottom:16px;margin-bottom:24px}
@@ -173,7 +178,7 @@ export default function LabPage() {
       @media print{body{padding:20px}}</style></head>
       <body>
         <div class="header">
-          <div class="logo">Ayphen HMS</div>
+          <div>${orgLogoImg}<div class="logo">${orgName}</div>${orgContact ? `<div style="font-size:11px;color:#6b7280;margin-top:2px">${orgContact}</div>` : ''}</div>
           <div style="text-align:right;font-size:13px;color:#6b7280">
             <div style="font-weight:600;color:#1f2937">${o.orderNumber}</div>
             <div>${new Date(o.createdAt || Date.now()).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</div>

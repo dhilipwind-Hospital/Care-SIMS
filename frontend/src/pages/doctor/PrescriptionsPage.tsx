@@ -7,10 +7,12 @@ import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import api from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 
 const EMPTY_ITEM = { drugName: '', dosage: '', frequency: 'OD', durationDays: 7, route: 'ORAL', instructions: '' };
 
 export default function PrescriptionsPage() {
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const [rxList, setRxList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,6 +99,9 @@ export default function PrescriptionsPage() {
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${it.instructions || '—'}</td>
       </tr>`
     ).join('');
+    const orgName = user?.tenantName || 'Hospital';
+    const orgContact = [user?.tenantPrimaryPhone, user?.tenantPrimaryEmail].filter(Boolean).join(' · ');
+    const orgLogoImg = user?.tenantLogoUrl ? `<img src="${user.tenantLogoUrl}" alt="${orgName}" style="height:40px;max-width:160px;object-fit:contain;margin-bottom:4px" />` : '';
     const html = `<!DOCTYPE html><html><head><title>Prescription — ${rx.prescriptionNumber}</title>
       <style>body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:40px;color:#1f2937}
       .header{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #0f766e;padding-bottom:16px;margin-bottom:24px}
@@ -109,7 +114,7 @@ export default function PrescriptionsPage() {
       @media print{body{padding:20px}}</style></head>
       <body>
         <div class="header">
-          <div class="logo">Ayphen HMS</div>
+          <div>${orgLogoImg}<div class="logo">${orgName}</div>${orgContact ? `<div style="font-size:11px;color:#6b7280;margin-top:2px">${orgContact}</div>` : ''}</div>
           <div style="text-align:right;font-size:13px;color:#6b7280">
             <div style="font-weight:600;color:#1f2937">${rx.prescriptionNumber}</div>
             <div>${new Date(rx.createdAt).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</div>

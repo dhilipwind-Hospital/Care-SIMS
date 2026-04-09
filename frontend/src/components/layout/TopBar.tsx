@@ -20,9 +20,12 @@ export default function TopBar({ title, subtitle, actions }: Props) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [langMenuOpen, setLangMenuOpen] = useState(false);
 
+  const isPlatform = user?.role === 'PLATFORM_OWNER' || user?.role === 'PLATFORM_ADMIN';
+  const brandName = isPlatform ? 'Ayphen HMS' : (user?.tenantName || 'Hospital');
+
   useEffect(() => {
-    document.title = `${title} · Ayphen HMS`;
-  }, [title]);
+    document.title = `${title} · ${brandName}`;
+  }, [title, brandName]);
 
   useEffect(() => {
     let mounted = true;

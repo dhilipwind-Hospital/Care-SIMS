@@ -7,6 +7,10 @@ export interface AuthUser {
   systemRoleId: string;  // raw SYS_* value from backend
   tenantId: string;
   tenantName?: string;
+  tenantLogoUrl?: string | null;
+  tenantPrimaryEmail?: string | null;
+  tenantPrimaryPhone?: string | null;
+  tenantWebsite?: string | null;
   locationId: string;
   userType: 'platform' | 'tenant' | 'doctor' | 'patient';
   enabledModules?: string[];
@@ -92,6 +96,10 @@ export function setAuth(token: string, user: any, refreshToken?: string) {
     systemRoleId: rawSysId,
     tenantId: user.tenantId || '',
     tenantName: user.tenantName || '',
+    tenantLogoUrl: user.tenantLogoUrl || null,
+    tenantPrimaryEmail: user.tenantPrimaryEmail || null,
+    tenantPrimaryPhone: user.tenantPrimaryPhone || null,
+    tenantWebsite: user.tenantWebsite || null,
     locationId: user.locationId || '',
     userType: user.userType === 'patient' ? 'patient' : user.platformRole ? 'platform' : user.userType || 'tenant',
     enabledModules: user.enabledModules || [],
