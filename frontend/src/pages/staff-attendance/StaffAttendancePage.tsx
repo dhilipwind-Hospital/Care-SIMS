@@ -190,7 +190,7 @@ export default function StaffAttendancePage() {
       {activeTab === 'records' && (
         <>
           {loading ? <SkeletonKpiRow count={4} /> : (
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <KpiCard label="Present" value={present} icon={UserCheck} color="#10B981" />
               <KpiCard label="Absent" value={absent} icon={UserX} color="#EF4444" />
               <KpiCard label="On Leave" value={onLeave} icon={CalendarOff} color="#F59E0B" />
@@ -208,7 +208,7 @@ export default function StaffAttendancePage() {
           {showForm && editingId && (
             <div className="hms-card p-5 space-y-4">
               <h3 className="font-semibold text-gray-900">Edit Attendance Record</h3>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <select className="hms-input" value={editForm.shiftType} onChange={e => setEditForm({ ...editForm, shiftType: e.target.value })}>
                   <option value="GENERAL">General</option>
                   <option value="MORNING">Morning</option>
@@ -265,7 +265,7 @@ export default function StaffAttendancePage() {
               className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
           </div>
           {summaryLoading ? <SkeletonKpiRow count={4} /> : summary ? (
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <KpiCard label="Total Records" value={summary.total} icon={Clock} color="#0F766E" />
               <KpiCard label="Present" value={summary.present} icon={UserCheck} color="#10B981" />
               <KpiCard label="Absent" value={summary.absent} icon={UserX} color="#EF4444" />
@@ -310,7 +310,7 @@ export default function StaffAttendancePage() {
               className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
           </div>
           {myLoading ? <SkeletonKpiRow count={4} /> : (
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <KpiCard label="Total Days" value={myRecords.length} icon={Clock} color="#0F766E" />
               <KpiCard label="Present" value={myRecords.filter(r => r.status === 'PRESENT').length} icon={UserCheck} color="#10B981" />
               <KpiCard label="Absent" value={myRecords.filter(r => r.status === 'ABSENT').length} icon={UserX} color="#EF4444" />

@@ -37,7 +37,7 @@ export default function InfectionControlPage() {
     <div className="p-6 space-y-6">
       <TopBar title="Infection Control" subtitle="Monitor and manage infections" />
       {loading ? <SkeletonKpiRow count={4} /> : (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="Active Cases" value={dashboard.active || 0} icon={Bug} color="#EF4444" />
           <KpiCard label="HAI Cases" value={dashboard.hai || 0} icon={AlertTriangle} color="#F59E0B" />
           <KpiCard label="Resolved" value={dashboard.resolved || 0} icon={CheckCircle} color="#10B981" />
@@ -48,7 +48,7 @@ export default function InfectionControlPage() {
       {showForm && (
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">Report Infection</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <select className="hms-input" value={form.recordType} onChange={e => setForm({ ...form, recordType: e.target.value })}><option value="SURVEILLANCE">Surveillance</option><option value="OUTBREAK">Outbreak</option><option value="HAI">HAI</option><option value="ALERT">Alert</option></select>
             <input className="hms-input" placeholder="Organism *" value={form.organism} onChange={e => setForm({ ...form, organism: e.target.value })} />
             <input className="hms-input" placeholder="Infection Site" value={form.infectionSite} onChange={e => setForm({ ...form, infectionSite: e.target.value })} />

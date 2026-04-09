@@ -111,7 +111,7 @@ export default function DepartmentsPage() {
         }
       />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Departments" value={depts.length} icon={Building2} color="#0F766E" />
         <KpiCard label="Active" value={active} icon={Building2} color="#10B981" />
         <KpiCard label="Clinical" value={clinical} icon={Users} color="#3B82F6" />

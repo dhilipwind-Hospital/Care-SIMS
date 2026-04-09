@@ -270,7 +270,7 @@ export default function DoctorRegistryPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Doctors" value={total}     icon={UserCheck}    color="#0F766E" />
         <KpiCard label="Verified"      value={verified}  icon={CheckCircle}  color="#10B981" />
         <KpiCard label="Pending"       value={pending}   icon={AlertCircle}  color="#F59E0B" />

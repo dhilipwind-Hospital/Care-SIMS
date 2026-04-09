@@ -167,7 +167,7 @@ export default function LocationsPage() {
       />
 
       {/* Summary */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Total Locations', value: locations.length, color: '#0F766E' },
           { label: 'Active', value: activeCount, color: '#10B981' },

@@ -34,7 +34,7 @@ export default function TelemedicinePage() {
     <div className="p-6 space-y-6">
       <TopBar title="Telemedicine" subtitle="Virtual consultations and teleconsult sessions" />
       {loading ? <SkeletonKpiRow count={4} /> : (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="Total Sessions" value={sessions.length} icon={Video} color="#3B82F6" />
           <KpiCard label="Scheduled" value={sessions.filter(s => s.status === 'SCHEDULED').length} icon={Clock} color="#F59E0B" />
           <KpiCard label="In Progress" value={sessions.filter(s => s.status === 'IN_PROGRESS').length} icon={Play} color="#8B5CF6" />
@@ -45,7 +45,7 @@ export default function TelemedicinePage() {
       {showForm && (
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">Schedule Teleconsult</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <input className="hms-input" placeholder="Patient ID *" value={form.patientId} onChange={e => setForm({ ...form, patientId: e.target.value })} />
             <input className="hms-input" placeholder="Doctor ID *" value={form.doctorId} onChange={e => setForm({ ...form, doctorId: e.target.value })} />
             <select className="hms-input" value={form.platform} onChange={e => setForm({ ...form, platform: e.target.value })}><option value="IN_APP">In-App</option><option value="ZOOM">Zoom</option><option value="GOOGLE_MEET">Google Meet</option></select>

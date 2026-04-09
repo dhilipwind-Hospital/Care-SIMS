@@ -298,7 +298,7 @@ export default function BloodBankPage() {
 
       {/* KPI Cards */}
       {loading ? <SkeletonKpiRow count={4} /> : (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="Total Donors" value={donors.length} icon={Users} color="#3B82F6" />
           <KpiCard label="Available Units" value={summary.total} icon={Package} color="#10B981" />
           <KpiCard label="Blood Groups" value={Object.keys(summary.byGroup || {}).length} icon={Droplets} color="#EF4444" />
@@ -331,7 +331,7 @@ export default function BloodBankPage() {
             <div className="hms-card p-5 space-y-4">
               <h3 className="font-semibold text-gray-900">Register Donor</h3>
               {formError && <p className="text-sm text-red-600">{formError}</p>}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <input className="hms-input" placeholder="First Name *" value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value })} />
                 <input className="hms-input" placeholder="Last Name *" value={form.lastName} onChange={e => setForm({ ...form, lastName: e.target.value })} />
                 <input className="hms-input" type="date" value={form.dateOfBirth} onChange={e => setForm({ ...form, dateOfBirth: e.target.value })} />
@@ -405,7 +405,7 @@ export default function BloodBankPage() {
           {/* Summary cards */}
           <div className="hms-card p-5">
             <h3 className="font-semibold text-gray-900 mb-4">Blood Inventory by Group</h3>
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {Object.entries(summary.byGroup || {}).map(([group, count]) => (
                 <div key={group} className="p-4 rounded-lg border text-center">
                   <div className="text-2xl font-bold text-red-600">{count as number}</div>

@@ -133,7 +133,7 @@ export default function DischargeSummaryPage() {
     <div className="p-6 space-y-6">
       <TopBar title="Discharge Summaries" subtitle="Prepare and approve patient discharge summaries" />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total" value={summaries.length} icon={FileText} color="#3B82F6" />
         <KpiCard label="Drafts" value={drafts} icon={Clock} color="#F59E0B" />
         <KpiCard label="Approved" value={approved} icon={CheckCircle} color="#10B981" />
@@ -150,7 +150,7 @@ export default function DischargeSummaryPage() {
         <div className="hms-card p-5 space-y-4">
           <h3 className="font-semibold text-gray-900">Create Discharge Summary</h3>
           {formError && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{formError}</div>}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <input className="hms-input" placeholder="Admission ID *" value={form.admissionId} onChange={e => setForm({ ...form, admissionId: e.target.value })} />
             <input className="hms-input" placeholder="Patient ID *" value={form.patientId} onChange={e => setForm({ ...form, patientId: e.target.value })} />
             <input className="hms-input" placeholder="Doctor ID *" value={form.doctorId} onChange={e => setForm({ ...form, doctorId: e.target.value })} />
@@ -248,7 +248,7 @@ export default function DischargeSummaryPage() {
                 {/* Dates */}
                 <div className="bg-gray-50 rounded-xl p-4">
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Dates</p>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <p className="text-xs text-gray-500">Admission Date</p>
                       <p className="text-sm font-medium text-gray-900">{viewDetail.admissionDate ? new Date(viewDetail.admissionDate).toLocaleDateString() : '--'}</p>

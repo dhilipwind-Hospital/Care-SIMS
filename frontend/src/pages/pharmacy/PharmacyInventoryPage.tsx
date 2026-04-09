@@ -55,7 +55,7 @@ export default function PharmacyInventoryPage() {
         }
       />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Items" value={drugs.length} icon={Package} color="#0F766E" />
         <KpiCard label="Low Stock" value={lowStock} icon={AlertTriangle} color="#F59E0B" />
         <KpiCard label="Expiring Soon" value={expiring} icon={Clock} color="#F97316" />
@@ -65,7 +65,7 @@ export default function PharmacyInventoryPage() {
       {showForm && (
         <div className="hms-card p-6">
           <h3 className="text-base font-bold text-gray-900 mb-4">Add Drug to Formulary</h3>
-          <form onSubmit={addDrug} className="grid grid-cols-3 gap-4">
+          <form onSubmit={addDrug} className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div><label className="block text-xs font-medium text-gray-600 mb-1">Drug Name (Brand)</label>
               <input required value={form.drugName} onChange={e => setForm(f => ({ ...f, drugName: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" /></div>
             <div><label className="block text-xs font-medium text-gray-600 mb-1">Generic Name</label>

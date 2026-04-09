@@ -87,7 +87,7 @@ export default function MARPage() {
     <div className="p-6 space-y-6">
       <TopBar title="Medication Administration (MAR)" subtitle="Record and track medication administration" />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Due" value={records.length} icon={Pill} color="#0F766E" />
         <KpiCard label="Scheduled" value={scheduled} icon={Clock} color="#3B82F6" />
         <KpiCard label="Administered" value={administered} icon={CheckCircle} color="#10B981" />
@@ -151,7 +151,7 @@ export default function MARPage() {
             <button onClick={() => { setShowScheduleForm(false); setScheduleForm({ ...emptyScheduleForm }); setScheduleError(''); }} className="p-1 rounded hover:bg-gray-100 text-gray-400"><X size={18} /></button>
           </div>
           {scheduleError && <p className="text-sm text-red-600">{scheduleError}</p>}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <input className="hms-input" placeholder="Admission ID *" value={scheduleForm.admissionId} onChange={e => setScheduleForm({ ...scheduleForm, admissionId: e.target.value })} />
             <input className="hms-input" placeholder="Drug Name *" value={scheduleForm.drugName} onChange={e => setScheduleForm({ ...scheduleForm, drugName: e.target.value })} />
             <input className="hms-input" placeholder="Dose *" value={scheduleForm.dose} onChange={e => setScheduleForm({ ...scheduleForm, dose: e.target.value })} />

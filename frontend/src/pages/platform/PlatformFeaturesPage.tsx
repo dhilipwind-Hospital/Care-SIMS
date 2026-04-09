@@ -82,7 +82,7 @@ export default function PlatformFeaturesPage() {
         </div>
       ) : (
       <>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="hms-card p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-teal-50 rounded-xl flex items-center justify-center"><Layers size={18} className="text-teal-600" /></div>

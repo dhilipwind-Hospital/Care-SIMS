@@ -20,7 +20,7 @@ export default function AdminDashboard() {
       <TopBar title="Admin Dashboard" subtitle="Hospital overview and management" />
 
       {loading ? <SkeletonKpiRow count={6} /> : (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="Total Patients" value={stats?.totalPatients ?? '—'} icon={Users} color="#0F766E" />
           <KpiCard label="Today's Queue" value={stats?.todayQueue ?? '—'} icon={Activity} color="#3B82F6" />
           <KpiCard label="Active Admissions" value={stats?.activeAdmissions ?? '—'} icon={Building2} color="#F59E0B" />

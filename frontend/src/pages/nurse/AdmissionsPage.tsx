@@ -212,7 +212,7 @@ export default function AdmissionsPage() {
     <div className="p-6 space-y-6">
       <TopBar title="Admissions" subtitle="Manage inpatient admissions" />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Admissions" value={admissions.length} icon={UserCheck} color="#0F766E" />
         <KpiCard label="Currently Admitted" value={active} icon={Bed} color="#3B82F6" />
         <KpiCard label="Discharged" value={discharged} icon={LogOut} color="#10B981" />

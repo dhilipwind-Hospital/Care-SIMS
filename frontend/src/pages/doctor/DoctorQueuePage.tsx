@@ -63,7 +63,7 @@ export default function DoctorQueuePage() {
       <TopBar title="My Patient Queue" subtitle="Patients assigned to you today" />
 
       {loading ? <SkeletonKpiRow count={4} /> : (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="My Patients Today" value={tokens.length} icon={Users} color="#0F766E" />
           <KpiCard label="Waiting" value={waiting} icon={Clock} color="#F59E0B" />
           <KpiCard label="In Consultation" value={inProgress} icon={Activity} color="#3B82F6" />

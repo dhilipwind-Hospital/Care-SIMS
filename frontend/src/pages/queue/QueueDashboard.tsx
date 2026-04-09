@@ -85,7 +85,7 @@ export default function QueueDashboard() {
       />
 
       {loading ? <SkeletonKpiRow count={4} /> : (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="Total Today" value={tokens.length} icon={Users} color="#0F766E"
             sub={tokens.length > 0 ? `${tokens.length} patient${tokens.length > 1 ? 's' : ''} today` : 'No patients yet'} />
           <KpiCard label="Waiting" value={waiting} icon={Clock} color="#F59E0B"

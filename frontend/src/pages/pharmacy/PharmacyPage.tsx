@@ -8,6 +8,7 @@ import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import Pagination from '../../components/ui/Pagination';
 import ExportButton from '../../components/ui/ExportButton';
 import api from '../../lib/api';
+import { formatTime, formatDate } from '../../lib/format';
 
 const STATUS_BADGE: Record<string, string> = {
   SENT_TO_PHARMACY: 'bg-amber-100 text-amber-700',
@@ -130,7 +131,7 @@ export default function PharmacyPage() {
       />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Pending Rx" value={prescriptions.length} icon={Package} color="#F59E0B"
           sub={prescriptions.length === 1 ? '1 urgent' : `${prescriptions.length} total`} />
         <KpiCard label="Dispensed Today" value={dispensedToday} icon={CheckCircle} color="#10B981"
@@ -154,7 +155,7 @@ export default function PharmacyPage() {
       </div>
 
       {tab === 'dispense' && (
-        <div className="flex gap-5">
+        <div className="flex flex-col lg:flex-row gap-5">
 
           {/* Left: Prescription Queue */}
           <div className="flex-1 hms-card">
@@ -175,7 +176,7 @@ export default function PharmacyPage() {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead>
+                <thead className="sticky top-0 z-10">
                   <tr>
                     {['Rx #','Patient','Doctor','Items','Status','Time'].map(h => (
                       <th key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 py-3 text-left bg-gray-50">{h}</th>
@@ -219,7 +220,7 @@ export default function PharmacyPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-400">
-                        {rx.createdAt ? new Date(rx.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                        {rx.createdAt ? formatTime(rx.createdAt) : '—'}
                       </td>
                     </tr>
                   ))}
@@ -230,7 +231,7 @@ export default function PharmacyPage() {
           </div>
 
           {/* Right: Selected Prescription + Dispense Actions */}
-          <div className="w-80 flex-shrink-0 space-y-4">
+          <div className="w-full lg:w-80 lg:flex-shrink-0 space-y-4">
 
             {/* Selected Prescription */}
             <div className="hms-card">
@@ -261,7 +262,7 @@ export default function PharmacyPage() {
                     <div>
                       <p className="text-xs text-gray-400 mb-0.5">Date</p>
                       <p className="text-sm text-gray-700">
-                        {selectedRx.createdAt ? new Date(selectedRx.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
+                        {selectedRx.createdAt ? formatDate(selectedRx.createdAt) : '—'}
                       </p>
                     </div>
                     <div>
@@ -447,7 +448,7 @@ export default function PharmacyPage() {
                       }`}>
                         <div>
                           <p className="text-sm font-medium text-gray-900">Batch {b.batchNumber}</p>
-                          <p className="text-xs text-gray-500">Exp: {b.expiryDate ? new Date(b.expiryDate).toLocaleDateString() : '—'}</p>
+                          <p className="text-xs text-gray-500">Exp: {b.expiryDate ? formatDate(b.expiryDate) : '—'}</p>
                         </div>
                         <div className="text-right">
                           <p className={`text-lg font-bold ${b.quantityInStock < 20 ? 'text-red-600' : 'text-gray-900'}`}>{b.quantityInStock}</p>

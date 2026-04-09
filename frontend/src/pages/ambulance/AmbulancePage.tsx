@@ -43,7 +43,7 @@ export default function AmbulancePage() {
     <div className="p-6 space-y-6">
       <TopBar title="Ambulance" subtitle="Fleet management and trip dispatch" />
       {loading ? <SkeletonKpiRow count={4} /> : (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="Total Vehicles" value={vehicles.length} icon={Ambulance} color="#3B82F6" />
           <KpiCard label="Available" value={vehicles.filter(v => v.status === 'AVAILABLE').length} icon={CheckCircle} color="#10B981" />
           <KpiCard label="On Trip" value={vehicles.filter(v => v.status === 'ON_TRIP').length} icon={Truck} color="#F59E0B" />
@@ -58,7 +58,7 @@ export default function AmbulancePage() {
       {showForm && tab === 'vehicles' && (
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">Add Vehicle</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <input className="hms-input" placeholder="Vehicle Number *" value={vForm.vehicleNumber} onChange={e => setVForm({ ...vForm, vehicleNumber: e.target.value })} />
             <select className="hms-input" value={vForm.vehicleType} onChange={e => setVForm({ ...vForm, vehicleType: e.target.value })}><option value="BLS">BLS</option><option value="ALS">ALS</option><option value="PATIENT_TRANSPORT">Patient Transport</option></select>
             <input className="hms-input" placeholder="Driver Name" value={vForm.driverName} onChange={e => setVForm({ ...vForm, driverName: e.target.value })} />
@@ -68,7 +68,7 @@ export default function AmbulancePage() {
       {showForm && tab === 'trips' && (
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">Dispatch Ambulance</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <select className="hms-input" value={tForm.ambulanceId} onChange={e => setTForm({ ...tForm, ambulanceId: e.target.value })}><option value="">Select Vehicle *</option>{vehicles.filter(v => v.status === 'AVAILABLE').map(v => <option key={v.id} value={v.id}>{v.vehicleNumber}</option>)}</select>
             <input className="hms-input" placeholder="Patient Name" value={tForm.patientName} onChange={e => setTForm({ ...tForm, patientName: e.target.value })} />
             <select className="hms-input" value={tForm.tripType} onChange={e => setTForm({ ...tForm, tripType: e.target.value })}><option value="EMERGENCY">Emergency</option><option value="TRANSFER">Transfer</option><option value="PICKUP">Pickup</option></select>

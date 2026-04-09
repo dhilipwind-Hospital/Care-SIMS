@@ -38,7 +38,7 @@ export default function LabResultsPage() {
     <div className="p-6 space-y-6">
       <TopBar title="Lab Test Results" subtitle="View and manage test results" />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Results" value={results.length} icon={FlaskConical} color="#0F766E" />
         <KpiCard label="Pending Validation" value={pendingValidation} icon={Clock} color="#F59E0B" />
         <KpiCard label="Validated" value={validated} icon={CheckCircle} color="#10B981" />

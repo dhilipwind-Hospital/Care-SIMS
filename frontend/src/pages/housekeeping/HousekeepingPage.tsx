@@ -128,7 +128,7 @@ export default function HousekeepingPage() {
         <div className="hms-card p-5 space-y-4">
           <h3 className="font-semibold text-gray-900">{editingId ? 'Edit Housekeeping Task' : 'Create Housekeeping Task'}</h3>
           {formError && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{formError}</div>}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <input className="hms-input" placeholder="Room/Area *" value={form.roomOrArea} onChange={e => setForm({ ...form, roomOrArea: e.target.value })} />
             <select className="hms-input" value={form.taskType} onChange={e => setForm({ ...form, taskType: e.target.value })}>
               <option value="CLEANING">Cleaning</option>

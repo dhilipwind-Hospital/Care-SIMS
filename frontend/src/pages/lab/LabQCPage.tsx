@@ -62,7 +62,7 @@ export default function LabQCPage() {
         }
       />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="QC Pass Rate" value={`${passRate}%`} icon={CheckCircle} color="#10B981" />
         <KpiCard label="Failed QC Runs" value={failed} icon={XCircle} color="#EF4444" />
         <KpiCard label="Calibration Due" value={calDue} icon={Wrench} color="#F59E0B" />
@@ -72,7 +72,7 @@ export default function LabQCPage() {
       {showForm && (
         <div className="hms-card p-6">
           <h3 className="text-base font-bold text-gray-900 mb-4">Record QC Run</h3>
-          <form onSubmit={submitQC} className="grid grid-cols-3 gap-4">
+          <form onSubmit={submitQC} className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
               { label: 'QC Lot #', key: 'qcLot', type: 'text', required: true },
               { label: 'Test Name', key: 'testName', type: 'text', required: true },

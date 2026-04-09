@@ -209,7 +209,7 @@ export default function UsersPage() {
         }
       />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Staff"        value={total}            icon={Users}  color="#0F766E" />
         <KpiCard label="Active"             value={active}           icon={Shield} color="#10B981" />
         <KpiCard label="Pending Approvals"  value={pending.length}   icon={Clock}  color="#F59E0B" />

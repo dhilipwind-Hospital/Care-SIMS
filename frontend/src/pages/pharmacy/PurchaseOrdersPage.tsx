@@ -38,7 +38,7 @@ export default function PurchaseOrdersPage() {
         }
       />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Open Orders" value={open} icon={ShoppingCart} color="#3B82F6" />
         <KpiCard label="Pending Receipt" value={pending} icon={Truck} color="#F59E0B" />
         <KpiCard label="Received Today" value={received} icon={CheckCircle} color="#10B981" />

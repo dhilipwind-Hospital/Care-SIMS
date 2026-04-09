@@ -89,7 +89,7 @@ export default function VisitorsPage() {
     <div className="p-6 space-y-6">
       <TopBar title="Visitor Management" subtitle="Track patient visitors check-in and check-out" />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Today" value={visitors.length} icon={Users} color="#3B82F6" />
         <KpiCard label="Active Visitors" value={activeCount} icon={UserCheck} color="#10B981" />
         <KpiCard label="Checked Out" value={checkedOut} icon={LogOut} color="#6B7280" />
@@ -105,7 +105,7 @@ export default function VisitorsPage() {
       {showForm && (
         <div className="hms-card p-5 space-y-4">
           <h3 className="font-semibold text-gray-900">{editingId ? 'Edit Visitor' : 'New Visitor Check-In'}</h3>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <input className="hms-input" placeholder="Visitor Name *" value={form.visitorName} onChange={e => setForm({ ...form, visitorName: e.target.value })} />
             <select className="hms-input" value={form.relationship} onChange={e => setForm({ ...form, relationship: e.target.value })}>
               <option value="">Relationship *</option>

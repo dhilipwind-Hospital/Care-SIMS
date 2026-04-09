@@ -60,7 +60,7 @@ export default function PlatformSubscriptionsPage() {
     <div className="p-6 space-y-6">
       <TopBar title="Subscription Management" subtitle="Manage organization plans and billing" />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Active Subscriptions" value={active} icon={CheckCircle} color="#10B981" />
         <KpiCard label="On Trial" value={trial} icon={Clock} color="#F59E0B" />
         <KpiCard label="Trial Expiring (7d)" value={trialExpiringSoon} icon={RefreshCw} color="#F97316" />
@@ -70,7 +70,7 @@ export default function PlatformSubscriptionsPage() {
       {/* Plan catalog */}
       <div className="hms-card p-5">
         <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><CreditCard size={16} className="text-teal-600" /> Subscription Plans</h3>
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {PLANS.map(p => {
             const count = orgs.filter(o => o.subscriptionPlan === p.id).length;
             return (

@@ -67,7 +67,7 @@ export default function MortuaryPage() {
     <div className="p-6 space-y-6">
       <TopBar title="Mortuary" subtitle="Manage mortuary records and releases" />
       {loading ? <SkeletonKpiRow count={4} /> : (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="In Custody" value={dashboard.inCustody || 0} icon={Skull} color="#6B7280" />
           <KpiCard label="Released" value={dashboard.released || 0} icon={CheckCircle} color="#10B981" />
           <KpiCard label="Autopsy Pending" value={records.filter(r => r.autopsyRequired && r.autopsyStatus !== 'COMPLETED').length} icon={Clock} color="#F59E0B" />
@@ -78,7 +78,7 @@ export default function MortuaryPage() {
       {showForm && (
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">{editingId ? 'Edit Mortuary Record' : 'New Mortuary Record'}</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <input className="hms-input" placeholder="Deceased Name *" value={form.deceasedName} onChange={e => setForm({ ...form, deceasedName: e.target.value })} />
             <input className="hms-input" type="number" placeholder="Age" value={form.age} onChange={e => setForm({ ...form, age: e.target.value })} />
             <select className="hms-input" value={form.gender} onChange={e => setForm({ ...form, gender: e.target.value })}><option value="MALE">Male</option><option value="FEMALE">Female</option></select>

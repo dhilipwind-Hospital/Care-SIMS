@@ -48,7 +48,7 @@ export default function PharmacyReportsPage() {
         }
       />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Revenue" value={`₹${(summary?.revenue || 0).toLocaleString('en-IN')}`} icon={DollarSign} color="#0F766E" />
         <KpiCard label="Prescriptions Filled" value={summary?.prescriptionsFilled ?? '—'} icon={Pill} color="#3B82F6" />
         <KpiCard label="Avg. Turnaround" value={`${summary?.avgTurnaroundMins ?? '—'} min`} icon={Clock} color="#10B981" />

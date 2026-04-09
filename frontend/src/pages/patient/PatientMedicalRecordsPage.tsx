@@ -47,7 +47,7 @@ export default function PatientMedicalRecordsPage() {
         <div className="space-y-6">
 
           {/* Summary cards */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
               { label: 'Completed Visits', value: appointments.length, icon: Stethoscope, color: '#0F766E', bg: '#F0FDFA' },
               { label: 'Prescriptions',    value: prescriptions.length, icon: Pill,        color: '#F59E0B', bg: '#FFFBEB' },

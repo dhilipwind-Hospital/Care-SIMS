@@ -146,7 +146,7 @@ export default function OTPage() {
     <div className="p-6 space-y-6">
       <TopBar title="Operating Theatre" subtitle="OT scheduling and room management" />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total OT Rooms" value={rooms.length} icon={Scissors} color="#0F766E" />
         <KpiCard label="Scheduled Today" value={scheduled} icon={Calendar} color="#3B82F6" />
         <KpiCard label="In Progress" value={inProgress} icon={Clock} color="#F59E0B" />
@@ -229,7 +229,7 @@ export default function OTPage() {
       )}
 
       {tab === 'rooms' && (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {rooms.slice((page - 1) * 20, page * 20).map(room => (
             <div key={room.id} className="hms-card p-5">
               <div className="flex items-center justify-between mb-3">
@@ -348,7 +348,7 @@ export default function OTPage() {
               </div>
 
               {/* Date + Time + Duration */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Scheduled Date <span className="text-red-500">*</span></label>
                   <input type="date" value={bookingForm.scheduledDate} onChange={e => setBookingForm(f => ({ ...f, scheduledDate: e.target.value }))}

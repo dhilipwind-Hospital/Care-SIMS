@@ -172,14 +172,14 @@ export default function WardsPage() {
       />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Wards" value={wards.length} icon={Users} color="#0F766E" />
         <KpiCard label="Total Beds" value={totalBeds} icon={Bed} color="#3B82F6" />
         <KpiCard label="Occupied" value={occupied} icon={UserCheck} color="#F59E0B" />
         <KpiCard label="Available" value={available} icon={CheckCircle} color="#10B981" />
       </div>
       {maintenance > 0 && (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="Maintenance" value={maintenance} icon={Wrench} color="#EF4444" />
         </div>
       )}

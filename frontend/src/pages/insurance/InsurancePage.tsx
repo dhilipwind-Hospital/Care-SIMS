@@ -63,7 +63,7 @@ export default function InsurancePage() {
     <div className="p-6 space-y-6">
       <TopBar title="Insurance / TPA" subtitle="Manage insurance policies and claims" />
       {loading ? <SkeletonKpiRow count={4} /> : (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="Active Policies" value={policies.filter(p => p.status === 'ACTIVE').length} icon={ShieldCheck} color="#3B82F6" />
           <KpiCard label="Pending Claims" value={claims.filter(c => c.status === 'SUBMITTED').length} icon={Clock} color="#F59E0B" />
           <KpiCard label="Approved Claims" value={claims.filter(c => c.status === 'APPROVED').length} icon={CheckCircle} color="#10B981" />
@@ -78,7 +78,7 @@ export default function InsurancePage() {
       {showForm && tab === 'policies' && (
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">Add Policy</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <SearchableSelect
               value={pForm.patientId}
               onChange={(id) => setPForm({ ...pForm, patientId: id })}
@@ -99,7 +99,7 @@ export default function InsurancePage() {
       {showForm && tab === 'claims' && (
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">New Claim</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <SearchableSelect
               value={cForm.policyId}
               onChange={(id) => setCForm({ ...cForm, policyId: id })}

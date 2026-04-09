@@ -61,7 +61,7 @@ export default function DialysisPage() {
     <div className="p-6 space-y-6">
       <TopBar title="Dialysis" subtitle="Manage dialysis sessions and machines" />
       {loading ? <SkeletonKpiRow count={4} /> : (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="Today's Sessions" value={dashboard.todaySessions || 0} icon={HeartPulse} color="#3B82F6" />
           <KpiCard label="Machines Available" value={dashboard.available || 0} icon={CheckCircle} color="#10B981" />
           <KpiCard label="In Progress" value={dashboard.inProgress || 0} icon={Play} color="#8B5CF6" />
@@ -76,7 +76,7 @@ export default function DialysisPage() {
       {showForm && (
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">Schedule Dialysis Session</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <input className="hms-input" placeholder="Patient ID *" value={form.patientId} onChange={e => setForm({ ...form, patientId: e.target.value })} />
             <input className="hms-input" placeholder="Doctor ID *" value={form.doctorId} onChange={e => setForm({ ...form, doctorId: e.target.value })} />
             <select className="hms-input" value={form.machineId} onChange={e => setForm({ ...form, machineId: e.target.value })}><option value="">Select Machine *</option>{machines.filter(m => m.status === 'AVAILABLE').map(m => <option key={m.id} value={m.id}>{m.machineNumber}</option>)}</select>
@@ -111,7 +111,7 @@ export default function DialysisPage() {
         </div>
       )}
       {tab === 'machines' && (
-        <div className="grid grid-cols-4 gap-4">{machines.length === 0 ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{machines.length === 0 ? (
           <div className="col-span-4"><EmptyState icon={<HeartPulse size={24} className="text-gray-400" />} title="No machines registered" description="Dialysis machines will appear once configured" /></div>
         ) : machines.slice((page - 1) * 20, page * 20).map(m => (
           <div key={m.id} className={`hms-card p-4 border-l-4 ${m.status === 'AVAILABLE' ? 'border-l-green-500' : m.status === 'IN_USE' ? 'border-l-purple-500' : 'border-l-yellow-500'}`}>

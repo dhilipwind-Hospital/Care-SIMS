@@ -72,7 +72,7 @@ export default function GrievancePage() {
     <div className="p-6 space-y-6">
       <TopBar title="Grievance Management" subtitle="Track and resolve patient grievances" />
       {loading ? <SkeletonKpiRow count={4} /> : (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="Total Tickets" value={grievances.length} icon={MessageSquare} color="#3B82F6" />
           <KpiCard label="Open" value={grievances.filter(g => g.status === 'OPEN').length} icon={Clock} color="#F59E0B" />
           <KpiCard label="Escalated" value={grievances.filter(g => g.status === 'ESCALATED').length} icon={AlertTriangle} color="#EF4444" />
@@ -83,7 +83,7 @@ export default function GrievancePage() {
       {showForm && (
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">Register Grievance</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <input className="hms-input" placeholder="Complainant Name *" value={form.complainantName} onChange={e => setForm({ ...form, complainantName: e.target.value })} />
             <input className="hms-input" placeholder="Phone" value={form.complainantPhone} onChange={e => setForm({ ...form, complainantPhone: e.target.value })} />
             <select className="hms-input" value={form.complainantType} onChange={e => setForm({ ...form, complainantType: e.target.value })}><option value="PATIENT">Patient</option><option value="RELATIVE">Relative</option><option value="STAFF">Staff</option></select>

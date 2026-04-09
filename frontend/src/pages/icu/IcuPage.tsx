@@ -113,7 +113,7 @@ export default function IcuPage() {
     <div className="p-6 space-y-6">
       <TopBar title="ICU Management" subtitle="Monitor ICU beds and critical patients" />
       {loading ? <SkeletonKpiRow count={4} /> : (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="Total Beds" value={beds.length} icon={Bed} color="#3B82F6" />
           <KpiCard label="Occupied" value={occupied} icon={Monitor} color="#EF4444" />
           <KpiCard label="Available" value={available} icon={CheckCircle} color="#10B981" />
@@ -124,7 +124,7 @@ export default function IcuPage() {
       {showForm && (
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">Add ICU Bed</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <input className="hms-input" placeholder="Bed Number *" value={form.bedNumber} onChange={e => setForm({ ...form, bedNumber: e.target.value })} />
             <select className="hms-input" value={form.bedType} onChange={e => setForm({ ...form, bedType: e.target.value })}><option value="GENERAL_ICU">General ICU</option><option value="CARDIAC_ICU">Cardiac ICU</option><option value="NICU">NICU</option><option value="PICU">PICU</option></select>
             <input className="hms-input" placeholder="Equipment (comma-separated)" value={form.equipmentList} onChange={e => setForm({ ...form, equipmentList: e.target.value })} />
@@ -136,7 +136,7 @@ export default function IcuPage() {
         </div>
       ) : (
         <>
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {beds.slice((page - 1) * 20, page * 20).map(b => (
             <div key={b.id} className={`hms-card p-4 border-l-4 ${b.status === 'OCCUPIED' ? 'border-l-red-500' : b.status === 'AVAILABLE' ? 'border-l-green-500' : 'border-l-yellow-500'}`}>
               <div className="flex justify-between items-start"><span className="font-bold text-lg">{b.bedNumber}</span><StatusBadge status={b.status} /></div>

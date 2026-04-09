@@ -78,7 +78,7 @@ export default function AssetManagementPage() {
     <div className="p-6 space-y-6">
       <TopBar title="Asset Management" subtitle="Track hospital assets and maintenance" />
       {loading ? <SkeletonKpiRow count={4} /> : (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="Total Assets" value={assets.length} icon={Package} color="#3B82F6" />
           <KpiCard label="Active" value={active} icon={CheckCircle} color="#10B981" />
           <KpiCard label="Maintenance" value={maintenance} icon={Wrench} color="#F59E0B" />
@@ -89,7 +89,7 @@ export default function AssetManagementPage() {
       {showForm && (
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">Add Asset</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <input className="hms-input" placeholder="Asset Code *" value={form.assetCode} onChange={e => setForm({ ...form, assetCode: e.target.value })} />
             <input className="hms-input" placeholder="Name *" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
             <select className="hms-input" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}><option value="MEDICAL_EQUIPMENT">Medical Equipment</option><option value="IT">IT</option><option value="FURNITURE">Furniture</option><option value="VEHICLE">Vehicle</option></select>
@@ -103,7 +103,7 @@ export default function AssetManagementPage() {
       {showMaintenance && (
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">Schedule Maintenance</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <select className="hms-input" value={maintForm.maintenanceType} onChange={e => setMaintForm({ ...maintForm, maintenanceType: e.target.value })}><option value="PREVENTIVE">Preventive</option><option value="CORRECTIVE">Corrective</option><option value="CALIBRATION">Calibration</option></select>
             <input className="hms-input" placeholder="Description *" value={maintForm.description} onChange={e => setMaintForm({ ...maintForm, description: e.target.value })} />
             <input className="hms-input" type="date" value={maintForm.scheduledDate} onChange={e => setMaintForm({ ...maintForm, scheduledDate: e.target.value })} />

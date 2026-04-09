@@ -85,7 +85,7 @@ export default function OTEquipmentPage() {
         }
       />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Equipment" value={equipment.length} icon={Wrench} color="#0F766E" />
         <KpiCard label="Sterilized & Ready" value={sterilized} icon={CheckCircle} color="#10B981" />
         <KpiCard label="Under Maintenance" value={maintenance} icon={AlertTriangle} color="#F59E0B" />
@@ -95,7 +95,7 @@ export default function OTEquipmentPage() {
       {showForm && (
         <div className="hms-card p-6">
           <h3 className="text-base font-bold text-gray-900 mb-4">Add Equipment</h3>
-          <form onSubmit={addEquipment} className="grid grid-cols-3 gap-4">
+          <form onSubmit={addEquipment} className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div><label className="block text-xs font-medium text-gray-600 mb-1">Equipment Name</label>
               <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" /></div>
             <div><label className="block text-xs font-medium text-gray-600 mb-1">Type</label>

@@ -152,7 +152,7 @@ export default function PharmacyReturnsPage() {
       />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Returns" value={totalReturns} icon={RotateCcw} color="#0F766E" />
         <KpiCard label="Pending Review" value={pending} icon={Clock} color="#F59E0B" />
         <KpiCard label="Approved" value={approved} icon={CheckCircle} color="#10B981" />
@@ -163,7 +163,7 @@ export default function PharmacyReturnsPage() {
       {showForm && (
         <div className="hms-card p-6">
           <h3 className="text-base font-bold text-gray-900 mb-4">New Return Record</h3>
-          <form onSubmit={submitReturn} className="grid grid-cols-3 gap-4">
+          <form onSubmit={submitReturn} className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
               { label: 'Source', key: 'source', type: 'select', options: ['PATIENT', 'WARD', 'EXPIRED'] },
               { label: 'Patient ID (if applicable)', key: 'patientId', type: 'text' },

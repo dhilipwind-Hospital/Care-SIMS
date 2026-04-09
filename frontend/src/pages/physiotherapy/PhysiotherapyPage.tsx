@@ -53,7 +53,7 @@ export default function PhysiotherapyPage() {
     <div className="p-6 space-y-6">
       <TopBar title="Physiotherapy" subtitle="Manage physiotherapy orders and sessions" />
       {loading ? <SkeletonKpiRow count={4} /> : (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="Active Orders" value={active} icon={Dumbbell} color="#3B82F6" />
           <KpiCard label="Total Sessions" value={totalSessions} icon={Activity} color="#8B5CF6" />
           <KpiCard label="Completed" value={completed} icon={CheckCircle} color="#10B981" />
@@ -64,7 +64,7 @@ export default function PhysiotherapyPage() {
       {showForm && (
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">New PT Order</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <input className="hms-input" placeholder="Patient ID *" value={form.patientId} onChange={e => setForm({ ...form, patientId: e.target.value })} />
             <input className="hms-input" placeholder="Doctor ID *" value={form.doctorId} onChange={e => setForm({ ...form, doctorId: e.target.value })} />
             <input className="hms-input" placeholder="Diagnosis *" value={form.diagnosis} onChange={e => setForm({ ...form, diagnosis: e.target.value })} />

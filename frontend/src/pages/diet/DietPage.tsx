@@ -135,7 +135,7 @@ export default function DietPage() {
     <div className="p-6 space-y-6">
       <TopBar title="Diet & Nutrition" subtitle="Manage patient diet orders and meal service" />
       {loading ? <SkeletonKpiRow count={4} /> : (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="Active Orders" value={active} icon={FileText} color="#3B82F6" />
           <KpiCard label="Today's Meals" value={meals.length} icon={UtensilsCrossed} color="#8B5CF6" />
           <KpiCard label="Served" value={served} icon={CheckCircle} color="#10B981" />
@@ -151,7 +151,7 @@ export default function DietPage() {
       {showForm && (
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">New Diet Order</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <input className="hms-input" placeholder="Patient ID *" value={form.patientId} onChange={e => setForm({ ...form, patientId: e.target.value })} />
             <input className="hms-input" placeholder="Admission ID *" value={form.admissionId} onChange={e => setForm({ ...form, admissionId: e.target.value })} />
             <select className="hms-input" value={form.dietType} onChange={e => setForm({ ...form, dietType: e.target.value })}><option value="REGULAR">Regular</option><option value="DIABETIC">Diabetic</option><option value="RENAL">Renal</option><option value="CARDIAC">Cardiac</option><option value="SOFT">Soft</option><option value="LIQUID">Liquid</option><option value="NPO">NPO</option></select>

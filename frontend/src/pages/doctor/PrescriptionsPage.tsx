@@ -146,7 +146,7 @@ export default function PrescriptionsPage() {
         }
       />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total" value={rxList.length} icon={Pill} color="#0F766E" />
         <KpiCard label="Draft" value={draft} icon={Clock} color="#F59E0B" />
         <KpiCard label="Sent to Pharmacy" value={sent} icon={Send} color="#3B82F6" />

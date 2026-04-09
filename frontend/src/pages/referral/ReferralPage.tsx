@@ -83,7 +83,7 @@ export default function ReferralPage() {
     <div className="p-6 space-y-6">
       <TopBar title="Referrals" subtitle="Manage patient referrals between departments" />
       {loading ? <SkeletonKpiRow count={4} /> : (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="Total" value={referrals.length} icon={GitBranch} color="#3B82F6" />
           <KpiCard label="Pending" value={referrals.filter(r => r.status === 'PENDING').length} icon={Clock} color="#F59E0B" />
           <KpiCard label="Accepted" value={referrals.filter(r => r.status === 'ACCEPTED').length} icon={Users} color="#10B981" />
@@ -106,7 +106,7 @@ export default function ReferralPage() {
       {showForm && (
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">{editingId ? 'Edit Referral' : 'New Referral'}</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <SearchableSelect
               value={form.patientId}
               onChange={(id) => setForm({ ...form, patientId: id })}

@@ -9,6 +9,7 @@ import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import Pagination from '../../components/ui/Pagination';
 import ExportButton from '../../components/ui/ExportButton';
 import api from '../../lib/api';
+import { formatTime, formatDateTime } from '../../lib/format';
 
 const PAGE_SIZE = 20;
 
@@ -205,7 +206,7 @@ export default function LabPage() {
         actions={<ExportButton endpoint="/lab/orders/export" params={{ status: statusFilter || undefined }} filename={`lab-orders-${new Date().toISOString().slice(0, 10)}.csv`} />}
       />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Samples Received" value={orders.length} icon={FlaskConical} color="#0F766E" />
         <KpiCard label="In Progress" value={received} icon={Clock} color="#F97316" />
         <KpiCard label="Results Ready" value={ready} icon={CheckCircle} color="#10B981" />
@@ -223,7 +224,7 @@ export default function LabPage() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr>
                 {['Order #','Patient','Doctor','Tests','Collected By','Collection Time','Status','Actions'].map(h => (
                   <th key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 py-3 text-left bg-gray-50">{h}</th>
@@ -245,7 +246,7 @@ export default function LabPage() {
                   <td className="px-4 py-3 text-sm text-gray-600">{o.doctor ? `Dr. ${o.doctor.firstName}` : '—'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{o.tests?.map((t: any) => t.testName).join(', ') || o.items?.map((t: any) => t.testName).join(', ') || '—'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{o.collectedById || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{o.collectedAt ? new Date(o.collectedAt).toLocaleTimeString() : '—'}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{o.collectedAt ? formatTime(o.collectedAt) : '—'}</td>
                   <td className="px-4 py-3"><StatusBadge status={o.status} /></td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1.5 flex-wrap">
@@ -310,7 +311,7 @@ export default function LabPage() {
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
                   <div>
                     <h2 className="font-bold text-gray-900">Order {viewOrder.orderNumber}</h2>
-                    <p className="text-xs text-gray-500 mt-0.5">Created {new Date(viewOrder.orderedAt || viewOrder.createdAt).toLocaleString()}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Created {formatDateTime(viewOrder.orderedAt || viewOrder.createdAt)}</p>
                   </div>
                   <button onClick={() => setViewOrder(null)} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600">
                     <X size={18} />

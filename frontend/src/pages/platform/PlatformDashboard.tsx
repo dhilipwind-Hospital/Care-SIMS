@@ -106,7 +106,7 @@ export default function PlatformDashboard() {
       />
 
       {/* KPI Row */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Organizations" value={tenants.length} icon={Building2} color="#0F766E" />
         <KpiCard label="Active" value={active} icon={CheckCircle} color="#10B981" />
         <KpiCard label="On Trial" value={trial} icon={Clock} color="#F59E0B" />
@@ -114,7 +114,7 @@ export default function PlatformDashboard() {
       </div>
 
       {/* Org type breakdown */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="hms-card p-5">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-semibold text-gray-700">Clinics</span>
@@ -279,7 +279,7 @@ export default function PlatformDashboard() {
       </div>
 
       {/* Subscription plan breakdown */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { plan: 'STARTER', label: 'Starter', desc: 'Clinics — OPD only', color: 'text-gray-700', bg: 'bg-gray-50' },
           { plan: 'STANDARD', label: 'Standard', desc: 'Hospital — OPD+IPD+Pharmacy+Lab', color: 'text-blue-700', bg: 'bg-blue-50' },
@@ -301,7 +301,7 @@ export default function PlatformDashboard() {
       </div>
 
       {/* Platform stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="hms-card p-5">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center"><Globe size={18} className="text-teal-600" /></div>

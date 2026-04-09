@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Calendar, Clock, Users, CheckCircle, Plus, X, Search, XCircle, Edit3 } from 'lucide-react';
+import { Calendar, Clock, Users, CheckCircle, Plus, X, Search, XCircle, Edit3, Loader2 } from 'lucide-react';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
@@ -10,6 +10,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
 import ExportButton from '../../components/ui/ExportButton';
 import api from '../../lib/api';
+import { formatSlotTime } from '../../lib/format';
 
 const EMPTY_FORM = {
   patientId: '', doctorId: '', appointmentDate: new Date().toISOString().split('T')[0],
@@ -202,15 +203,14 @@ export default function AppointmentsPage() {
             <input type="date" value={date} onChange={e => { setDate(e.target.value); setPage(1); }}
               className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
             <button onClick={() => { setShowBook(true); setForm({ ...EMPTY_FORM, appointmentDate: date }); setFormError(''); setSelectedPat(null); setPatSearch(''); }}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-semibold shadow-sm"
-              style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
+              className="btn-primary flex items-center gap-2">
               <Plus size={15} /> Book Appointment
             </button>
           </div>
         }
       />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Today" value={total}     icon={Calendar}     color="#0F766E" />
         <KpiCard label="Scheduled"   value={scheduled} icon={Clock}        color="#3B82F6" />
         <KpiCard label="Completed"   value={completed}  icon={CheckCircle} color="#10B981" />
@@ -233,7 +233,7 @@ export default function AppointmentsPage() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr>
                 {['Appt #','Patient','Doctor','Dept','Time','Type','Status','Actions'].map(h => (
                   <th key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 py-3 text-left bg-gray-50">{h}</th>
@@ -260,7 +260,7 @@ export default function AppointmentsPage() {
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-700">{a.doctor ? `Dr. ${a.doctor.firstName} ${a.doctor.lastName}` : '—'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{a.department?.name || '—'}</td>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-800">{a.slotTime}</td>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-800">{formatSlotTime(a.slotTime)}</td>
                   <td className="px-4 py-3 text-xs">
                     <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">{a.appointmentType}</span>
                   </td>
@@ -409,8 +409,8 @@ export default function AppointmentsPage() {
                 <button type="button" onClick={() => setShowBook(false)}
                   className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
                 <button type="submit" disabled={submitting}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-60"
-                  style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
+                  className="btn-primary flex items-center gap-2">
+                  {submitting && <Loader2 size={14} className="animate-spin" />}
                   {submitting ? 'Booking…' : 'Book Appointment'}
                 </button>
               </div>
@@ -507,8 +507,8 @@ export default function AppointmentsPage() {
                 <button type="button" onClick={() => { setShowEdit(false); setEditAppt(null); }}
                   className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
                 <button type="submit" disabled={editSubmitting}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-60"
-                  style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
+                  className="btn-primary flex items-center gap-2">
+                  {editSubmitting && <Loader2 size={14} className="animate-spin" />}
                   {editSubmitting ? 'Saving…' : 'Save Changes'}
                 </button>
               </div>

@@ -224,7 +224,7 @@ export default function RadiologyPage() {
       <TopBar title="Radiology" subtitle="Manage imaging orders and results" />
 
       {/* KPI cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Orders" value={orders.length} icon={ScanLine} color="#3B82F6" />
         <KpiCard label="Pending" value={pending} icon={Clock} color="#F59E0B" />
         <KpiCard label="Reported" value={reported} icon={FileText} color="#8B5CF6" />
@@ -274,7 +274,7 @@ export default function RadiologyPage() {
         <div className="hms-card p-5 space-y-4">
           <h3 className="font-semibold text-gray-900">{editingId ? 'Edit Order' : 'New Radiology Order'}</h3>
           {formError && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{formError}</div>}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <input className="hms-input" placeholder="Patient ID *" value={form.patientId} onChange={e => setForm({ ...form, patientId: e.target.value })} />
             <select className="hms-input" value={form.modality} onChange={e => setForm({ ...form, modality: e.target.value })}>
               {modalities.map(m => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}

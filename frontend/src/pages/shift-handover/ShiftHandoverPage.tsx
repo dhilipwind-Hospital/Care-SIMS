@@ -114,7 +114,7 @@ export default function ShiftHandoverPage() {
     <div className="p-6 space-y-6">
       <TopBar title="Shift Handover" subtitle="Manage shift transitions and handover notes" />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Handovers" value={handovers.length} icon={ClipboardList} color="#3B82F6" />
         <KpiCard label="Drafts" value={drafts} icon={Clock} color="#F59E0B" />
         <KpiCard label="Pending Ack." value={pending} icon={AlertTriangle} color="#EF4444" />
@@ -131,7 +131,7 @@ export default function ShiftHandoverPage() {
         <div className="hms-card p-5 space-y-4">
           <h3 className="font-semibold text-gray-900">{editingId ? 'Edit Handover' : 'New Handover'}</h3>
           {formError && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{formError}</div>}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <input className="hms-input" type="date" value={form.shiftDate} onChange={e => setForm({ ...form, shiftDate: e.target.value })} />
             <select className="hms-input" value={form.shiftType} onChange={e => setForm({ ...form, shiftType: e.target.value })}>
               <option value="MORNING">Morning (6AM - 2PM)</option>
