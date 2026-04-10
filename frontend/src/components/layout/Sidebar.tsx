@@ -194,6 +194,8 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       <div className="px-8 flex items-center gap-3" style={{ height: 88, borderBottom: '1px solid var(--sidebar-border)' }}>
         {role === 'PLATFORM_OWNER' || role === 'PLATFORM_ADMIN' ? (
           <img src={ayphenLogo} alt="Ayphen" className="w-8 h-8 flex-shrink-0" />
+        ) : user?.tenantLogoUrl ? (
+          <img src={user.tenantLogoUrl} alt={user?.tenantName || 'Logo'} className="w-8 h-8 rounded-lg object-contain bg-white p-0.5 flex-shrink-0" />
         ) : (
           <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
             <Building2 className="w-5 h-5 text-white" />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Building2, Save, Globe, Phone, Mail, FileText, Shield, AlertCircle, CheckCircle, ToggleLeft, ToggleRight, Loader2 } from 'lucide-react';
+import { Building2, Save, Globe, Phone, Mail, FileText, Shield, AlertCircle, CheckCircle, ToggleLeft, ToggleRight, Loader2, Upload, ImageIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TopBar from '../../components/layout/TopBar';
 import api from '../../lib/api';
@@ -51,12 +51,15 @@ export default function OrgSettingsPage() {
   const [features, setFeatures] = useState<OrgFeature[]>([]);
   const [featuresLoading, setFeaturesLoading] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
 
   useEffect(() => {
     api.get('/tenants/me')
       .then(r => {
         setOrg(r.data);
         setForm(r.data);
+        setLogoUrl(r.data.logoUrl || null);
       })
       .catch((err) => { console.error('Failed to fetch organization settings:', err); })
       .finally(() => setLoading(false));
@@ -74,6 +77,23 @@ export default function OrgSettingsPage() {
   useEffect(() => {
     if (activeTab === 'features') fetchFeatures();
   }, [activeTab]);
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { toast.error('Logo must be under 2MB'); return; }
+    setLogoUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const { data: upload } = await api.post('/uploads/profile-picture', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await api.patch('/tenants/me', { logoUrl: upload.url });
+      setLogoUrl(upload.url);
+      toast.success('Logo updated! Log out and back in to see it in the sidebar.');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Logo upload failed');
+    } finally { setLogoUploading(false); }
+  };
 
   const handleToggleFeature = async (feature: OrgFeature) => {
     setTogglingId(feature.id);
@@ -151,8 +171,12 @@ export default function OrgSettingsPage() {
 
       {/* Org identity banner */}
       <div className="bg-gradient-to-r from-teal-600 to-teal-500 rounded-xl p-5 text-white flex items-center gap-5">
-        <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center">
-          <Building2 size={28} className="text-white" />
+        <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center overflow-hidden">
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo" className="w-full h-full object-contain p-1" />
+          ) : (
+            <Building2 size={28} className="text-white" />
+          )}
         </div>
         <div>
           <div className="text-xl font-bold">{org?.tradeName || org?.legalName}</div>
@@ -349,7 +373,28 @@ export default function OrgSettingsPage() {
 
           {/* Contact & Branding Tab */}
           {activeTab === 'contact' && (
-            <div className="space-y-4">
+            <div className="space-y-5">
+              {/* Logo upload */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Organization Logo</label>
+                <div className="flex items-center gap-5">
+                  <div className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center bg-gray-50 overflow-hidden">
+                    {logoUrl ? (
+                      <img src={logoUrl} alt="Logo" className="w-full h-full object-contain p-1" />
+                    ) : (
+                      <ImageIcon size={28} className="text-gray-300" />
+                    )}
+                  </div>
+                  <div>
+                    <label className="btn-primary inline-flex items-center gap-2 cursor-pointer">
+                      {logoUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                      {logoUploading ? 'Uploading…' : 'Upload Logo'}
+                      <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={handleLogoUpload} disabled={logoUploading} />
+                    </label>
+                    <p className="text-xs text-gray-400 mt-1.5">PNG, JPG, WebP or SVG. Max 2MB. Appears in sidebar, invoices, and reports.</p>
+                  </div>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
