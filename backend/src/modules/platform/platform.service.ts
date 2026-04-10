@@ -119,17 +119,20 @@ export class PlatformService {
 
     // Create primary admin user — support both flat and nested field formats
     const adminEmail = dto.adminUser?.email || dto.primaryAdminEmail;
+    let adminTempPassword: string | null = null;
     if (adminEmail) {
       const tempPassword = 'Ayphen@' + Math.random().toString(36).slice(2, 10).toUpperCase();
+      adminTempPassword = tempPassword;
       const hash = await bcrypt.hash(tempPassword, 12);
       const adminRole = await this.prisma.tenantRole.findFirst({ where: { tenantId: tenant.id, systemRoleId: 'SYS_ORG_ADMIN' } });
       if (adminRole) {
+        const adminFirstName = dto.adminUser?.firstName || dto.primaryAdminName?.split(' ')[0] || 'Admin';
         await this.prisma.tenantUser.create({
           data: {
             tenantId: tenant.id,
             email: adminEmail,
             passwordHash: hash,
-            firstName: dto.adminUser?.firstName || dto.primaryAdminName?.split(' ')[0] || 'Admin',
+            firstName: adminFirstName,
             lastName: dto.adminUser?.lastName || dto.primaryAdminName?.split(' ').slice(1).join(' ') || '',
             phone: dto.adminUser?.phone || '',
             roleId: adminRole.id,
@@ -139,11 +142,30 @@ export class PlatformService {
             isActive: true,
           },
         });
+
+        // Send welcome email with credentials (non-blocking)
+        sendEmail(
+          adminEmail,
+          `Welcome to ${tenant.tradeName || tenant.legalName} on Ayphen HMS`,
+          emailTemplate(
+            'Your Organization is Ready!',
+            `Dear ${adminFirstName},<br><br>` +
+            `Your organization <strong>${tenant.tradeName || tenant.legalName}</strong> has been created on Ayphen HMS.<br><br>` +
+            `<div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:8px;padding:16px;margin:16px 0;">` +
+            `<p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Login Credentials</p>` +
+            `<p style="margin:0 0 4px;"><strong>Email:</strong> ${adminEmail}</p>` +
+            `<p style="margin:0 0 4px;"><strong>Password:</strong> ${tempPassword}</p>` +
+            `<p style="margin:8px 0 0;font-size:12px;color:#6b7280;">You will be asked to change your password on first login.</p>` +
+            `</div>` +
+            `<p>You can log in at: <a href="${process.env.FRONTEND_URL || 'https://care-sims.vercel.app'}/login" style="color:#0F766E;">Login to Ayphen HMS</a></p>` +
+            `<br>Thank you for choosing Ayphen HMS.`,
+          ),
+        ).catch((err) => console.error('Failed to send org welcome email:', err));
       }
     }
 
     await this.logPlatformEvent('TENANT_CREATED', adminId, 'TENANT', tenant.id, tenant.legalName, `Organization ${tenant.legalName} created`);
-    return tenant;
+    return { ...tenant, adminEmail: adminEmail || null, adminTempPassword };
   }
 
   async getOrganization(id: string) {

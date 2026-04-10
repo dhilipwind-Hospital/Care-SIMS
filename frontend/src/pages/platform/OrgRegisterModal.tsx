@@ -100,6 +100,7 @@ export default function OrgRegisterModal({ onClose, onSuccess }: Props) {
   const [enabledModules, setEnabledModules] = useState<string[]>(DEFAULT_FEATURES['HOSPITAL']);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [createdCreds, setCreatedCreds] = useState<{ email: string; password: string } | null>(null);
 
   const setOrgType = (type: string) => {
     setForm(f => ({ ...f, orgType: type, subscriptionPlan: PLAN_BY_TYPE[type] || 'STANDARD' }));
@@ -116,7 +117,7 @@ export default function OrgRegisterModal({ onClose, onSuccess }: Props) {
     setSubmitting(true);
     setError('');
     try {
-      await api.post('/platform/organizations', {
+      const { data } = await api.post('/platform/organizations', {
         legalName: form.legalName,
         tradeName: form.tradeName || form.legalName,
         orgType: form.orgType,
@@ -145,11 +146,47 @@ export default function OrgRegisterModal({ onClose, onSuccess }: Props) {
         },
         enabledModules,
       });
-      onSuccess();
+      if (data.adminEmail && data.adminTempPassword) {
+        setCreatedCreds({ email: data.adminEmail, password: data.adminTempPassword });
+      } else {
+        onSuccess();
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || JSON.stringify(err.response?.data) || 'Registration failed');
     } finally { setSubmitting(false); }
   };
+
+  // ── SUCCESS SCREEN — show admin credentials after org creation ──
+  if (createdCreds) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center">
+          <div className="w-14 h-14 rounded-full bg-teal-50 flex items-center justify-center mx-auto mb-4">
+            <CheckCircle size={28} className="text-teal-600" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-1">Organization Created!</h2>
+          <p className="text-sm text-gray-500 mb-6">{form.tradeName || form.legalName} is ready. Admin credentials below.</p>
+          <div className="bg-gray-50 rounded-xl p-4 text-left space-y-3 mb-6 border border-gray-100">
+            <div>
+              <p className="text-xs text-gray-400 mb-0.5">Admin Email</p>
+              <p className="text-sm font-semibold text-gray-900 select-all">{createdCreds.email}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 mb-0.5">Temporary Password</p>
+              <p className="text-sm font-mono font-semibold text-teal-700 bg-teal-50 rounded-lg px-3 py-1.5 select-all border border-teal-100">{createdCreds.password}</p>
+            </div>
+            <p className="text-xs text-gray-400">A welcome email has been sent. Password change is required on first login.</p>
+          </div>
+          <button
+            onClick={() => { setCreatedCreds(null); onSuccess(); }}
+            className="btn-primary w-full py-2.5"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
