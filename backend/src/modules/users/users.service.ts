@@ -3,17 +3,18 @@ import { PrismaService } from '../../database/prisma.service';
 import * as bcrypt from 'bcryptjs';
 import { sendEmail } from '../../common/utils/mailer';
 
-function emailTemplate(title: string, body: string): string {
+function emailTemplate(title: string, body: string, orgName?: string): string {
+  const brandName = orgName || 'Ayphen HMS';
   return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
   <div style="background:linear-gradient(135deg,#0F766E,#14B8A6);padding:20px;border-radius:12px 12px 0 0;">
-    <h1 style="color:white;margin:0;font-size:20px;">Ayphen HMS</h1>
+    <h1 style="color:white;margin:0;font-size:20px;">${brandName}</h1>
   </div>
   <div style="padding:24px;background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
     <h2 style="color:#1f2937;margin:0 0 16px;">${title}</h2>
     <p style="color:#4b5563;line-height:1.6;">${body}</p>
   </div>
   <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:16px;">
-    This is an automated message from Ayphen HMS. Do not reply.
+    This is an automated message from ${brandName}. Do not reply.
   </p>
 </div>`;
 }
@@ -85,11 +86,15 @@ export class UsersService {
     });
     const { passwordHash, mfaSecret, ...safe } = user as any;
 
+    // Resolve tenant name for branded email
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { tradeName: true, legalName: true } });
+    const orgName = tenant?.tradeName || tenant?.legalName || 'Hospital';
+
     // Non-blocking welcome email to new user
     sendEmail(
       dto.email,
-      'Welcome to Ayphen HMS',
-      emailTemplate('Welcome to Ayphen HMS', `Dear ${dto.firstName} ${dto.lastName || ''},<br><br>Your account has been created on Ayphen HMS.<br><br><strong>Email:</strong> ${dto.email}<br><strong>Role:</strong> ${(user as any).role?.name || 'Staff'}<br><br>${!dto.password ? `<strong>Temporary Password:</strong> ${password}<br><br>Please change your password upon first login.<br>` : ''}<br>Login at: <a href="${process.env.FRONTEND_URL || 'https://app.ayphenhms.com'}">${process.env.FRONTEND_URL || 'https://app.ayphenhms.com'}</a>`),
+      `Welcome to ${orgName}`,
+      emailTemplate(`Welcome to ${orgName}`, `Dear ${dto.firstName} ${dto.lastName || ''},<br><br>Your account has been created at <strong>${orgName}</strong>.<br><br><strong>Email:</strong> ${dto.email}<br><strong>Role:</strong> ${(user as any).role?.name || 'Staff'}<br><br>${!dto.password ? `<strong>Temporary Password:</strong> ${password}<br><br>Please change your password upon first login.<br>` : ''}<br>Login at: <a href="${process.env.FRONTEND_URL || 'https://care-sims.vercel.app'}/login">${process.env.FRONTEND_URL || 'https://care-sims.vercel.app'}/login</a>`, orgName),
     ).catch((err) => console.error('Failed to send welcome email:', err));
 
     return { ...safe, tempPassword: dto.password ? undefined : password };
@@ -179,12 +184,16 @@ export class UsersService {
       });
     });
 
+    // Resolve tenant name for branded email
+    const tenantApproval = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { tradeName: true, legalName: true } });
+    const approvalOrgName = tenantApproval?.tradeName || tenantApproval?.legalName || 'Hospital';
+
     // Non-blocking approval email
     if ((approved as any).email) {
       sendEmail(
         (approved as any).email,
-        'Account Approved - Ayphen HMS',
-        emailTemplate('Account Approved', `Dear ${(approved as any).firstName} ${(approved as any).lastName || ''},<br><br>Great news! Your registration request has been approved. Your account is now active.<br><br>You can now log in at: <a href="${process.env.FRONTEND_URL || 'https://app.ayphenhms.com'}">${process.env.FRONTEND_URL || 'https://app.ayphenhms.com'}</a><br><br>Welcome aboard!`),
+        `Account Approved - ${approvalOrgName}`,
+        emailTemplate('Account Approved', `Dear ${(approved as any).firstName} ${(approved as any).lastName || ''},<br><br>Great news! Your registration request at <strong>${approvalOrgName}</strong> has been approved. Your account is now active.<br><br>You can now log in at: <a href="${process.env.FRONTEND_URL || 'https://care-sims.vercel.app'}/login">${process.env.FRONTEND_URL || 'https://care-sims.vercel.app'}/login</a><br><br>Welcome aboard!`, approvalOrgName),
       ).catch((err) => console.error('Failed to send approval email:', err));
     }
 
@@ -199,12 +208,16 @@ export class UsersService {
       return user;
     });
 
+    // Resolve tenant name for branded email
+    const tenantReject = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { tradeName: true, legalName: true } });
+    const rejectOrgName = tenantReject?.tradeName || tenantReject?.legalName || 'Hospital';
+
     // Non-blocking rejection email
     if ((rejected as any).email) {
       sendEmail(
         (rejected as any).email,
-        'Registration Update - Ayphen HMS',
-        emailTemplate('Registration Update', `Dear ${(rejected as any).firstName} ${(rejected as any).lastName || ''},<br><br>We regret to inform you that your registration request has not been approved at this time.<br><br>If you believe this was in error or would like more information, please contact the organization administrator directly.<br><br>Thank you for your interest.`),
+        `Registration Update - ${rejectOrgName}`,
+        emailTemplate('Registration Update', `Dear ${(rejected as any).firstName} ${(rejected as any).lastName || ''},<br><br>We regret to inform you that your registration request at <strong>${rejectOrgName}</strong> has not been approved at this time.<br><br>If you believe this was in error or would like more information, please contact the organization administrator directly.<br><br>Thank you for your interest.`, rejectOrgName),
       ).catch((err) => console.error('Failed to send rejection email:', err));
     }
 

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Shield, Search, UserCheck } from 'lucide-react';
+import { Shield, Search, UserCheck, Download } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import Pagination from '../../components/ui/Pagination';
 import api from '../../lib/api';
+import { exportTableToCsv } from '../../lib/export';
 
 const PAGE_SIZE = 20;
 type Tab = 'activity' | 'patient-access';
@@ -56,6 +57,36 @@ export default function AuditPage() {
 
   const handleAccessSearch = () => { setAccessPage(1); fetchPatientAccess(); };
 
+  const exportActivityLogs = () => {
+    if (!logs.length) { toast.error('No data to export'); return; }
+    exportTableToCsv([
+      { header: 'Timestamp', key: 'createdAt', transform: (v: string) => v ? new Date(v).toLocaleString('en-IN') : '' },
+      { header: 'User', key: 'user', transform: (_: any, row: any) => row.user ? `${row.user.firstName || ''} ${row.user.lastName || ''}`.trim() : '' },
+      { header: 'Email', key: 'user', transform: (_: any, row: any) => row.user?.email || '' },
+      { header: 'Action', key: 'action' },
+      { header: 'Entity', key: 'entityType' },
+      { header: 'Entity ID', key: 'entityId' },
+      { header: 'IP Address', key: 'ipAddress' },
+      { header: 'Details', key: 'details', transform: (v: any) => v ? JSON.stringify(v) : '' },
+    ], logs, `audit-activity-log.csv`);
+    toast.success('Activity log exported');
+  };
+
+  const exportAccessLogs = () => {
+    if (!accessLogs.length) { toast.error('No data to export'); return; }
+    exportTableToCsv([
+      { header: 'Timestamp', key: 'createdAt', transform: (v: string) => v ? new Date(v).toLocaleString('en-IN') : '' },
+      { header: 'Patient', key: 'patientName' },
+      { header: 'Patient ID', key: 'patientId' },
+      { header: 'Accessed By', key: 'actorName' },
+      { header: 'Role', key: 'actorRole' },
+      { header: 'Action', key: 'accessType' },
+      { header: 'Description', key: 'description' },
+      { header: 'Cross-Location', key: 'isCrossLocation', transform: (v: boolean) => v ? 'Yes' : 'No' },
+    ], accessLogs, `patient-access-log.csv`);
+    toast.success('Patient access log exported');
+  };
+
   const actionColor: Record<string, string> = {
     CREATE: 'bg-green-100 text-green-700', UPDATE: 'bg-blue-100 text-blue-700',
     DELETE: 'bg-red-100 text-red-700', VIEW: 'bg-gray-100 text-gray-600',
@@ -100,6 +131,9 @@ export default function AuditPage() {
                 <option value="">All Actions</option>
                 {['CREATE','UPDATE','DELETE','VIEW','LOGIN','LOGOUT'].map(a => <option key={a}>{a}</option>)}
               </select>
+              <button onClick={exportActivityLogs} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                <Download size={14} /> Export
+              </button>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -146,6 +180,9 @@ export default function AuditPage() {
               <UserCheck size={18} className="text-teal-600" />
               <span className="font-semibold">Patient Access Log</span>
             </div>
+            <button onClick={exportAccessLogs} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+              <Download size={14} /> Export
+            </button>
           </div>
           {/* Filters */}
           <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-end gap-3">

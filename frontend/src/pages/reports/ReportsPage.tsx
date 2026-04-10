@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import {
   Users, DollarSign, Activity, TrendingUp, BedDouble,
-  Clock, CalendarRange, FileText, Stethoscope, HeartPulse,
+  Clock, CalendarRange, FileText, Stethoscope, HeartPulse, Download,
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -13,6 +13,7 @@ import KpiCard from '../../components/ui/KpiCard';
 import EmptyState from '../../components/ui/EmptyState';
 import { SkeletonKpiRow } from '../../components/ui/Skeleton';
 import api from '../../lib/api';
+import { exportTableToCsv } from '../../lib/export';
 
 // Chart colors matching the Ayphen HMS palette
 const CHART_COLORS = ['#0F766E', '#3B82F6', '#EC4899', '#8B5CF6', '#F59E0B', '#10B981', '#EF4444', '#14B8A6'];
@@ -80,6 +81,53 @@ export default function ReportsPage() {
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(defaultTo);
 
+  const handleExport = async () => {
+    try {
+      const params = { from, to };
+      if (activeTab === 'patients') {
+        const { data } = await api.get('/reports/patients', { params });
+        const rows = [
+          ...(data.byGender || []).map((g: any) => ({ category: 'Gender', label: capitalize(g.gender), count: g._count })),
+          ...(data.byRegistrationType || []).map((r: any) => ({ category: 'Registration Type', label: capitalize(r.registrationType), count: r._count })),
+        ];
+        exportTableToCsv([
+          { header: 'Category', key: 'category' }, { header: 'Label', key: 'label' }, { header: 'Count', key: 'count' },
+        ], rows, `patient-report-${from}-to-${to}.csv`);
+      } else if (activeTab === 'revenue') {
+        const { data } = await api.get('/reports/revenue', { params });
+        exportTableToCsv([
+          { header: 'Metric', key: 'metric' }, { header: 'Amount (INR)', key: 'amount' },
+        ], [
+          { metric: 'Total Billed', amount: data.totalBilled },
+          { metric: 'Total Collected', amount: data.totalCollected },
+          { metric: 'Outstanding', amount: data.outstanding },
+          { metric: 'Invoice Count', amount: data.invoiceCount },
+          { metric: 'Collection Rate %', amount: data.totalBilled > 0 ? ((data.totalCollected / data.totalBilled) * 100).toFixed(1) : '0' },
+        ], `revenue-report-${from}-to-${to}.csv`);
+      } else if (activeTab === 'opd') {
+        const { data } = await api.get('/reports/opd', { params });
+        const days = Math.max(1, Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / 86400000));
+        exportTableToCsv([
+          { header: 'Metric', key: 'metric' }, { header: 'Value', key: 'value' },
+        ], [
+          { metric: 'Total Consultations', value: data.totalConsultations },
+          { metric: 'Period (days)', value: days },
+          { metric: 'Avg Consultations/Day', value: (data.totalConsultations / days).toFixed(1) },
+        ], `opd-report-${from}-to-${to}.csv`);
+      } else if (activeTab === 'ipd') {
+        const { data } = await api.get('/reports/ipd', { params });
+        exportTableToCsv([
+          { header: 'Metric', key: 'metric' }, { header: 'Value', key: 'value' },
+        ], [
+          { metric: 'Total Admissions', value: data.total },
+          { metric: 'Currently Admitted', value: data.currentlyAdmitted },
+          { metric: 'Discharged', value: data.discharged },
+        ], `ipd-report-${from}-to-${to}.csv`);
+      }
+      toast.success('Report exported');
+    } catch { toast.error('Export failed'); }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <TopBar title="Reports & Analytics" subtitle="Hospital performance overview" />
@@ -107,7 +155,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Date range filter */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <CalendarRange size={16} className="text-gray-400" />
         <label className="text-sm text-gray-500 font-medium">From</label>
         <input
@@ -123,6 +171,9 @@ export default function ReportsPage() {
           onChange={e => setTo(e.target.value)}
           className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:ring-2 focus:ring-teal-200 focus:border-teal-400 outline-none"
         />
+        <button onClick={handleExport} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors ml-auto">
+          <Download size={15} /> Export CSV
+        </button>
       </div>
 
       {/* Tab content */}
