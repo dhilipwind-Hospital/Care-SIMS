@@ -431,6 +431,55 @@ export class PlatformService {
         { systemRoleId: 'SYS_OT_COORDINATOR', name: 'OT Coordinator', description: 'Full OT module management' },
         { systemRoleId: 'SYS_COMPLIANCE_OFFICER', name: 'Compliance Officer', description: 'Audit logs + compliance' },
       ],
+      PHARMACY_STANDALONE: [
+        { systemRoleId: 'SYS_ORG_ADMIN', name: 'Organization Admin', description: 'Full access to all enabled modules' },
+        { systemRoleId: 'SYS_PHARMACIST', name: 'Pharmacist', description: 'Full pharmacy module' },
+        { systemRoleId: 'SYS_PHARMACY_INCHARGE', name: 'Pharmacist In-Charge', description: 'Pharmacist + PO + returns + reports' },
+        { systemRoleId: 'SYS_BILLING', name: 'Billing Staff', description: 'Invoicing and payments' },
+        { systemRoleId: 'SYS_RECEPTIONIST', name: 'Receptionist', description: 'Counter and customer intake' },
+      ],
+      LAB_STANDALONE: [
+        { systemRoleId: 'SYS_ORG_ADMIN', name: 'Organization Admin', description: 'Full access to all enabled modules' },
+        { systemRoleId: 'SYS_LAB_TECH', name: 'Lab Technician', description: 'Sample processing, result entry' },
+        { systemRoleId: 'SYS_LAB_SUPERVISOR', name: 'Lab Supervisor', description: 'Lab Tech + validation + QC' },
+        { systemRoleId: 'SYS_RECEPTIONIST', name: 'Receptionist', description: 'Sample collection, patient intake' },
+        { systemRoleId: 'SYS_BILLING', name: 'Billing Staff', description: 'Invoicing and payments' },
+      ],
+      DENTAL_CLINIC: [
+        { systemRoleId: 'SYS_ORG_ADMIN', name: 'Organization Admin', description: 'Full access to all enabled modules' },
+        { systemRoleId: 'SYS_DOCTOR', name: 'Dentist', description: 'Consultation, treatment plans, prescriptions' },
+        { systemRoleId: 'SYS_NURSE', name: 'Dental Assistant', description: 'Vitals, chair-side assistance' },
+        { systemRoleId: 'SYS_RECEPTIONIST', name: 'Receptionist', description: 'Queue, registration, appointments' },
+        { systemRoleId: 'SYS_BILLING', name: 'Billing Staff', description: 'Invoicing and payments' },
+      ],
+      OPTICAL_CENTRE: [
+        { systemRoleId: 'SYS_ORG_ADMIN', name: 'Organization Admin', description: 'Full access to all enabled modules' },
+        { systemRoleId: 'SYS_DOCTOR', name: 'Optometrist', description: 'Eye examination, prescriptions' },
+        { systemRoleId: 'SYS_PHARMACIST', name: 'Dispensing Optician', description: 'Lens dispensing and inventory' },
+        { systemRoleId: 'SYS_RECEPTIONIST', name: 'Receptionist', description: 'Appointments and registration' },
+        { systemRoleId: 'SYS_BILLING', name: 'Billing Staff', description: 'Invoicing and payments' },
+      ],
+      IMAGING_CENTRE: [
+        { systemRoleId: 'SYS_ORG_ADMIN', name: 'Organization Admin', description: 'Full access to all enabled modules' },
+        { systemRoleId: 'SYS_DOCTOR', name: 'Radiologist', description: 'Image interpretation, reports' },
+        { systemRoleId: 'SYS_LAB_TECH', name: 'Radiographer', description: 'Image acquisition, patient positioning' },
+        { systemRoleId: 'SYS_RECEPTIONIST', name: 'Receptionist', description: 'Scheduling and patient intake' },
+        { systemRoleId: 'SYS_BILLING', name: 'Billing Staff', description: 'Invoicing and payments' },
+      ],
+      BLOOD_BANK: [
+        { systemRoleId: 'SYS_ORG_ADMIN', name: 'Organization Admin', description: 'Full access to all enabled modules' },
+        { systemRoleId: 'SYS_LAB_TECH', name: 'Blood Bank Technician', description: 'Donor processing, crossmatch, inventory' },
+        { systemRoleId: 'SYS_LAB_SUPERVISOR', name: 'Blood Bank Medical Officer', description: 'Supervision, quality control' },
+        { systemRoleId: 'SYS_RECEPTIONIST', name: 'Donor Coordinator', description: 'Donor registration and scheduling' },
+        { systemRoleId: 'SYS_BILLING', name: 'Billing Staff', description: 'Component pricing and invoicing' },
+      ],
+      PHYSIOTHERAPY: [
+        { systemRoleId: 'SYS_ORG_ADMIN', name: 'Organization Admin', description: 'Full access to all enabled modules' },
+        { systemRoleId: 'SYS_DOCTOR', name: 'Physiotherapist', description: 'Assessment, treatment plans, sessions' },
+        { systemRoleId: 'SYS_NURSE', name: 'PT Assistant', description: 'Exercise supervision, vitals' },
+        { systemRoleId: 'SYS_RECEPTIONIST', name: 'Receptionist', description: 'Appointments and registration' },
+        { systemRoleId: 'SYS_BILLING', name: 'Billing Staff', description: 'Invoicing and payments' },
+      ],
     };
 
     const roles = rolesByType[orgType] || rolesByType['CLINIC'];
