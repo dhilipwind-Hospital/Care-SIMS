@@ -3,17 +3,17 @@ import { PrismaService } from '../../database/prisma.service';
 import { generateSequentialId } from '../../common/utils/id-generator';
 import { sendEmail } from '../../common/utils/mailer';
 
-function emailTemplate(title: string, body: string): string {
+function emailTemplate(title: string, body: string, orgName?: string): string {
   return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
   <div style="background:linear-gradient(135deg,#0F766E,#14B8A6);padding:20px;border-radius:12px 12px 0 0;">
-    <h1 style="color:white;margin:0;font-size:20px;">Ayphen HMS</h1>
+    <h1 style="color:white;margin:0;font-size:20px;">${orgName || 'Ayphen HMS'}</h1>
   </div>
   <div style="padding:24px;background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
     <h2 style="color:#1f2937;margin:0 0 16px;">${title}</h2>
     <p style="color:#4b5563;line-height:1.6;">${body}</p>
   </div>
   <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:16px;">
-    This is an automated message from Ayphen HMS. Do not reply.
+    This is an automated message from ${orgName || 'Ayphen HMS'}. Do not reply.
   </p>
 </div>`;
 }
@@ -49,15 +49,18 @@ export class AdmissionsService {
     });
 
     // Non-blocking email notification to patient
-    this.prisma.patient.findUnique({ where: { id: dto.patientId }, select: { email: true, firstName: true, lastName: true } })
-      .then((patient) => {
+    Promise.all([
+      this.prisma.patient.findUnique({ where: { id: dto.patientId }, select: { email: true, firstName: true, lastName: true } }),
+      this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { tradeName: true, legalName: true } }),
+    ]).then(([patient, tenant]) => {
         if (patient?.email) {
+          const orgName = tenant?.tradeName || tenant?.legalName || 'Hospital';
           const admDate = new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
           const wardName = (admission as any).ward?.name || 'N/A';
           sendEmail(
             patient.email,
-            'Admission Confirmation - Ayphen HMS',
-            emailTemplate('Admission Confirmation', `Dear ${patient.firstName} ${patient.lastName},<br><br>You have been admitted to our facility. Here are your admission details:<br><br><strong>Admission Number:</strong> ${(admission as any).admissionNumber}<br><strong>Ward:</strong> ${wardName}<br><strong>Date:</strong> ${admDate}<br><strong>Type:</strong> ${dto.admissionType || 'PLANNED'}<br><br>If you have any questions, please don't hesitate to contact the nursing station.`),
+            `Admission Confirmation - ${orgName}`,
+            emailTemplate('Admission Confirmation', `Dear ${patient.firstName} ${patient.lastName},<br><br>You have been admitted to <strong>${orgName}</strong>. Here are your admission details:<br><br><strong>Admission Number:</strong> ${(admission as any).admissionNumber}<br><strong>Ward:</strong> ${wardName}<br><strong>Date:</strong> ${admDate}<br><strong>Type:</strong> ${dto.admissionType || 'PLANNED'}<br><br>If you have any questions, please don't hesitate to contact the nursing station.`, orgName),
           ).catch((err) => console.error('Failed to send admission confirmation email:', err));
         }
       })
@@ -131,11 +134,13 @@ export class AdmissionsService {
     // Non-blocking email notification to patient
     const patient = (discharged as any).patient;
     if (patient?.email) {
+      const tenantInfo = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { tradeName: true, legalName: true } });
+      const orgName = tenantInfo?.tradeName || tenantInfo?.legalName || 'Hospital';
       const dischargeDate = new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
       sendEmail(
         patient.email,
-        'Discharge Summary - Ayphen HMS',
-        emailTemplate('Discharge Summary', `Dear ${patient.firstName} ${patient.lastName},<br><br>You have been discharged from our facility.<br><br><strong>Discharge Date:</strong> ${dischargeDate}<br><strong>Discharge Type:</strong> ${dto.dischargeType || 'REGULAR'}<br>${dto.dischargeDiagnosis ? `<strong>Diagnosis:</strong> ${dto.dischargeDiagnosis}<br>` : ''}<br>${dto.dischargeSummary ? `<strong>Follow-up Instructions:</strong><br>${dto.dischargeSummary}<br><br>` : ''}Please follow the prescribed medications and attend all follow-up appointments. We wish you a speedy recovery.`),
+        `Discharge Summary - ${orgName}`,
+        emailTemplate('Discharge Summary', `Dear ${patient.firstName} ${patient.lastName},<br><br>You have been discharged from <strong>${orgName}</strong>.<br><br><strong>Discharge Date:</strong> ${dischargeDate}<br><strong>Discharge Type:</strong> ${dto.dischargeType || 'REGULAR'}<br>${dto.dischargeDiagnosis ? `<strong>Diagnosis:</strong> ${dto.dischargeDiagnosis}<br>` : ''}<br>${dto.dischargeSummary ? `<strong>Follow-up Instructions:</strong><br>${dto.dischargeSummary}<br><br>` : ''}Please follow the prescribed medications and attend all follow-up appointments. We wish you a speedy recovery.`, orgName),
       ).catch((err) => console.error('Failed to send discharge email:', err));
     }
 

@@ -3,17 +3,17 @@ import { PrismaService } from '../../database/prisma.service';
 import { generateSequentialId } from '../../common/utils/id-generator';
 import { sendEmail } from '../../common/utils/mailer';
 
-function emailTemplate(title: string, body: string): string {
+function emailTemplate(title: string, body: string, orgName?: string): string {
   return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
   <div style="background:linear-gradient(135deg,#0F766E,#14B8A6);padding:20px;border-radius:12px 12px 0 0;">
-    <h1 style="color:white;margin:0;font-size:20px;">Ayphen HMS</h1>
+    <h1 style="color:white;margin:0;font-size:20px;">${orgName || 'Ayphen HMS'}</h1>
   </div>
   <div style="padding:24px;background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
     <h2 style="color:#1f2937;margin:0 0 16px;">${title}</h2>
     <p style="color:#4b5563;line-height:1.6;">${body}</p>
   </div>
   <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:16px;">
-    This is an automated message from Ayphen HMS. Do not reply.
+    This is an automated message from ${orgName || 'Ayphen HMS'}. Do not reply.
   </p>
 </div>`;
 }
@@ -77,16 +77,19 @@ export class LabService {
     if (hasCritical) {
       const criticalItems = dto.items.filter((i: any) => ['CRITICAL', 'CRITICAL_HIGH', 'CRITICAL_LOW', 'PANIC'].includes(i.flag));
       const patientName = order.patient ? `${(order.patient as any).firstName} ${(order.patient as any).lastName}` : 'Unknown Patient';
-      this.prisma.labOrder.findFirst({ where: { id: orderId }, select: { doctorId: true } })
-        .then(async (labOrder) => {
+      Promise.all([
+        this.prisma.labOrder.findFirst({ where: { id: orderId }, select: { doctorId: true } }),
+        this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { tradeName: true, legalName: true } }),
+      ]).then(async ([labOrder, tenant]) => {
           if (!labOrder?.doctorId) return;
+          const orgName = tenant?.tradeName || tenant?.legalName || 'Hospital';
           const doctor = await this.prisma.doctorRegistry.findUnique({ where: { id: labOrder.doctorId }, select: { email: true, firstName: true } });
           if (doctor?.email) {
             const criticalList = criticalItems.map((i: any) => `<strong>${i.testName}:</strong> ${i.resultValue} ${i.resultUnit || ''} (${i.flag})`).join('<br>');
             sendEmail(
               doctor.email,
-              'CRITICAL Lab Result Alert - Ayphen HMS',
-              emailTemplate('CRITICAL Lab Result Alert', `Dear Dr. ${doctor.firstName},<br><br>A critical lab result has been entered that requires your immediate attention.<br><br><strong>Patient:</strong> ${patientName}<br><strong>Order:</strong> ${order.orderNumber}<br><br>${criticalList}<br><br>Please review these results at your earliest convenience.`),
+              `CRITICAL Lab Result Alert - ${orgName}`,
+              emailTemplate('CRITICAL Lab Result Alert', `Dear Dr. ${doctor.firstName},<br><br>A critical lab result has been entered that requires your immediate attention.<br><br><strong>Patient:</strong> ${patientName}<br><strong>Order:</strong> ${order.orderNumber}<br><br>${criticalList}<br><br>Please review these results at your earliest convenience.`, orgName),
             ).catch((err) => console.error('Failed to send critical lab result email:', err));
           }
         })

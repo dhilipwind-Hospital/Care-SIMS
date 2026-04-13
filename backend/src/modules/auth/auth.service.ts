@@ -567,23 +567,30 @@ export class AuthService {
 
     this.logger.log(`Password reset token generated for ${email} (type: ${userType}): ${rawToken}`);
 
+    // Resolve org name for branded email (tenant users get hospital name, others get Ayphen HMS)
+    let resetOrgName = 'Ayphen HMS';
+    if (userType === 'TENANT' && tenantUser?.tenantId) {
+      const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantUser.tenantId }, select: { tradeName: true, legalName: true } });
+      if (tenant) resetOrgName = tenant.tradeName || tenant.legalName;
+    }
+
     // Send email (non-blocking, won't fail the request)
     const frontendUrl = this.config.get('FRONTEND_URL', 'http://localhost:5555');
     const resetLink = `${frontendUrl}/reset-password?token=${rawToken}`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
         <h2 style="color: #0F766E;">Password Reset Request</h2>
-        <p>We received a request to reset your password for your Ayphen HMS account.</p>
+        <p>We received a request to reset your password for your ${resetOrgName} account.</p>
         <p>Click the button below to set a new password. This link expires in 1 hour.</p>
         <a href="${resetLink}" style="display:inline-block;padding:12px 24px;background:linear-gradient(90deg,#0F766E,#14B8A6);color:#fff;text-decoration:none;border-radius:8px;font-weight:600;margin:16px 0;">
           Reset Password
         </a>
         <p style="color:#888;font-size:13px;">If you didn't request this, you can safely ignore this email.</p>
         <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
-        <p style="color:#aaa;font-size:12px;">Ayphen HMS - Hospital Management System</p>
+        <p style="color:#aaa;font-size:12px;">${resetOrgName}</p>
       </div>
     `;
-    sendEmail(email, 'Password Reset - Ayphen HMS', html).catch((err) =>
+    sendEmail(email, `Password Reset - ${resetOrgName}`, html).catch((err) =>
       this.logger.error(`Failed to send reset email to ${email}`, err),
     );
 

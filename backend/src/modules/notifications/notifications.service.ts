@@ -62,15 +62,17 @@ export class NotificationsService {
         select: { email: true, firstName: true },
       });
       if (user?.email) {
+        const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { tradeName: true, legalName: true } });
+        const orgName = tenant?.tradeName || tenant?.legalName || 'Hospital';
         const html = `
           <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
             <h3 style="color: #0F766E;">${dto.title}</h3>
             <p>${dto.message}</p>
             <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
-            <p style="color:#aaa;font-size:12px;">Ayphen HMS - Hospital Management System</p>
+            <p style="color:#aaa;font-size:12px;">${orgName}</p>
           </div>
         `;
-        sendEmail(user.email, `${dto.title} - Ayphen HMS`, html).catch((err) =>
+        sendEmail(user.email, `${dto.title} - ${orgName}`, html).catch((err) =>
           this.logger.error(`Failed to send email notification to ${user.email}`, err),
         );
       }
