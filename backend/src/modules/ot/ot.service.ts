@@ -181,6 +181,120 @@ export class OTService {
     return this.prisma.oTBooking.update({ where: { id }, data });
   }
 
+  async getTimeline(tenantId: string, query: any) {
+    const date = query.date ? new Date(query.date) : new Date();
+    date.setHours(0, 0, 0, 0);
+    const nextDay = new Date(date); nextDay.setDate(nextDay.getDate() + 1);
+
+    const where: any = { tenantId, scheduledDate: { gte: date, lt: nextDay } };
+    if (query.locationId) where.locationId = query.locationId;
+
+    const [rooms, bookings] = await Promise.all([
+      this.prisma.oTRoom.findMany({ where: { tenantId, isActive: true, ...(query.locationId ? { locationId: query.locationId } : {}) }, orderBy: { name: 'asc' } }),
+      this.prisma.oTBooking.findMany({
+        where,
+        orderBy: [{ scheduledStart: 'asc' }],
+        include: { otRoom: { select: { name: true } } },
+      }),
+    ]);
+
+    // Resolve patient names in batch
+    const patientIds = [...new Set(bookings.map(b => b.patientId))];
+    const patients = patientIds.length > 0
+      ? await this.prisma.patient.findMany({ where: { id: { in: patientIds } }, select: { id: true, firstName: true, lastName: true } })
+      : [];
+    const patientMap = new Map(patients.map(p => [p.id, p]));
+
+    // Resolve surgeon names in batch
+    const surgeonIds = [...new Set(bookings.map(b => b.primarySurgeonId))];
+    const surgeons = surgeonIds.length > 0
+      ? await this.prisma.tenantUser.findMany({ where: { id: { in: surgeonIds } }, select: { id: true, firstName: true, lastName: true } })
+      : [];
+    const surgeonMap = new Map(surgeons.map(s => [s.id, s]));
+
+    const enrichedBookings = bookings.map(b => ({
+      id: b.id,
+      bookingNumber: b.bookingNumber,
+      otRoomId: b.otRoomId,
+      roomName: (b as any).otRoom?.name,
+      procedureName: b.procedureName,
+      surgeryType: b.surgeryType,
+      scheduledStart: b.scheduledStart,
+      expectedDurationMins: b.expectedDurationMins,
+      actualStart: b.actualStart,
+      actualEnd: b.actualEnd,
+      status: b.status,
+      patient: patientMap.get(b.patientId) || null,
+      surgeon: surgeonMap.get(b.primarySurgeonId) || null,
+    }));
+
+    return { date: date.toISOString().slice(0, 10), rooms, bookings: enrichedBookings };
+  }
+
+  async getPerformanceReport(tenantId: string, query: any) {
+    const where: any = { tenantId, status: 'COMPLETED' };
+    if (query.from) where.scheduledDate = { ...(where.scheduledDate || {}), gte: new Date(query.from) };
+    if (query.to) where.scheduledDate = { ...(where.scheduledDate || {}), lte: new Date(query.to) };
+
+    const completed = await this.prisma.oTBooking.findMany({ where, include: { otRoom: { select: { name: true } } } });
+
+    // Resolve surgeon names
+    const surgeonIds = [...new Set(completed.map(b => b.primarySurgeonId))];
+    const surgeons = surgeonIds.length > 0
+      ? await this.prisma.tenantUser.findMany({ where: { id: { in: surgeonIds } }, select: { id: true, firstName: true, lastName: true } })
+      : [];
+    const surgeonMap = new Map(surgeons.map(s => [s.id, s]));
+
+    // By surgeon
+    const bySurgeon: Record<string, { name: string; cases: number; totalMins: number }> = {};
+    completed.forEach(b => {
+      const key = b.primarySurgeonId;
+      if (!bySurgeon[key]) {
+        const s = surgeonMap.get(key);
+        bySurgeon[key] = { name: s ? `Dr. ${s.firstName} ${s.lastName}` : 'Unknown', cases: 0, totalMins: 0 };
+      }
+      bySurgeon[key].cases++;
+      if (b.actualStart && b.actualEnd) {
+        bySurgeon[key].totalMins += Math.round((b.actualEnd.getTime() - b.actualStart.getTime()) / 60000);
+      }
+    });
+
+    // By room
+    const byRoom: Record<string, { name: string; cases: number; totalMins: number }> = {};
+    completed.forEach(b => {
+      const key = b.otRoomId;
+      if (!byRoom[key]) byRoom[key] = { name: (b as any).otRoom?.name || 'Unknown', cases: 0, totalMins: 0 };
+      byRoom[key].cases++;
+      if (b.actualStart && b.actualEnd) {
+        byRoom[key].totalMins += Math.round((b.actualEnd.getTime() - b.actualStart.getTime()) / 60000);
+      }
+    });
+
+    // By surgery type
+    const byType: Record<string, number> = {};
+    completed.forEach(b => { byType[b.surgeryType] = (byType[b.surgeryType] || 0) + 1; });
+
+    // Cancelled count
+    const cancelled = await this.prisma.oTBooking.count({ where: { tenantId, status: 'CANCELLED', ...(query.from ? { scheduledDate: { gte: new Date(query.from) } } : {}) } });
+
+    const totalMins = completed.reduce((s, b) => {
+      if (b.actualStart && b.actualEnd) return s + Math.round((b.actualEnd.getTime() - b.actualStart.getTime()) / 60000);
+      return s;
+    }, 0);
+
+    return {
+      summary: {
+        totalSurgeries: completed.length,
+        cancelled,
+        avgDurationMins: completed.length > 0 ? Math.round(totalMins / completed.length) : 0,
+        totalOperatingMins: totalMins,
+      },
+      bySurgeon: Object.values(bySurgeon).sort((a, b) => b.cases - a.cases),
+      byRoom: Object.values(byRoom).sort((a, b) => b.cases - a.cases),
+      bySurgeryType: Object.entries(byType).map(([type, count]) => ({ type, count })),
+    };
+  }
+
   async startProcedure(tenantId: string, id: string) {
     const booking = await this.prisma.oTBooking.findFirst({ where: { id, tenantId } });
     if (!booking) throw new NotFoundException('OT Booking not found');

@@ -50,7 +50,7 @@ export default function OTPage() {
   const [bookings, setBookings] = useState<any[]>([]);
   const [rooms, setRooms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'schedule'|'rooms'>('schedule');
+  const [tab, setTab] = useState<'schedule'|'rooms'|'timeline'|'reports'>('schedule');
   const [page, setPage] = useState(1);
 
   // Schedule surgery modal
@@ -70,6 +70,17 @@ export default function OTPage() {
     bloodUnitsUsed: '', complications: '', drainInserted: false, drainType: '',
   });
   const [completeSaving, setCompleteSaving] = useState(false);
+
+  // Timeline
+  const [timelineDate, setTimelineDate] = useState(new Date().toISOString().slice(0, 10));
+  const [timelineData, setTimelineData] = useState<any>(null);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+
+  // Reports
+  const [reportData, setReportData] = useState<any>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportFrom, setReportFrom] = useState(() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 10); });
+  const [reportTo, setReportTo] = useState(new Date().toISOString().slice(0, 10));
   const [formError, setFormError] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -206,6 +217,30 @@ export default function OTPage() {
     } finally { setChecklistSaving(false); }
   };
 
+  // ---------- Timeline ----------
+  const fetchTimeline = async () => {
+    setTimelineLoading(true);
+    try {
+      const { data } = await api.get('/ot/schedule/timeline', { params: { date: timelineDate } });
+      setTimelineData(data);
+    } catch { toast.error('Failed to load timeline'); }
+    finally { setTimelineLoading(false); }
+  };
+
+  useEffect(() => { if (tab === 'timeline') fetchTimeline(); }, [tab, timelineDate]);
+
+  // ---------- Reports ----------
+  const fetchReport = async () => {
+    setReportLoading(true);
+    try {
+      const { data } = await api.get('/ot/reports/performance', { params: { from: reportFrom, to: reportTo } });
+      setReportData(data);
+    } catch { toast.error('Failed to load performance report'); }
+    finally { setReportLoading(false); }
+  };
+
+  useEffect(() => { if (tab === 'reports') fetchReport(); }, [tab]);
+
   const totalChecklistItems = CHECKLIST_ITEMS.reduce((s, sec) => s + sec.items.length, 0);
   const checkedCount = Object.values(checklist).filter(Boolean).length;
 
@@ -248,8 +283,8 @@ export default function OTPage() {
       </div>
 
       <div className="flex items-center justify-between">
-        <div className="flex bg-gray-100 rounded-xl p-1 w-fit">
-          {[['schedule','OT Schedule'],['rooms','OT Rooms']].map(([val,label]) => (
+        <div className="flex bg-gray-100 rounded-xl p-1 w-fit flex-wrap">
+          {[['schedule','OT Schedule'],['timeline','Timeline'],['rooms','OT Rooms'],['reports','Reports']].map(([val,label]) => (
             <button key={val} onClick={() => { setTab(val as any); setPage(1); }}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === val ? 'bg-white shadow text-teal-700' : 'text-gray-500 hover:text-gray-700'}`}>
               {label}
@@ -348,6 +383,191 @@ export default function OTPage() {
           )}
           {rooms.length > 0 && (
             <div className="col-span-3"><Pagination page={page} totalPages={Math.ceil(rooms.length / 20)} onPageChange={setPage} totalItems={rooms.length} pageSize={20} /></div>
+          )}
+        </div>
+      )}
+
+      {/* ── TIMELINE TAB ── */}
+      {tab === 'timeline' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-gray-500 font-medium">Date</label>
+            <input type="date" value={timelineDate} onChange={e => { setTimelineDate(e.target.value); }}
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-400 outline-none" />
+          </div>
+
+          {timelineLoading ? (
+            <div className="hms-card p-12 text-center text-gray-400">Loading timeline…</div>
+          ) : !timelineData || !timelineData.rooms?.length ? (
+            <div className="hms-card"><EmptyState icon={<Calendar size={36} />} title="No OT rooms" description="Configure OT rooms to see the timeline" /></div>
+          ) : (
+            <div className="hms-card overflow-x-auto">
+              <div className="px-5 py-4 border-b border-gray-100">
+                <h3 className="font-semibold text-gray-800">OT Schedule — {timelineDate}</h3>
+              </div>
+              <div className="p-4" style={{ minWidth: 800 }}>
+                {/* Time header */}
+                <div className="flex mb-1">
+                  <div className="w-28 flex-shrink-0" />
+                  <div className="flex-1 flex">
+                    {Array.from({ length: 16 }, (_, i) => i + 6).map(h => (
+                      <div key={h} className="flex-1 text-center text-[10px] text-gray-400 font-mono border-l border-gray-100">
+                        {h > 12 ? `${h - 12}PM` : h === 12 ? '12PM' : `${h}AM`}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Room rows */}
+                {timelineData.rooms.map((room: any) => {
+                  const roomBookings = (timelineData.bookings || []).filter((b: any) => b.otRoomId === room.id);
+                  return (
+                    <div key={room.id} className="flex items-stretch mb-1" style={{ minHeight: 44 }}>
+                      <div className="w-28 flex-shrink-0 flex items-center px-2 text-xs font-semibold text-gray-700 bg-gray-50 rounded-l-lg border border-gray-100">
+                        {room.name}
+                      </div>
+                      <div className="flex-1 relative bg-gray-50/50 border border-l-0 border-gray-100 rounded-r-lg">
+                        {/* Hour grid lines */}
+                        {Array.from({ length: 16 }, (_, i) => (
+                          <div key={i} className="absolute top-0 bottom-0 border-l border-gray-100" style={{ left: `${(i / 16) * 100}%` }} />
+                        ))}
+                        {/* Booking blocks */}
+                        {roomBookings.map((b: any) => {
+                          const [hh, mm] = (b.scheduledStart || '08:00').split(':').map(Number);
+                          const startMins = (hh - 6) * 60 + (mm || 0); // offset from 6AM
+                          const totalMins = 16 * 60; // 6AM to 10PM
+                          const left = Math.max(0, (startMins / totalMins) * 100);
+                          const width = Math.min(((b.expectedDurationMins || 60) / totalMins) * 100, 100 - left);
+                          const colors: Record<string, string> = {
+                            SCHEDULED: '#3B82F6', IN_PROGRESS: '#F59E0B', COMPLETED: '#10B981', CANCELLED: '#EF4444',
+                          };
+                          return (
+                            <div key={b.id} title={`${b.procedureName} — ${b.patient?.firstName || ''} ${b.patient?.lastName || ''} (${b.status})`}
+                              className="absolute top-1 bottom-1 rounded-md flex items-center px-1.5 overflow-hidden cursor-default"
+                              style={{ left: `${left}%`, width: `${width}%`, background: colors[b.status] || '#6B7280', minWidth: 4 }}>
+                              <span className="text-[10px] text-white font-medium truncate">{b.procedureName}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Legend */}
+                <div className="flex gap-4 mt-4 justify-center">
+                  {[['Scheduled','#3B82F6'],['In Progress','#F59E0B'],['Completed','#10B981'],['Cancelled','#EF4444']].map(([label, color]) => (
+                    <div key={label} className="flex items-center gap-1.5 text-xs text-gray-500">
+                      <div className="w-3 h-3 rounded" style={{ background: color as string }} />
+                      {label}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── REPORTS TAB ── */}
+      {tab === 'reports' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="text-sm text-gray-500 font-medium">From</label>
+            <input type="date" value={reportFrom} onChange={e => setReportFrom(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-teal-200 outline-none" />
+            <label className="text-sm text-gray-500 font-medium">To</label>
+            <input type="date" value={reportTo} onChange={e => setReportTo(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-teal-200 outline-none" />
+            <button onClick={fetchReport} className="btn-primary px-4 py-1.5 text-sm">Apply</button>
+          </div>
+
+          {reportLoading ? (
+            <div className="hms-card p-12 text-center text-gray-400">Loading report…</div>
+          ) : !reportData ? (
+            <div className="hms-card"><EmptyState icon={<Scissors size={36} />} title="No data" description="Select a date range and click Apply" /></div>
+          ) : (
+            <>
+              {/* KPIs */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <KpiCard label="Total Surgeries" value={reportData.summary.totalSurgeries} icon={Scissors} color="#0F766E" />
+                <KpiCard label="Cancelled" value={reportData.summary.cancelled} icon={Calendar} color="#EF4444" />
+                <KpiCard label="Avg Duration" value={`${reportData.summary.avgDurationMins}m`} icon={Clock} color="#3B82F6" />
+                <KpiCard label="Total OR Time" value={`${Math.round(reportData.summary.totalOperatingMins / 60)}h`} icon={CheckCircle} color="#10B981" />
+              </div>
+
+              {/* By Surgeon */}
+              <div className="hms-card">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h3 className="font-semibold text-gray-800">Performance by Surgeon</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="sticky top-0 z-10">
+                      <tr>
+                        {['Surgeon','Cases','Total Time','Avg Duration'].map(h => (
+                          <th key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 py-3 text-left bg-gray-50">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportData.bySurgeon.map((s: any, i: number) => (
+                        <tr key={i} className="hover:bg-gray-50 border-t border-gray-50">
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{s.name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">{s.cases}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{Math.round(s.totalMins / 60)}h {s.totalMins % 60}m</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{s.cases > 0 ? Math.round(s.totalMins / s.cases) : 0}m</td>
+                        </tr>
+                      ))}
+                      {reportData.bySurgeon.length === 0 && (
+                        <tr><td colSpan={4} className="text-center py-8 text-gray-400 text-sm">No completed surgeries in this period</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* By Room */}
+              <div className="hms-card">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h3 className="font-semibold text-gray-800">Room Utilization</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="sticky top-0 z-10">
+                      <tr>
+                        {['OT Room','Cases','Total Time','Avg Duration'].map(h => (
+                          <th key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 py-3 text-left bg-gray-50">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportData.byRoom.map((r: any, i: number) => (
+                        <tr key={i} className="hover:bg-gray-50 border-t border-gray-50">
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{r.name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">{r.cases}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{Math.round(r.totalMins / 60)}h {r.totalMins % 60}m</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{r.cases > 0 ? Math.round(r.totalMins / r.cases) : 0}m</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* By Surgery Type */}
+              <div className="hms-card p-5">
+                <h3 className="font-semibold text-gray-800 mb-3">Surgery Types</h3>
+                <div className="flex gap-3 flex-wrap">
+                  {reportData.bySurgeryType.map((t: any) => (
+                    <div key={t.type} className="bg-gray-50 rounded-xl px-4 py-3 text-center">
+                      <div className="text-lg font-bold text-gray-900">{t.count}</div>
+                      <div className="text-xs text-gray-500">{t.type}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
         </div>
       )}

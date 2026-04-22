@@ -28,6 +28,8 @@ export class OTController {
   @Get('rooms') getRooms(@CurrentUser('tenantId') tid: string, @Query('locationId') lid: string) { return this.svc.getRooms(tid, lid); }
   @Get('rooms/live-status') getRoomsLiveStatus(@CurrentUser('tenantId') tid: string, @Query('locationId') lid: string) { return this.svc.getRoomsLiveStatus(tid, lid); }
   @Post('rooms') createRoom(@CurrentUser('tenantId') tid: string, @Body() body: CreateOTRoomDto) { return this.svc.createRoom(tid, body); }
+  @Get('schedule/timeline') getTimeline(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getTimeline(tid, q); }
+  @Get('reports/performance') getPerformance(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getPerformanceReport(tid, q); }
   @Get('bookings') getBookings(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getBookings(tid, q); }
   @Post('bookings') createBooking(@CurrentUser('tenantId') tid: string, @Body() body: CreateOTBookingDto, @CurrentUser('sub') uid: string) { return this.svc.createBooking(tid, body, uid); }
   @Put('bookings/:id') updateBooking(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: UpdateOTBookingDto) { return this.svc.updateBooking(tid, id, body); }
