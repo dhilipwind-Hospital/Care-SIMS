@@ -33,6 +33,8 @@ export class OTController {
   @Get('bookings') getBookings(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getBookings(tid, q); }
   @Post('bookings') createBooking(@CurrentUser('tenantId') tid: string, @Body() body: CreateOTBookingDto, @CurrentUser('sub') uid: string) { return this.svc.createBooking(tid, body, uid); }
   @Put('bookings/:id') updateBooking(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: UpdateOTBookingDto) { return this.svc.updateBooking(tid, id, body); }
+  @Post('bookings/:id/pre-op-assessment') upsertPreOp(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.upsertPreOpAssessment(tid, id, body, uid); }
+  @Get('bookings/:id/pre-op-assessment') getPreOp(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getPreOpAssessment(tid, id); }
   @Patch('bookings/:id/start') start(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.startProcedure(tid, id); }
   @Patch('bookings/:id/complete') complete(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: CompleteProcedureDto) { return this.svc.completeProcedure(tid, id, body); }
 }

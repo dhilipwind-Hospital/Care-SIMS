@@ -1552,6 +1552,35 @@ model IcuMonitoring {
   @@map("icu_monitoring")
 }
 
+model PreOpAssessment {
+  id                  String   @id @default(uuid())
+  tenantId            String   @map("tenant_id")
+  bookingId           String   @unique @map("booking_id")
+  patientId           String   @map("patient_id")
+  asaGrade            String?  @map("asa_grade")
+  mallampatiScore     Int?     @map("mallampati_score")
+  mouthOpening        String?  @map("mouth_opening")
+  neckMobility        String?  @map("neck_mobility")
+  dentalStatus        String?  @map("dental_status")
+  predictedDifficult  Boolean  @default(false) @map("predicted_difficult")
+  cardiacHistory      String?  @map("cardiac_history")
+  respiratoryHistory  String?  @map("respiratory_history")
+  diabetesStatus      String?  @map("diabetes_status")
+  renalStatus         String?  @map("renal_status")
+  hepaticStatus       String?  @map("hepatic_status")
+  allergies           String?
+  currentMedications  String?  @map("current_medications")
+  previousAnaesthesia String?  @map("previous_anaesthesia")
+  anaesthesiaPlan     String?  @map("anaesthesia_plan")
+  specialInstructions String?  @map("special_instructions")
+  npoConfirmed        Boolean  @default(false) @map("npo_confirmed")
+  assessedById        String   @map("assessed_by_id")
+  assessedAt          DateTime @default(now()) @map("assessed_at")
+
+  @@index([tenantId])
+  @@map("pre_op_assessments")
+}
+
 model IcuRound {
   id               String   @id @default(uuid())
   tenantId         String   @map("tenant_id")

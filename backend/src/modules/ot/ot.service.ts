@@ -295,6 +295,20 @@ export class OTService {
     };
   }
 
+  async upsertPreOpAssessment(tenantId: string, bookingId: string, dto: any, userId: string) {
+    const booking = await this.prisma.oTBooking.findFirst({ where: { id: bookingId, tenantId } });
+    if (!booking) throw new NotFoundException('OT Booking not found');
+    return this.prisma.preOpAssessment.upsert({
+      where: { bookingId },
+      update: { ...dto, assessedById: userId },
+      create: { tenantId, bookingId, patientId: booking.patientId, assessedById: userId, ...dto },
+    });
+  }
+
+  async getPreOpAssessment(tenantId: string, bookingId: string) {
+    return this.prisma.preOpAssessment.findUnique({ where: { bookingId } }) || null;
+  }
+
   async startProcedure(tenantId: string, id: string) {
     const booking = await this.prisma.oTBooking.findFirst({ where: { id, tenantId } });
     if (!booking) throw new NotFoundException('OT Booking not found');

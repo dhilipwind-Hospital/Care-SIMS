@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Monitor, Bed, AlertTriangle, CheckCircle, Activity, History, X } from 'lucide-react';
+import { Monitor, Bed, AlertTriangle, CheckCircle, Activity, History, X, FileText, Loader2, UserPlus, ArrowRightLeft } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -42,6 +42,19 @@ export default function IcuPage() {
   const [historyBed, setHistoryBed] = useState<any>(null);
   const [historyRecords, setHistoryRecords] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Doctor rounds
+  const [roundsBed, setRoundsBed] = useState<any>(null);
+  const [rounds, setRounds] = useState<any[]>([]);
+  const [roundsLoading, setRoundsLoading] = useState(false);
+  const [roundForm, setRoundForm] = useState({ roundType: 'MORNING', currentStatus: '', assessment: '', plan: '', ventilatorPlan: '', nutritionPlan: '', labsOrdered: '', consultRequested: '', estimatedLos: '' });
+  const [roundSubmitting, setRoundSubmitting] = useState(false);
+
+  // Admit / Transfer
+  const [admitBed, setAdmitBed] = useState<any>(null);
+  const [admitPatientId, setAdmitPatientId] = useState('');
+  const [transferBed, setTransferBed] = useState<any>(null);
+  const [transferForm, setTransferForm] = useState({ destination: '', reason: '', admissionId: '' });
 
   const fetchData = async () => { setLoading(true); try { const [b, d] = await Promise.all([api.get('/icu/beds'), api.get('/icu/dashboard')]); setBeds(b.data.data || b.data || []); setDashboard(d.data.data || d.data || {}); } catch (err) { toast.error('Failed to load ICU data'); } finally { setLoading(false); } };
   useEffect(() => { fetchData(); }, []);
@@ -110,6 +123,62 @@ export default function IcuPage() {
     } finally { setHistoryLoading(false); }
   };
 
+  // Rounds handlers
+  const openRounds = async (bed: any) => {
+    if (!bed.admissionId) { toast.error('No active admission on this bed'); return; }
+    setRoundsBed(bed);
+    setRoundsLoading(true);
+    setRoundForm({ roundType: 'MORNING', currentStatus: '', assessment: '', plan: '', ventilatorPlan: '', nutritionPlan: '', labsOrdered: '', consultRequested: '', estimatedLos: '' });
+    try {
+      const { data } = await api.get(`/icu/rounds/admission/${bed.admissionId}`);
+      setRounds(data.data || data || []);
+    } catch { setRounds([]); }
+    finally { setRoundsLoading(false); }
+  };
+
+  const handleSubmitRound = async () => {
+    if (!roundsBed) return;
+    setRoundSubmitting(true);
+    try {
+      await api.post('/icu/rounds', {
+        admissionId: roundsBed.admissionId, patientId: roundsBed.currentPatientId || roundsBed.patientId,
+        icuBedId: roundsBed.id, roundType: roundForm.roundType,
+        currentStatus: roundForm.currentStatus || undefined, assessment: roundForm.assessment || undefined,
+        plan: roundForm.plan || undefined, ventilatorPlan: roundForm.ventilatorPlan || undefined,
+        nutritionPlan: roundForm.nutritionPlan || undefined, labsOrdered: roundForm.labsOrdered || undefined,
+        consultRequested: roundForm.consultRequested || undefined,
+        estimatedLos: roundForm.estimatedLos ? Number(roundForm.estimatedLos) : undefined,
+      });
+      toast.success('Round documented');
+      openRounds(roundsBed);
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to save round'); }
+    finally { setRoundSubmitting(false); }
+  };
+
+  // Admit handler
+  const handleAdmit = async () => {
+    if (!admitBed || !admitPatientId.trim()) { toast.error('Enter a patient ID'); return; }
+    try {
+      await api.post(`/icu/beds/${admitBed.id}/admit`, { patientId: admitPatientId.trim() });
+      toast.success('Patient admitted to ICU bed');
+      setAdmitBed(null); setAdmitPatientId(''); fetchData();
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to admit'); }
+  };
+
+  // Transfer handler
+  const handleTransfer = async () => {
+    if (!transferBed) return;
+    try {
+      await api.post(`/icu/beds/${transferBed.id}/transfer-out`, {
+        destination: transferForm.destination || 'Ward',
+        reason: transferForm.reason || 'Stable for transfer',
+        admissionId: transferBed.admissionId || undefined,
+      });
+      toast.success('Patient transferred out of ICU');
+      setTransferBed(null); setTransferForm({ destination: '', reason: '', admissionId: '' }); fetchData();
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to transfer'); }
+  };
+
   const occupied = beds.filter(b => b.status === 'OCCUPIED').length;
   const available = beds.filter(b => b.status === 'AVAILABLE').length;
 
@@ -150,7 +219,11 @@ export default function IcuPage() {
                   {b.status === 'OCCUPIED' ? 'Occupied' : b.status === 'AVAILABLE' ? 'Available' : 'Maintenance'}
                 </span>
               </div>
-              {b.patientId && <div className="text-sm text-gray-700 mt-2">Patient: {b.patientId?.slice(0, 8)}...</div>}
+              {b.currentPatient ? (
+                <div className="text-sm text-gray-700 mt-2 font-medium">{b.currentPatient.firstName} {b.currentPatient.lastName}</div>
+              ) : b.currentPatientId ? (
+                <div className="text-sm text-gray-500 mt-2">Patient: {b.currentPatientId.slice(0, 8)}…</div>
+              ) : null}
               <div className="flex gap-1.5 mt-3 flex-wrap">
                 {b.status === 'OCCUPIED' && (
                   <>
@@ -158,14 +231,28 @@ export default function IcuPage() {
                       className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium flex items-center gap-1">
                       <Activity size={11} /> Record
                     </button>
+                    <button onClick={() => openRounds(b)}
+                      className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1">
+                      <FileText size={11} /> Rounds
+                    </button>
                     <button onClick={() => openHistory(b)}
                       className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 font-medium flex items-center gap-1">
                       <History size={11} /> History
                     </button>
+                    <button onClick={() => { setTransferBed(b); setTransferForm({ destination: '', reason: '', admissionId: b.admissionId || '' }); }}
+                      className="text-xs px-2 py-1 bg-orange-50 text-orange-700 rounded-md hover:bg-orange-100 font-medium flex items-center gap-1">
+                      <ArrowRightLeft size={11} /> Transfer
+                    </button>
                   </>
                 )}
                 {b.status === 'AVAILABLE' && (
-                  <button onClick={() => updateBedStatus(b.id, 'MAINTENANCE')} className="text-xs px-2 py-1 bg-yellow-50 text-yellow-700 rounded-md hover:bg-yellow-100 font-medium">Maintenance</button>
+                  <>
+                    <button onClick={() => { setAdmitBed(b); setAdmitPatientId(''); }}
+                      className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium flex items-center gap-1">
+                      <UserPlus size={11} /> Admit
+                    </button>
+                    <button onClick={() => updateBedStatus(b.id, 'MAINTENANCE')} className="text-xs px-2 py-1 bg-yellow-50 text-yellow-700 rounded-md hover:bg-yellow-100 font-medium">Maintenance</button>
+                  </>
                 )}
                 {b.status === 'MAINTENANCE' && (
                   <button onClick={() => updateBedStatus(b.id, 'AVAILABLE')} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium">Mark Available</button>
@@ -469,6 +556,145 @@ export default function IcuPage() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {/* ── DOCTOR ROUNDS MODAL ── */}
+      {roundsBed && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+              <div>
+                <h2 className="font-bold text-gray-900">Doctor Rounds — Bed {roundsBed.bedNumber}</h2>
+                <p className="text-xs text-gray-400 mt-0.5">{roundsBed.currentPatient ? `${roundsBed.currentPatient.firstName} ${roundsBed.currentPatient.lastName}` : 'Patient'}</p>
+              </div>
+              <button onClick={() => setRoundsBed(null)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 p-6 space-y-5">
+              {/* Round form */}
+              <div className="bg-purple-50 rounded-xl p-4 space-y-3">
+                <h3 className="text-sm font-bold text-purple-800">New Round Entry</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Round Type</label>
+                    <select className="hms-input w-full" value={roundForm.roundType} onChange={e => setRoundForm({ ...roundForm, roundType: e.target.value })}>
+                      <option value="MORNING">Morning Round</option>
+                      <option value="EVENING">Evening Round</option>
+                      <option value="EMERGENCY">Emergency</option>
+                      <option value="CONSULTANT">Consultant Review</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Estimated LOS (days)</label>
+                    <input type="number" className="hms-input w-full" placeholder="e.g. 3" value={roundForm.estimatedLos} onChange={e => setRoundForm({ ...roundForm, estimatedLos: e.target.value })} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Current Status</label>
+                  <textarea className="hms-input w-full" rows={2} placeholder="Brief clinical summary..." value={roundForm.currentStatus} onChange={e => setRoundForm({ ...roundForm, currentStatus: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Assessment</label>
+                  <textarea className="hms-input w-full" rows={2} placeholder="Doctor's assessment..." value={roundForm.assessment} onChange={e => setRoundForm({ ...roundForm, assessment: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Plan</label>
+                  <textarea className="hms-input w-full" rows={2} placeholder="Care plan / goals for today..." value={roundForm.plan} onChange={e => setRoundForm({ ...roundForm, plan: e.target.value })} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Ventilator Plan</label>
+                    <input className="hms-input w-full" placeholder="Weaning, settings change..." value={roundForm.ventilatorPlan} onChange={e => setRoundForm({ ...roundForm, ventilatorPlan: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Nutrition Plan</label>
+                    <input className="hms-input w-full" placeholder="NGT feeding, TPN..." value={roundForm.nutritionPlan} onChange={e => setRoundForm({ ...roundForm, nutritionPlan: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Labs Ordered</label>
+                    <input className="hms-input w-full" placeholder="CBC, ABG, RFT..." value={roundForm.labsOrdered} onChange={e => setRoundForm({ ...roundForm, labsOrdered: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Consult Requested</label>
+                    <input className="hms-input w-full" placeholder="Cardiology, Nephrology..." value={roundForm.consultRequested} onChange={e => setRoundForm({ ...roundForm, consultRequested: e.target.value })} />
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <button onClick={handleSubmitRound} disabled={roundSubmitting} className="btn-primary flex items-center gap-2 px-4 py-2">
+                    {roundSubmitting && <Loader2 size={14} className="animate-spin" />}
+                    {roundSubmitting ? 'Saving…' : 'Save Round'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Previous rounds */}
+              <div>
+                <h3 className="text-sm font-bold text-gray-700 mb-3">Previous Rounds</h3>
+                {roundsLoading ? <p className="text-sm text-gray-400">Loading…</p> : rounds.length === 0 ? <p className="text-sm text-gray-400">No rounds documented yet.</p> : (
+                  <div className="space-y-3">
+                    {rounds.map((r: any) => {
+                      const typeColors: Record<string, string> = { MORNING: 'bg-blue-100 text-blue-700', EVENING: 'bg-amber-100 text-amber-700', EMERGENCY: 'bg-red-100 text-red-700', CONSULTANT: 'bg-purple-100 text-purple-700' };
+                      return (
+                        <div key={r.id} className="border border-gray-100 rounded-xl p-4 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${typeColors[r.roundType] || 'bg-gray-100 text-gray-600'}`}>{r.roundType}</span>
+                            <span className="text-xs text-gray-400">{new Date(r.roundedAt).toLocaleString('en-IN')}</span>
+                          </div>
+                          {r.currentStatus && <div className="text-sm"><strong className="text-gray-500">Status:</strong> {r.currentStatus}</div>}
+                          {r.assessment && <div className="text-sm"><strong className="text-gray-500">Assessment:</strong> {r.assessment}</div>}
+                          {r.plan && <div className="text-sm"><strong className="text-gray-500">Plan:</strong> {r.plan}</div>}
+                          {r.ventilatorPlan && <div className="text-xs text-gray-500">Ventilator: {r.ventilatorPlan}</div>}
+                          {r.nutritionPlan && <div className="text-xs text-gray-500">Nutrition: {r.nutritionPlan}</div>}
+                          {r.labsOrdered && <div className="text-xs text-gray-500">Labs: {r.labsOrdered}</div>}
+                          {r.consultRequested && <div className="text-xs text-gray-500">Consult: {r.consultRequested}</div>}
+                          {r.estimatedLos && <div className="text-xs text-gray-500">Est. LOS: {r.estimatedLos} days</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ADMIT PATIENT MODAL ── */}
+      {admitBed && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <h2 className="font-bold text-gray-900 mb-1">Admit to ICU — Bed {admitBed.bedNumber}</h2>
+            <p className="text-xs text-gray-400 mb-4">Enter the patient ID to assign to this bed</p>
+            <input className="hms-input w-full mb-4" placeholder="Patient ID (UUID)" value={admitPatientId} onChange={e => setAdmitPatientId(e.target.value)} />
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setAdmitBed(null)} className="btn-secondary px-4 py-2">Cancel</button>
+              <button onClick={handleAdmit} className="btn-primary px-4 py-2">Admit</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TRANSFER OUT MODAL ── */}
+      {transferBed && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <h2 className="font-bold text-gray-900 mb-1">Transfer Out — Bed {transferBed.bedNumber}</h2>
+            <p className="text-xs text-gray-400 mb-4">Transfer patient out of ICU</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Destination</label>
+                <input className="hms-input w-full" placeholder="e.g. Ward 3, Bed 12" value={transferForm.destination} onChange={e => setTransferForm({ ...transferForm, destination: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Reason</label>
+                <input className="hms-input w-full" placeholder="e.g. Stable for transfer" value={transferForm.reason} onChange={e => setTransferForm({ ...transferForm, reason: e.target.value })} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-4">
+              <button onClick={() => setTransferBed(null)} className="btn-secondary px-4 py-2">Cancel</button>
+              <button onClick={handleTransfer} className="btn-primary px-4 py-2">Transfer</button>
+            </div>
           </div>
         </div>
       )}

@@ -63,6 +63,16 @@ export default function OTPage() {
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
   const [checklistSaving, setChecklistSaving] = useState(false);
 
+  // Pre-op assessment
+  const [assessBooking, setAssessBooking] = useState<any>(null);
+  const [assessForm, setAssessForm] = useState({
+    asaGrade: '', mallampatiScore: '', mouthOpening: 'ADEQUATE', neckMobility: 'FULL', dentalStatus: 'NORMAL',
+    predictedDifficult: false, cardiacHistory: '', respiratoryHistory: '', diabetesStatus: '', renalStatus: '',
+    hepaticStatus: '', allergies: '', currentMedications: '', previousAnaesthesia: '', anaesthesiaPlan: '',
+    specialInstructions: '', npoConfirmed: false,
+  });
+  const [assessSaving, setAssessSaving] = useState(false);
+
   // Complete surgery modal
   const [completeBooking, setCompleteBooking] = useState<any>(null);
   const [completeForm, setCompleteForm] = useState({
@@ -217,6 +227,41 @@ export default function OTPage() {
     } finally { setChecklistSaving(false); }
   };
 
+  // ---------- Pre-Op Assessment ----------
+  const openAssessment = async (booking: any) => {
+    setAssessBooking(booking);
+    try {
+      const { data } = await api.get(`/ot/bookings/${booking.id}/pre-op-assessment`);
+      if (data) {
+        setAssessForm({
+          asaGrade: data.asaGrade || '', mallampatiScore: data.mallampatiScore?.toString() || '',
+          mouthOpening: data.mouthOpening || 'ADEQUATE', neckMobility: data.neckMobility || 'FULL',
+          dentalStatus: data.dentalStatus || 'NORMAL', predictedDifficult: data.predictedDifficult || false,
+          cardiacHistory: data.cardiacHistory || '', respiratoryHistory: data.respiratoryHistory || '',
+          diabetesStatus: data.diabetesStatus || '', renalStatus: data.renalStatus || '',
+          hepaticStatus: data.hepaticStatus || '', allergies: data.allergies || '',
+          currentMedications: data.currentMedications || '', previousAnaesthesia: data.previousAnaesthesia || '',
+          anaesthesiaPlan: data.anaesthesiaPlan || '', specialInstructions: data.specialInstructions || '',
+          npoConfirmed: data.npoConfirmed || false,
+        });
+      }
+    } catch { /* no existing assessment — use defaults */ }
+  };
+
+  const handleSaveAssessment = async () => {
+    if (!assessBooking) return;
+    setAssessSaving(true);
+    try {
+      const payload: any = { ...assessForm };
+      if (payload.mallampatiScore) payload.mallampatiScore = Number(payload.mallampatiScore);
+      else delete payload.mallampatiScore;
+      await api.post(`/ot/bookings/${assessBooking.id}/pre-op-assessment`, payload);
+      toast.success('Pre-op assessment saved');
+      setAssessBooking(null);
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to save assessment'); }
+    finally { setAssessSaving(false); }
+  };
+
   // ---------- Timeline ----------
   const fetchTimeline = async () => {
     setTimelineLoading(true);
@@ -342,6 +387,11 @@ export default function OTPage() {
                               className="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 font-medium flex items-center gap-1"
                               title="Pre-op checklist">
                               <ClipboardCheck size={13} /> Checklist
+                            </button>
+                            <button onClick={() => openAssessment(b)}
+                              className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"
+                              title="Anaesthesia assessment">
+                              <Scissors size={13} /> Assess
                             </button>
                             <button onClick={async () => { try { await api.patch(`/ot/bookings/${b.id}/start`); toast.success('Surgery started'); fetchData(); } catch (err) { console.error('Failed to start surgery:', err); toast.error('Failed to start surgery'); } }}
                               className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">Start</button>
@@ -732,6 +782,137 @@ export default function OTPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── PRE-OP ASSESSMENT MODAL ── */}
+      {assessBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+              <div>
+                <h2 className="font-bold text-gray-900">Pre-Op Anaesthesia Assessment</h2>
+                <p className="text-xs text-gray-400 mt-0.5">{assessBooking.procedureName} — {assessBooking.bookingNumber}</p>
+              </div>
+              <button onClick={() => setAssessBooking(null)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 p-6 space-y-5">
+              {/* ASA Grade */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">ASA Classification</label>
+                  <select className="hms-input w-full" value={assessForm.asaGrade} onChange={e => setAssessForm({ ...assessForm, asaGrade: e.target.value })}>
+                    <option value="">Select grade</option>
+                    <option value="I">ASA I — Normal healthy</option>
+                    <option value="II">ASA II — Mild systemic disease</option>
+                    <option value="III">ASA III — Severe systemic disease</option>
+                    <option value="IV">ASA IV — Life-threatening</option>
+                    <option value="V">ASA V — Moribund</option>
+                    <option value="VI">ASA VI — Brain dead</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Anaesthesia Plan</label>
+                  <select className="hms-input w-full" value={assessForm.anaesthesiaPlan} onChange={e => setAssessForm({ ...assessForm, anaesthesiaPlan: e.target.value })}>
+                    <option value="">Select plan</option>
+                    {['GENERAL','SPINAL','EPIDURAL','REGIONAL','LOCAL','SEDATION','COMBINED_SPINAL_EPIDURAL'].map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Airway Assessment */}
+              <div>
+                <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Airway Assessment</div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Mallampati (1-4)</label>
+                    <select className="hms-input w-full" value={assessForm.mallampatiScore} onChange={e => setAssessForm({ ...assessForm, mallampatiScore: e.target.value })}>
+                      <option value="">—</option>
+                      <option value="1">Class I</option>
+                      <option value="2">Class II</option>
+                      <option value="3">Class III</option>
+                      <option value="4">Class IV</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Mouth Opening</label>
+                    <select className="hms-input w-full" value={assessForm.mouthOpening} onChange={e => setAssessForm({ ...assessForm, mouthOpening: e.target.value })}>
+                      {['ADEQUATE','LIMITED','RESTRICTED'].map(v => <option key={v}>{v}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Neck Mobility</label>
+                    <select className="hms-input w-full" value={assessForm.neckMobility} onChange={e => setAssessForm({ ...assessForm, neckMobility: e.target.value })}>
+                      {['FULL','LIMITED','FIXED'].map(v => <option key={v}>{v}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Dental Status</label>
+                    <select className="hms-input w-full" value={assessForm.dentalStatus} onChange={e => setAssessForm({ ...assessForm, dentalStatus: e.target.value })}>
+                      {['NORMAL','LOOSE_TEETH','DENTURES','CAPS'].map(v => <option key={v}>{v}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                  <input type="checkbox" checked={assessForm.predictedDifficult} onChange={e => setAssessForm({ ...assessForm, predictedDifficult: e.target.checked })}
+                    className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500" />
+                  <span className="text-sm text-red-700 font-medium">Predicted Difficult Airway</span>
+                </label>
+              </div>
+
+              {/* Medical History */}
+              <div>
+                <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Medical History</div>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { key: 'cardiacHistory', label: 'Cardiac', placeholder: 'IHD, HTN, valvular...' },
+                    { key: 'respiratoryHistory', label: 'Respiratory', placeholder: 'Asthma, COPD...' },
+                    { key: 'diabetesStatus', label: 'Diabetes', placeholder: 'Type 1/2, HbA1c...' },
+                    { key: 'renalStatus', label: 'Renal', placeholder: 'CKD, dialysis...' },
+                    { key: 'hepaticStatus', label: 'Hepatic', placeholder: 'Cirrhosis, hepatitis...' },
+                    { key: 'allergies', label: 'Allergies', placeholder: 'Drug allergies...' },
+                  ].map(f => (
+                    <div key={f.key}>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">{f.label}</label>
+                      <input className="hms-input w-full" placeholder={f.placeholder}
+                        value={(assessForm as any)[f.key]} onChange={e => setAssessForm({ ...assessForm, [f.key]: e.target.value })} />
+                    </div>
+                  ))}
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Current Medications</label>
+                    <input className="hms-input w-full" placeholder="Aspirin, Metformin, Atenolol..."
+                      value={assessForm.currentMedications} onChange={e => setAssessForm({ ...assessForm, currentMedications: e.target.value })} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Previous Anaesthesia Experience</label>
+                    <input className="hms-input w-full" placeholder="Any complications in prior surgeries..."
+                      value={assessForm.previousAnaesthesia} onChange={e => setAssessForm({ ...assessForm, previousAnaesthesia: e.target.value })} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Special Instructions + NPO */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Special Instructions</label>
+                <textarea className="hms-input w-full" rows={2} placeholder="Blood products ready, specific monitoring, positioning..."
+                  value={assessForm.specialInstructions} onChange={e => setAssessForm({ ...assessForm, specialInstructions: e.target.value })} />
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={assessForm.npoConfirmed} onChange={e => setAssessForm({ ...assessForm, npoConfirmed: e.target.checked })}
+                  className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500" />
+                <span className="text-sm text-gray-700 font-medium">NPO status confirmed (patient fasted)</span>
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
+              <button onClick={() => setAssessBooking(null)} className="btn-secondary px-4 py-2">Cancel</button>
+              <button onClick={handleSaveAssessment} disabled={assessSaving} className="btn-primary flex items-center gap-2 px-4 py-2">
+                {assessSaving && <Loader2 size={14} className="animate-spin" />}
+                {assessSaving ? 'Saving…' : 'Save Assessment'}
+              </button>
+            </div>
           </div>
         </div>
       )}
