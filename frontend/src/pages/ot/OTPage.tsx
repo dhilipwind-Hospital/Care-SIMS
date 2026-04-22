@@ -73,6 +73,17 @@ export default function OTPage() {
   });
   const [assessSaving, setAssessSaving] = useState(false);
 
+  // Anaesthesia record
+  const [anaesBooking, setAnaesBooking] = useState<any>(null);
+  const [anaesForm, setAnaesForm] = useState({
+    inductionMethod: '', airwayDevice: '', ettSize: '', maintenanceAgent: '', muscleRelaxant: '',
+    reversalAgent: '', totalIVFluids: '', totalBloodProducts: '', urineOutput: '',
+    recoveryScore: '', recoveryNotes: '',
+    events: [] as Array<{ time: string; type: string; detail: string }>,
+  });
+  const [anaesSaving, setAnaesSaving] = useState(false);
+  const [newEvent, setNewEvent] = useState({ time: '', type: 'DRUG', detail: '' });
+
   // Complete surgery modal
   const [completeBooking, setCompleteBooking] = useState<any>(null);
   const [completeForm, setCompleteForm] = useState({
@@ -225,6 +236,48 @@ export default function OTPage() {
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to save checklist');
     } finally { setChecklistSaving(false); }
+  };
+
+  // ---------- Anaesthesia Record ----------
+  const openAnaesRecord = async (booking: any) => {
+    setAnaesBooking(booking);
+    setNewEvent({ time: '', type: 'DRUG', detail: '' });
+    try {
+      const { data } = await api.get(`/ot/bookings/${booking.id}/anaesthesia-record`);
+      if (data) {
+        setAnaesForm({
+          inductionMethod: data.inductionMethod || '', airwayDevice: data.airwayDevice || '',
+          ettSize: data.ettSize || '', maintenanceAgent: data.maintenanceAgent || '',
+          muscleRelaxant: data.muscleRelaxant || '', reversalAgent: data.reversalAgent || '',
+          totalIVFluids: data.totalIVFluids?.toString() || '', totalBloodProducts: data.totalBloodProducts?.toString() || '',
+          urineOutput: data.urineOutput?.toString() || '', recoveryScore: data.recoveryScore?.toString() || '',
+          recoveryNotes: data.recoveryNotes || '', events: data.events || [],
+        });
+      } else {
+        setAnaesForm({ inductionMethod: '', airwayDevice: '', ettSize: '', maintenanceAgent: '', muscleRelaxant: '', reversalAgent: '', totalIVFluids: '', totalBloodProducts: '', urineOutput: '', recoveryScore: '', recoveryNotes: '', events: [] });
+      }
+    } catch { setAnaesForm({ inductionMethod: '', airwayDevice: '', ettSize: '', maintenanceAgent: '', muscleRelaxant: '', reversalAgent: '', totalIVFluids: '', totalBloodProducts: '', urineOutput: '', recoveryScore: '', recoveryNotes: '', events: [] }); }
+  };
+
+  const handleSaveAnaes = async () => {
+    if (!anaesBooking) return;
+    setAnaesSaving(true);
+    try {
+      const payload: any = { ...anaesForm };
+      ['totalIVFluids', 'totalBloodProducts', 'urineOutput', 'recoveryScore'].forEach(k => {
+        if (payload[k]) payload[k] = Number(payload[k]); else delete payload[k];
+      });
+      await api.post(`/ot/bookings/${anaesBooking.id}/anaesthesia-record`, payload);
+      toast.success('Anaesthesia record saved');
+      setAnaesBooking(null);
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to save'); }
+    finally { setAnaesSaving(false); }
+  };
+
+  const addEvent = () => {
+    if (!newEvent.time || !newEvent.detail.trim()) return;
+    setAnaesForm(f => ({ ...f, events: [...f.events, { ...newEvent }] }));
+    setNewEvent({ time: '', type: 'DRUG', detail: '' });
   };
 
   // ---------- Pre-Op Assessment ----------
@@ -398,8 +451,14 @@ export default function OTPage() {
                           </>
                         )}
                         {b.status === 'IN_PROGRESS' && (
-                          <button onClick={() => openComplete(b)}
-                            className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium">Complete</button>
+                          <>
+                            <button onClick={() => openAnaesRecord(b)}
+                              className="text-xs px-2 py-1 bg-indigo-50 text-indigo-700 rounded-md hover:bg-indigo-100 font-medium flex items-center gap-1">
+                              <Scissors size={11} /> Anaes Record
+                            </button>
+                            <button onClick={() => openComplete(b)}
+                              className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium">Complete</button>
+                          </>
                         )}
                       </div>
                     </td>
@@ -782,6 +841,130 @@ export default function OTPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── ANAESTHESIA RECORD MODAL ── */}
+      {anaesBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+              <div>
+                <h2 className="font-bold text-gray-900">Anaesthesia Record</h2>
+                <p className="text-xs text-gray-400 mt-0.5">{anaesBooking.procedureName} — {anaesBooking.bookingNumber}</p>
+              </div>
+              <button onClick={() => setAnaesBooking(null)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 p-6 space-y-5">
+              {/* Induction */}
+              <div>
+                <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Induction</div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Method</label>
+                    <select className="hms-input w-full" value={anaesForm.inductionMethod} onChange={e => setAnaesForm({ ...anaesForm, inductionMethod: e.target.value })}>
+                      <option value="">Select</option>
+                      {['IV','INHALATION','RAPID_SEQUENCE','AWAKE_INTUBATION'].map(v => <option key={v}>{v}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Airway Device</label>
+                    <select className="hms-input w-full" value={anaesForm.airwayDevice} onChange={e => setAnaesForm({ ...anaesForm, airwayDevice: e.target.value })}>
+                      <option value="">Select</option>
+                      {['ETT','LMA','MASK','TRACHEOSTOMY'].map(v => <option key={v}>{v}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">ETT Size</label>
+                    <input className="hms-input w-full" placeholder="e.g. 7.5" value={anaesForm.ettSize} onChange={e => setAnaesForm({ ...anaesForm, ettSize: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Muscle Relaxant</label>
+                    <input className="hms-input w-full" placeholder="e.g. Atracurium" value={anaesForm.muscleRelaxant} onChange={e => setAnaesForm({ ...anaesForm, muscleRelaxant: e.target.value })} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Maintenance */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Maintenance Agent</label>
+                  <input className="hms-input w-full" placeholder="e.g. Sevoflurane 2%" value={anaesForm.maintenanceAgent} onChange={e => setAnaesForm({ ...anaesForm, maintenanceAgent: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Reversal Agent</label>
+                  <input className="hms-input w-full" placeholder="e.g. Neostigmine + Glycopyrrolate" value={anaesForm.reversalAgent} onChange={e => setAnaesForm({ ...anaesForm, reversalAgent: e.target.value })} />
+                </div>
+              </div>
+
+              {/* Drug/Event Timeline */}
+              <div>
+                <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Drug & Event Timeline</div>
+                <div className="flex gap-2 mb-3">
+                  <input type="time" className="hms-input" value={newEvent.time} onChange={e => setNewEvent({ ...newEvent, time: e.target.value })} />
+                  <select className="hms-input" value={newEvent.type} onChange={e => setNewEvent({ ...newEvent, type: e.target.value })}>
+                    {['DRUG','FLUID','EVENT','VITAL_CHECK','COMPLICATION'].map(v => <option key={v}>{v}</option>)}
+                  </select>
+                  <input className="hms-input flex-1" placeholder="e.g. Propofol 200mg IV" value={newEvent.detail} onChange={e => setNewEvent({ ...newEvent, detail: e.target.value })} />
+                  <button onClick={addEvent} className="btn-primary px-3 py-1 text-xs">Add</button>
+                </div>
+                {anaesForm.events.length > 0 && (
+                  <div className="border border-gray-100 rounded-xl overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead><tr className="bg-gray-50"><th className="px-3 py-2 text-left text-gray-500">Time</th><th className="px-3 py-2 text-left text-gray-500">Type</th><th className="px-3 py-2 text-left text-gray-500">Detail</th><th className="px-3 py-2 w-8"></th></tr></thead>
+                      <tbody>
+                        {anaesForm.events.map((ev, i) => (
+                          <tr key={i} className="border-t border-gray-50">
+                            <td className="px-3 py-2 font-mono text-gray-700">{ev.time}</td>
+                            <td className="px-3 py-2"><span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${ev.type === 'DRUG' ? 'bg-blue-100 text-blue-700' : ev.type === 'COMPLICATION' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{ev.type}</span></td>
+                            <td className="px-3 py-2 text-gray-700">{ev.detail}</td>
+                            <td className="px-3 py-2"><button onClick={() => setAnaesForm(f => ({ ...f, events: f.events.filter((_, j) => j !== i) }))} className="text-gray-400 hover:text-red-500"><X size={12} /></button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Fluids & Recovery */}
+              <div>
+                <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Fluid Balance & Recovery</div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">IV Fluids (mL)</label>
+                    <input type="number" className="hms-input w-full" placeholder="e.g. 1500" value={anaesForm.totalIVFluids} onChange={e => setAnaesForm({ ...anaesForm, totalIVFluids: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Blood Products (mL)</label>
+                    <input type="number" className="hms-input w-full" placeholder="0" value={anaesForm.totalBloodProducts} onChange={e => setAnaesForm({ ...anaesForm, totalBloodProducts: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Urine Output (mL)</label>
+                    <input type="number" className="hms-input w-full" placeholder="e.g. 300" value={anaesForm.urineOutput} onChange={e => setAnaesForm({ ...anaesForm, urineOutput: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Aldrete Score (0-10)</label>
+                    <input type="number" min="0" max="10" className="hms-input w-full" placeholder="8" value={anaesForm.recoveryScore} onChange={e => setAnaesForm({ ...anaesForm, recoveryScore: e.target.value })} />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Recovery Notes</label>
+                  <textarea className="hms-input w-full" rows={2} placeholder="Post-anaesthesia recovery observations..."
+                    value={anaesForm.recoveryNotes} onChange={e => setAnaesForm({ ...anaesForm, recoveryNotes: e.target.value })} />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
+              <button onClick={() => setAnaesBooking(null)} className="btn-secondary px-4 py-2">Cancel</button>
+              <button onClick={handleSaveAnaes} disabled={anaesSaving} className="btn-primary flex items-center gap-2 px-4 py-2">
+                {anaesSaving && <Loader2 size={14} className="animate-spin" />}
+                {anaesSaving ? 'Saving…' : 'Save Record'}
+              </button>
+            </div>
           </div>
         </div>
       )}

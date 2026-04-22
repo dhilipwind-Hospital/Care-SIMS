@@ -152,6 +152,34 @@ export class IcuService {
     });
   }
 
+  // ── Code Blue ──
+
+  async triggerCodeBlue(tenantId: string, bedId: string, userId: string, dto: any) {
+    const bed = await this.prisma.icuBed.findFirst({ where: { id: bedId, tenantId } });
+    if (!bed) throw new NotFoundException('ICU bed not found');
+
+    // Record an emergency monitoring note
+    if (bed.currentPatientId) {
+      await this.prisma.icuMonitoring.create({
+        data: {
+          tenantId, locationId: bed.locationId, patientId: bed.currentPatientId,
+          icuBedId: bedId, admissionId: dto.admissionId || null,
+          nursesNotes: `🔴 CODE BLUE ACTIVATED — ${dto.reason || 'Cardiac/Respiratory arrest'}. Response team called.`,
+          recordedById: userId,
+        },
+      });
+    }
+
+    // Emit real-time alert
+    this.ws.emitToTenant(tenantId, 'icu:code-blue', {
+      bedId, bedNumber: bed.bedNumber, locationId: bed.locationId,
+      patientId: bed.currentPatientId, reason: dto.reason || 'Cardiac/Respiratory arrest',
+      triggeredAt: new Date(), triggeredById: userId,
+    });
+
+    return { message: `Code Blue activated for ICU Bed ${bed.bedNumber}`, bedId };
+  }
+
   async dashboard(tenantId: string, locationId?: string) {
     const where: any = { tenantId };
     if (locationId) where.locationId = locationId;

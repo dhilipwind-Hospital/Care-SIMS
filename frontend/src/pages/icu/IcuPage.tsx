@@ -8,6 +8,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
 import api from '../../lib/api';
 import { SkeletonKpiRow } from '../../components/ui/Skeleton';
+import { useSocket } from '../../context/SocketContext';
 
 const EMPTY_MONITORING = {
   admissionId: '', patientId: '', icuBedId: '', locationId: '',
@@ -49,6 +50,27 @@ export default function IcuPage() {
   const [roundsLoading, setRoundsLoading] = useState(false);
   const [roundForm, setRoundForm] = useState({ roundType: 'MORNING', currentStatus: '', assessment: '', plan: '', ventilatorPlan: '', nutritionPlan: '', labsOrdered: '', consultRequested: '', estimatedLos: '' });
   const [roundSubmitting, setRoundSubmitting] = useState(false);
+
+  // Code Blue
+  const { subscribe } = useSocket();
+  const [codeBlueAlert, setCodeBlueAlert] = useState<any>(null);
+  const [codeBlueConfirm, setCodeBlueConfirm] = useState<any>(null);
+
+  useEffect(() => {
+    const unsub = subscribe('icu:code-blue', (data: any) => {
+      setCodeBlueAlert(data);
+      setTimeout(() => setCodeBlueAlert(null), 15000); // auto-dismiss after 15s
+    });
+    return unsub;
+  }, [subscribe]);
+
+  const handleCodeBlue = async (bed: any) => {
+    try {
+      await api.post(`/icu/beds/${bed.id}/code-blue`, { reason: 'Cardiac/Respiratory arrest', admissionId: bed.admissionId });
+      toast.success(`Code Blue activated for Bed ${bed.bedNumber}`);
+      setCodeBlueConfirm(null);
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to trigger Code Blue'); }
+  };
 
   // Admit / Transfer
   const [admitBed, setAdmitBed] = useState<any>(null);
@@ -242,6 +264,10 @@ export default function IcuPage() {
                     <button onClick={() => { setTransferBed(b); setTransferForm({ destination: '', reason: '', admissionId: b.admissionId || '' }); }}
                       className="text-xs px-2 py-1 bg-orange-50 text-orange-700 rounded-md hover:bg-orange-100 font-medium flex items-center gap-1">
                       <ArrowRightLeft size={11} /> Transfer
+                    </button>
+                    <button onClick={() => setCodeBlueConfirm(b)}
+                      className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 font-bold flex items-center gap-1">
+                      <AlertTriangle size={11} /> Code Blue
                     </button>
                   </>
                 )}
@@ -670,6 +696,38 @@ export default function IcuPage() {
             <div className="flex justify-end gap-3">
               <button onClick={() => setAdmitBed(null)} className="btn-secondary px-4 py-2">Cancel</button>
               <button onClick={handleAdmit} className="btn-primary px-4 py-2">Admit</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CODE BLUE ALERT BANNER ── */}
+      {codeBlueAlert && (
+        <div className="fixed top-0 left-0 right-0 z-[100] bg-red-600 text-white px-6 py-4 flex items-center justify-between animate-pulse">
+          <div className="flex items-center gap-3">
+            <AlertTriangle size={28} className="text-white" />
+            <div>
+              <div className="font-black text-lg">CODE BLUE — ICU BED {codeBlueAlert.bedNumber}</div>
+              <div className="text-sm text-red-100">{codeBlueAlert.reason} — Immediate response required</div>
+            </div>
+          </div>
+          <button onClick={() => setCodeBlueAlert(null)} className="px-4 py-2 bg-white/20 rounded-lg text-white text-sm font-bold hover:bg-white/30">Dismiss</button>
+        </div>
+      )}
+
+      {/* ── CODE BLUE CONFIRM DIALOG ── */}
+      {codeBlueConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 text-center">
+            <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle size={28} className="text-red-600" />
+            </div>
+            <h2 className="text-xl font-black text-red-700 mb-1">Activate Code Blue?</h2>
+            <p className="text-sm text-gray-500 mb-4">This will alert all ICU doctors and nurses for Bed <strong>{codeBlueConfirm.bedNumber}</strong>.</p>
+            <p className="text-xs text-gray-400 mb-6">This action is logged and cannot be undone.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setCodeBlueConfirm(null)} className="flex-1 py-2.5 text-sm font-semibold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200">Cancel</button>
+              <button onClick={() => handleCodeBlue(codeBlueConfirm)} className="flex-1 py-2.5 text-sm font-bold text-white bg-red-600 rounded-xl hover:bg-red-700">ACTIVATE CODE BLUE</button>
             </div>
           </div>
         </div>

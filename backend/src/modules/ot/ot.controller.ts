@@ -35,6 +35,8 @@ export class OTController {
   @Put('bookings/:id') updateBooking(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: UpdateOTBookingDto) { return this.svc.updateBooking(tid, id, body); }
   @Post('bookings/:id/pre-op-assessment') upsertPreOp(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.upsertPreOpAssessment(tid, id, body, uid); }
   @Get('bookings/:id/pre-op-assessment') getPreOp(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getPreOpAssessment(tid, id); }
+  @Post('bookings/:id/anaesthesia-record') upsertAnaesRecord(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.upsertAnaesthesiaRecord(tid, id, body, uid); }
+  @Get('bookings/:id/anaesthesia-record') getAnaesRecord(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getAnaesthesiaRecord(tid, id); }
   @Patch('bookings/:id/start') start(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.startProcedure(tid, id); }
   @Patch('bookings/:id/complete') complete(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: CompleteProcedureDto) { return this.svc.completeProcedure(tid, id, body); }
 }

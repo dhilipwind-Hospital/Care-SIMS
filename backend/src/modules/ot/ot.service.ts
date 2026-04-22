@@ -295,6 +295,43 @@ export class OTService {
     };
   }
 
+  // ── Anaesthesia Record ──
+
+  async upsertAnaesthesiaRecord(tenantId: string, bookingId: string, dto: any, userId: string) {
+    const booking = await this.prisma.oTBooking.findFirst({ where: { id: bookingId, tenantId } });
+    if (!booking) throw new NotFoundException('OT Booking not found');
+    return this.prisma.anaesthesiaRecord.upsert({
+      where: { bookingId },
+      update: {
+        events: dto.events, inductionTime: dto.inductionTime ? new Date(dto.inductionTime) : undefined,
+        inductionMethod: dto.inductionMethod, airwayDevice: dto.airwayDevice, ettSize: dto.ettSize,
+        maintenanceAgent: dto.maintenanceAgent, muscleRelaxant: dto.muscleRelaxant,
+        reversalTime: dto.reversalTime ? new Date(dto.reversalTime) : undefined,
+        reversalAgent: dto.reversalAgent, extubationTime: dto.extubationTime ? new Date(dto.extubationTime) : undefined,
+        vitalSnapshots: dto.vitalSnapshots, totalIVFluids: dto.totalIVFluids,
+        totalBloodProducts: dto.totalBloodProducts, urineOutput: dto.urineOutput,
+        recoveryScore: dto.recoveryScore, recoveryNotes: dto.recoveryNotes,
+      },
+      create: {
+        tenantId, bookingId, patientId: booking.patientId, anesthetistId: userId,
+        events: dto.events, inductionTime: dto.inductionTime ? new Date(dto.inductionTime) : null,
+        inductionMethod: dto.inductionMethod, airwayDevice: dto.airwayDevice, ettSize: dto.ettSize,
+        maintenanceAgent: dto.maintenanceAgent, muscleRelaxant: dto.muscleRelaxant,
+        reversalTime: dto.reversalTime ? new Date(dto.reversalTime) : null,
+        reversalAgent: dto.reversalAgent, extubationTime: dto.extubationTime ? new Date(dto.extubationTime) : null,
+        vitalSnapshots: dto.vitalSnapshots, totalIVFluids: dto.totalIVFluids,
+        totalBloodProducts: dto.totalBloodProducts, urineOutput: dto.urineOutput,
+        recoveryScore: dto.recoveryScore, recoveryNotes: dto.recoveryNotes,
+      },
+    });
+  }
+
+  async getAnaesthesiaRecord(tenantId: string, bookingId: string) {
+    return this.prisma.anaesthesiaRecord.findUnique({ where: { bookingId } }) || null;
+  }
+
+  // ── Pre-Op Assessment ──
+
   async upsertPreOpAssessment(tenantId: string, bookingId: string, dto: any, userId: string) {
     const booking = await this.prisma.oTBooking.findFirst({ where: { id: bookingId, tenantId } });
     if (!booking) throw new NotFoundException('OT Booking not found');

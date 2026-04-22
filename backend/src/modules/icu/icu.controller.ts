@@ -42,6 +42,11 @@ export class IcuController {
     return this.svc.transferOut(tid, id, uid, body);
   }
 
+  @Post('beds/:id/code-blue')
+  codeBlue(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @CurrentUser('sub') uid: string, @Body() body: any) {
+    return this.svc.triggerCodeBlue(tid, id, uid, body);
+  }
+
   @Post('monitoring')
   record(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string, @Body() body: any) {
     return this.svc.recordMonitoring(tid, uid, body);

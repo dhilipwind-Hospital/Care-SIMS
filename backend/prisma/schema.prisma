@@ -1552,6 +1552,35 @@ model IcuMonitoring {
   @@map("icu_monitoring")
 }
 
+model AnaesthesiaRecord {
+  id                String    @id @default(uuid())
+  tenantId          String    @map("tenant_id")
+  bookingId         String    @unique @map("booking_id")
+  patientId         String    @map("patient_id")
+  anesthetistId     String    @map("anesthetist_id")
+  events            Json?
+  inductionTime     DateTime? @map("induction_time")
+  inductionMethod   String?   @map("induction_method")
+  airwayDevice      String?   @map("airway_device")
+  ettSize           String?   @map("ett_size")
+  maintenanceAgent  String?   @map("maintenance_agent")
+  muscleRelaxant    String?   @map("muscle_relaxant")
+  reversalTime      DateTime? @map("reversal_time")
+  reversalAgent     String?   @map("reversal_agent")
+  extubationTime    DateTime? @map("extubation_time")
+  vitalSnapshots    Json?     @map("vital_snapshots")
+  totalIVFluids     Int?      @map("total_iv_fluids")
+  totalBloodProducts Int?     @map("total_blood_products")
+  urineOutput       Int?      @map("urine_output")
+  recoveryScore     Int?      @map("recovery_score")
+  recoveryNotes     String?   @map("recovery_notes")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@index([tenantId])
+  @@map("anaesthesia_records")
+}
+
 model PreOpAssessment {
   id                  String   @id @default(uuid())
   tenantId            String   @map("tenant_id")
