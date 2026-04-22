@@ -26,6 +26,7 @@ export class OTController {
   @Patch('equipment/:id/condition') updateCondition(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body('condition') condition: string) { return this.svc.updateEquipmentCondition(tid, id, condition); }
 
   @Get('rooms') getRooms(@CurrentUser('tenantId') tid: string, @Query('locationId') lid: string) { return this.svc.getRooms(tid, lid); }
+  @Get('rooms/live-status') getRoomsLiveStatus(@CurrentUser('tenantId') tid: string, @Query('locationId') lid: string) { return this.svc.getRoomsLiveStatus(tid, lid); }
   @Post('rooms') createRoom(@CurrentUser('tenantId') tid: string, @Body() body: CreateOTRoomDto) { return this.svc.createRoom(tid, body); }
   @Get('bookings') getBookings(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getBookings(tid, q); }
   @Post('bookings') createBooking(@CurrentUser('tenantId') tid: string, @Body() body: CreateOTBookingDto, @CurrentUser('sub') uid: string) { return this.svc.createBooking(tid, body, uid); }

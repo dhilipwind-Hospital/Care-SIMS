@@ -958,6 +958,13 @@ model OTBooking {
   intraOpNotes         String?   @map("intra_op_notes")
   postOpNotes          String?   @map("post_op_notes")
   bloodUnitsReserved   Int       @default(0) @map("blood_units_reserved")
+  estimatedBloodLoss   Int?      @map("estimated_blood_loss")
+  bloodUnitsUsed       Int?      @default(0) @map("blood_units_used")
+  specimens            Json?
+  implants             Json?
+  complications        String?
+  drainInserted        Boolean?  @default(false) @map("drain_inserted")
+  drainType            String?   @map("drain_type")
   notes                String?
   createdById          String?   @map("created_by")
   createdAt            DateTime  @default(now()) @map("created_at")

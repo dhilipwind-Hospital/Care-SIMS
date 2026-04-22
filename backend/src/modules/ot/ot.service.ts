@@ -13,6 +13,74 @@ export class OTService {
     return this.prisma.oTRoom.findMany({ where, orderBy: { name: 'asc' } });
   }
 
+  async getRoomsLiveStatus(tenantId: string, locationId?: string) {
+    const where: any = { tenantId, isActive: true };
+    if (locationId) where.locationId = locationId;
+    const rooms = await this.prisma.oTRoom.findMany({ where, orderBy: { name: 'asc' } });
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+
+    return Promise.all(rooms.map(async (room) => {
+      const currentBooking = await this.prisma.oTBooking.findFirst({
+        where: { otRoomId: room.id, status: 'IN_PROGRESS' },
+      });
+      const nextBooking = !currentBooking ? await this.prisma.oTBooking.findFirst({
+        where: { otRoomId: room.id, status: 'SCHEDULED', scheduledDate: { gte: today } },
+        orderBy: [{ scheduledDate: 'asc' }, { scheduledStart: 'asc' }],
+      }) : null;
+
+      let status = 'AVAILABLE';
+      if (currentBooking) status = 'IN_OPERATION';
+      else if (nextBooking) status = 'SETUP';
+
+      // Helper to resolve a person's name by ID (try tenantUser first, then doctorRegistry)
+      const resolveName = async (id: string | null) => {
+        if (!id) return null;
+        const user = await this.prisma.tenantUser.findFirst({ where: { id }, select: { firstName: true, lastName: true } });
+        if (user) return user;
+        return this.prisma.doctorRegistry.findFirst({ where: { id }, select: { firstName: true, lastName: true } });
+      };
+
+      // Resolve patient + surgeon + anesthetist for active booking
+      let currentBookingData = null;
+      if (currentBooking) {
+        const [patient, primarySurgeon, anesthetistDoc] = await Promise.all([
+          this.prisma.patient.findFirst({ where: { id: currentBooking.patientId }, select: { firstName: true, lastName: true, patientId: true } }),
+          resolveName(currentBooking.primarySurgeonId),
+          resolveName(currentBooking.anesthetistId),
+        ]);
+        currentBookingData = {
+          id: currentBooking.id,
+          procedureName: currentBooking.procedureName,
+          anesthesiaType: currentBooking.anesthesiaType,
+          expectedDurationMins: currentBooking.expectedDurationMins,
+          patient,
+          primarySurgeon,
+          anesthetist: anesthetistDoc,
+        };
+      }
+
+      let nextBookingData = null;
+      if (nextBooking) {
+        const patient = await this.prisma.patient.findFirst({ where: { id: nextBooking.patientId }, select: { firstName: true, lastName: true } });
+        nextBookingData = {
+          id: nextBooking.id,
+          procedureName: nextBooking.procedureName,
+          scheduledStart: nextBooking.scheduledStart,
+          scheduledDate: nextBooking.scheduledDate,
+          patient,
+        };
+      }
+
+      return {
+        ...room,
+        status,
+        currentBooking: currentBookingData,
+        nextBooking: nextBookingData,
+        startTime: currentBooking?.actualStart || null,
+      };
+    }));
+  }
+
   async createRoom(tenantId: string, dto: any) {
     return this.prisma.oTRoom.create({ data: { tenantId, locationId: dto.locationId, name: dto.name, type: dto.type, capacityClass: dto.capacityClass } });
   }
@@ -109,6 +177,7 @@ export class OTService {
     if (dto.expectedDurationMins !== undefined) data.expectedDurationMins = dto.expectedDurationMins;
     if (dto.notes !== undefined) data.notes = dto.notes;
     if (dto.status !== undefined) data.status = dto.status;
+    if (dto.preOpChecklist !== undefined) data.preOpChecklist = dto.preOpChecklist;
     return this.prisma.oTBooking.update({ where: { id }, data });
   }
 
@@ -123,7 +192,15 @@ export class OTService {
   async completeProcedure(tenantId: string, id: string, dto: any) {
     const booking = await this.prisma.oTBooking.findFirst({ where: { id, tenantId } });
     if (!booking) throw new NotFoundException('OT Booking not found');
-    const updated = await this.prisma.oTBooking.update({ where: { id }, data: { status: 'COMPLETED', actualEnd: new Date(), intraOpNotes: dto.intraOpNotes, postOpNotes: dto.postOpNotes } });
+    const data: any = { status: 'COMPLETED', actualEnd: new Date(), intraOpNotes: dto.intraOpNotes, postOpNotes: dto.postOpNotes };
+    if (dto.estimatedBloodLoss !== undefined) data.estimatedBloodLoss = dto.estimatedBloodLoss;
+    if (dto.bloodUnitsUsed !== undefined) data.bloodUnitsUsed = dto.bloodUnitsUsed;
+    if (dto.specimens !== undefined) data.specimens = dto.specimens;
+    if (dto.implants !== undefined) data.implants = dto.implants;
+    if (dto.complications !== undefined) data.complications = dto.complications;
+    if (dto.drainInserted !== undefined) data.drainInserted = dto.drainInserted;
+    if (dto.drainType !== undefined) data.drainType = dto.drainType;
+    const updated = await this.prisma.oTBooking.update({ where: { id }, data });
     this.ws.emitToTenant(tenantId, 'ot:status:changed', { action: 'completed', booking: updated });
     return updated;
   }

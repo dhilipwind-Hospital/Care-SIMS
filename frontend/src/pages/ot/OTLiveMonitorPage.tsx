@@ -17,7 +17,7 @@ export default function OTLiveMonitorPage() {
   const fetchStatus = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get('/ot/rooms');
+      const { data } = await api.get('/ot/rooms/live-status');
       const items = data?.data || data || [];
       setOtStatus(items);
       otStatusRef.current = items;
@@ -86,7 +86,7 @@ export default function OTLiveMonitorPage() {
           <EmptyState icon={<Activity size={40} />} title="No OT rooms found" description="Ensure the backend is running and OT rooms are configured" />
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {otStatus.map(ot => {
             const cfg = statusConfig[ot.status] || statusConfig['AVAILABLE'];
             const elapsedSecs = elapsed[ot.id] || 0;
@@ -132,15 +132,15 @@ export default function OTLiveMonitorPage() {
                         Mark Surgery Complete
                       </button>
                     </>
-                  ) : ot.status === 'SETUP' && ot.currentBooking ? (
+                  ) : ot.status === 'SETUP' && ot.nextBooking ? (
                     <>
                       <div className="space-y-2 text-sm mb-4">
                         <div className="font-medium text-gray-700">Setting up for:</div>
-                        <div><span className="text-gray-500">Patient:</span> <span className="font-semibold">{ot.currentBooking.patient?.firstName} {ot.currentBooking.patient?.lastName}</span></div>
-                        <div><span className="text-gray-500">Procedure:</span> <span className="font-medium">{ot.currentBooking.procedureName}</span></div>
-                        <div><span className="text-gray-500">Scheduled:</span> <span className="font-medium">{ot.currentBooking.scheduledTime ? new Date(ot.currentBooking.scheduledTime).toLocaleTimeString() : '—'}</span></div>
+                        <div><span className="text-gray-500">Patient:</span> <span className="font-semibold">{ot.nextBooking.patient?.firstName} {ot.nextBooking.patient?.lastName}</span></div>
+                        <div><span className="text-gray-500">Procedure:</span> <span className="font-medium">{ot.nextBooking.procedureName}</span></div>
+                        <div><span className="text-gray-500">Scheduled:</span> <span className="font-medium">{ot.nextBooking.scheduledStart || '—'}</span></div>
                       </div>
-                      <button onClick={async () => { try { await api.patch(`/ot/bookings/${ot.currentBooking.id}/start`); toast.success('Surgery started'); fetchStatus(); } catch (err) { console.error('Failed to start surgery:', err); toast.error('Failed to start surgery'); } }}
+                      <button onClick={async () => { try { await api.patch(`/ot/bookings/${ot.nextBooking.id}/start`); toast.success('Surgery started'); fetchStatus(); } catch (err) { console.error('Failed to start surgery:', err); toast.error('Failed to start surgery'); } }}
                         className="w-full py-2 rounded-lg text-sm font-semibold text-white" style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
                         Start Surgery
                       </button>
@@ -155,7 +155,7 @@ export default function OTLiveMonitorPage() {
                         <div className="mt-3 bg-gray-50 rounded-lg p-3 text-left text-sm">
                           <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Next Scheduled</div>
                           <div className="font-medium text-gray-900">{ot.nextBooking.procedureName}</div>
-                          <div className="text-gray-500 text-xs mt-0.5">{ot.nextBooking.scheduledTime ? new Date(ot.nextBooking.scheduledTime).toLocaleTimeString() : '—'}</div>
+                          <div className="text-gray-500 text-xs mt-0.5">{ot.nextBooking.scheduledStart || '—'}</div>
                         </div>
                       )}
                     </div>
