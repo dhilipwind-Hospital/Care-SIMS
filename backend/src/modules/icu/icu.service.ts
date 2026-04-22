@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { WsGateway } from '../ws-gateway/ws-gateway.gateway';
+import { calculateApacheII, calculateSOFA } from '../../common/utils/icu-scoring';
 
 @Injectable()
 export class IcuService {
@@ -75,6 +76,10 @@ export class IcuService {
   }
 
   async recordMonitoring(tenantId: string, userId: string, dto: any) {
+    // Auto-calculate clinical scores
+    const apacheIIScore = calculateApacheII(dto);
+    const sofaScore = calculateSOFA(dto);
+
     const record = await this.prisma.icuMonitoring.create({
       data: {
         tenantId, locationId: dto.locationId, admissionId: dto.admissionId,
@@ -88,6 +93,14 @@ export class IcuService {
         bloodSugarMg: dto.bloodSugarMg, infusions: dto.infusions,
         sedationScore: dto.sedationScore, painScore: dto.painScore,
         nursesNotes: dto.nursesNotes, recordedById: userId,
+        // Lab values for scoring
+        arterialPh: dto.arterialPh, pao2: dto.pao2,
+        serumSodium: dto.serumSodium, serumPotassium: dto.serumPotassium,
+        serumCreatinine: dto.serumCreatinine, hematocrit: dto.hematocrit,
+        wbc: dto.wbc, plateletCount: dto.plateletCount,
+        bilirubinMg: dto.bilirubinMg, lactate: dto.lactate,
+        // Computed scores
+        apacheIIScore, sofaScore,
       },
     });
 
@@ -114,6 +127,29 @@ export class IcuService {
 
   async getAdmissionMonitoring(tenantId: string, admissionId: string) {
     return this.prisma.icuMonitoring.findMany({ where: { tenantId, admissionId }, orderBy: { recordedAt: 'desc' } });
+  }
+
+  // ── Doctor Rounds ──
+
+  async createRound(tenantId: string, userId: string, dto: any) {
+    return this.prisma.icuRound.create({
+      data: {
+        tenantId, admissionId: dto.admissionId, patientId: dto.patientId,
+        icuBedId: dto.icuBedId, roundType: dto.roundType || 'MORNING',
+        currentStatus: dto.currentStatus, assessment: dto.assessment,
+        plan: dto.plan, ventilatorPlan: dto.ventilatorPlan,
+        nutritionPlan: dto.nutritionPlan, labsOrdered: dto.labsOrdered,
+        consultRequested: dto.consultRequested, estimatedLos: dto.estimatedLos,
+        roundedById: userId,
+      },
+    });
+  }
+
+  async getRounds(tenantId: string, admissionId: string) {
+    return this.prisma.icuRound.findMany({
+      where: { tenantId, admissionId },
+      orderBy: { roundedAt: 'desc' },
+    });
   }
 
   async dashboard(tenantId: string, locationId?: string) {

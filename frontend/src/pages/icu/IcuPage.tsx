@@ -17,6 +17,10 @@ const EMPTY_MONITORING = {
   gcs: '', painScore: '', sedationScore: '',
   cvp: '', urineOutputMl: '', ioBalance: '', bloodSugarMg: '',
   infusions: '', nursesNotes: '',
+  // Lab values for APACHE II / SOFA
+  arterialPh: '', pao2: '', serumSodium: '', serumPotassium: '',
+  serumCreatinine: '', hematocrit: '', wbc: '', plateletCount: '',
+  bilirubinMg: '', lactate: '',
 };
 
 export default function IcuPage() {
@@ -75,7 +79,7 @@ export default function IcuPage() {
         if (payload[k] !== '' && payload[k] !== undefined) payload[k] = Number(payload[k]);
         else delete payload[k];
       });
-      ['temperatureC','fio2','peep','cvp','ioBalance'].forEach(k => {
+      ['temperatureC','fio2','peep','cvp','ioBalance','arterialPh','pao2','serumSodium','serumPotassium','serumCreatinine','hematocrit','wbc','plateletCount','bilirubinMg','lactate'].forEach(k => {
         if (payload[k] !== '' && payload[k] !== undefined) payload[k] = parseFloat(payload[k]);
         else delete payload[k];
       });
@@ -320,6 +324,30 @@ export default function IcuPage() {
 
               {/* Notes */}
               <div className="grid grid-cols-2 gap-4">
+                {/* Lab Values for APACHE II / SOFA Scoring */}
+                <div className="col-span-2">
+                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 mt-2">Lab Values (for APACHE II / SOFA auto-scoring)</div>
+                </div>
+                {[
+                  { key: 'arterialPh', label: 'Arterial pH', placeholder: '7.35-7.45' },
+                  { key: 'pao2', label: 'PaO2 (mmHg)', placeholder: '80-100' },
+                  { key: 'serumSodium', label: 'Serum Na (mEq/L)', placeholder: '136-145' },
+                  { key: 'serumPotassium', label: 'Serum K (mEq/L)', placeholder: '3.5-5.0' },
+                  { key: 'serumCreatinine', label: 'Creatinine (mg/dL)', placeholder: '0.6-1.2' },
+                  { key: 'hematocrit', label: 'Hematocrit (%)', placeholder: '36-50' },
+                  { key: 'wbc', label: 'WBC (×10³/µL)', placeholder: '4-11' },
+                  { key: 'plateletCount', label: 'Platelets (×10³/µL)', placeholder: '150-400' },
+                  { key: 'bilirubinMg', label: 'Bilirubin (mg/dL)', placeholder: '0.1-1.2' },
+                  { key: 'lactate', label: 'Lactate (mmol/L)', placeholder: '0.5-2.0' },
+                ].map(f => (
+                  <div key={f.key}>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">{f.label}</label>
+                    <input type="number" step="0.01" className="hms-input w-full" placeholder={f.placeholder}
+                      value={(monitorForm as any)[f.key]} onChange={e => setMonitorForm({ ...monitorForm, [f.key]: e.target.value })} />
+                  </div>
+                ))}
+
+                <div className="col-span-2"><div className="border-t border-gray-100 mt-2 pt-2" /></div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Infusions / Drips</label>
                   <textarea className="hms-input w-full" rows={3} placeholder="NS @ 100ml/hr, Dopamine @ 5mcg/kg/min..."
@@ -406,6 +434,22 @@ export default function IcuPage() {
                         {r.fio2 != null && <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded-md">FiO2: {r.fio2}</span>}
                         {r.peep != null && <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded-md">PEEP: {r.peep}</span>}
                         {r.tidalVolume != null && <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded-md">TV: {r.tidalVolume}mL</span>}
+                      </div>
+                    )}
+
+                    {/* Clinical Scores */}
+                    {(r.apacheIIScore != null || r.sofaScore != null) && (
+                      <div className="flex gap-3 text-xs mb-2">
+                        {r.apacheIIScore != null && (
+                          <span className={`px-2.5 py-1 rounded-md font-bold ${r.apacheIIScore <= 10 ? 'bg-green-50 text-green-700' : r.apacheIIScore <= 20 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'}`}>
+                            APACHE II: {r.apacheIIScore}
+                          </span>
+                        )}
+                        {r.sofaScore != null && (
+                          <span className={`px-2.5 py-1 rounded-md font-bold ${r.sofaScore <= 6 ? 'bg-green-50 text-green-700' : r.sofaScore <= 12 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'}`}>
+                            SOFA: {r.sofaScore}
+                          </span>
+                        )}
                       </div>
                     )}
 

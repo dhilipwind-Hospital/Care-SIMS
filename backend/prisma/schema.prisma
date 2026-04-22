@@ -1532,8 +1532,46 @@ model IcuMonitoring {
   nursesNotes     String?  @map("nurses_notes")
   recordedById    String   @map("recorded_by")
 
+  // Lab values for APACHE II / SOFA scoring
+  arterialPh        Decimal? @map("arterial_ph") @db.Decimal(3, 2)
+  pao2              Decimal? @map("pao2") @db.Decimal(5, 1)
+  serumSodium       Decimal? @map("serum_sodium") @db.Decimal(5, 1)
+  serumPotassium    Decimal? @map("serum_potassium") @db.Decimal(4, 2)
+  serumCreatinine   Decimal? @map("serum_creatinine") @db.Decimal(5, 2)
+  hematocrit        Decimal? @map("hematocrit") @db.Decimal(4, 1)
+  wbc               Decimal? @map("wbc") @db.Decimal(5, 1)
+  plateletCount     Decimal? @map("platelet_count") @db.Decimal(5, 1)
+  bilirubinMg       Decimal? @map("bilirubin_mg") @db.Decimal(5, 2)
+  lactate           Decimal? @map("lactate") @db.Decimal(4, 1)
+
+  // Computed scores
+  apacheIIScore     Int?     @map("apache_ii_score")
+  sofaScore         Int?     @map("sofa_score")
+
   @@index([tenantId, admissionId])
   @@map("icu_monitoring")
+}
+
+model IcuRound {
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
+  admissionId      String   @map("admission_id")
+  patientId        String   @map("patient_id")
+  icuBedId         String   @map("icu_bed_id")
+  roundType        String   @default("MORNING") @map("round_type")
+  currentStatus    String?  @map("current_status")
+  assessment       String?
+  plan             String?
+  ventilatorPlan   String?  @map("ventilator_plan")
+  nutritionPlan    String?  @map("nutrition_plan")
+  labsOrdered      String?  @map("labs_ordered")
+  consultRequested String?  @map("consult_requested")
+  estimatedLos     Int?     @map("estimated_los")
+  roundedById      String   @map("rounded_by_id")
+  roundedAt        DateTime @default(now()) @map("rounded_at")
+
+  @@index([tenantId, admissionId])
+  @@map("icu_rounds")
 }
 
 // ─────────────────────────────────────────

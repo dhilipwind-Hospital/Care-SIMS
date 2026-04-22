@@ -47,6 +47,16 @@ export class IcuController {
     return this.svc.recordMonitoring(tid, uid, body);
   }
 
+  @Post('rounds')
+  createRound(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string, @Body() body: any) {
+    return this.svc.createRound(tid, uid, body);
+  }
+
+  @Get('rounds/admission/:admissionId')
+  getRounds(@CurrentUser('tenantId') tid: string, @Param('admissionId') aid: string) {
+    return this.svc.getRounds(tid, aid);
+  }
+
   @Get('monitoring/admission/:admissionId')
   admMonitoring(@CurrentUser('tenantId') tid: string, @Param('admissionId') aid: string) {
     return this.svc.getAdmissionMonitoring(tid, aid);
