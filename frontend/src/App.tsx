@@ -83,6 +83,8 @@ import InfectionControlPage from './pages/infection-control/InfectionControlPage
 import ConsentPage from './pages/consent/ConsentPage';
 import DietPage from './pages/diet/DietPage';
 import MortuaryPage from './pages/mortuary/MortuaryPage';
+import DutyRosterPage from './pages/duty-roster/DutyRosterPage';
+import CssdPage from './pages/cssd/CssdPage';
 import EmergencyPage from './pages/emergency/EmergencyPage';
 import BirthDeathPage from './pages/birth-death/BirthDeathPage';
 import CertificatesPage from './pages/certificates/CertificatesPage';
@@ -217,6 +219,8 @@ function AppRoutes() {
         <Route path="diet" element={<RoleRoute roles={['NURSE', 'ADMIN']}><DietPage /></RoleRoute>} />
         <Route path="infection-control" element={<RoleRoute roles={['NURSE', 'ADMIN']}><InfectionControlPage /></RoleRoute>} />
         <Route path="mortuary" element={<RoleRoute roles={['NURSE', 'ADMIN']}><MortuaryPage /></RoleRoute>} />
+        <Route path="duty-roster" element={<RoleRoute roles={['ADMIN', 'NURSE', 'DOCTOR', 'RECEPTION', 'PHARMACY', 'LAB', 'OT']}><DutyRosterPage /></RoleRoute>} />
+        <Route path="cssd" element={<RoleRoute roles={['NURSE', 'OT', 'ADMIN']}><CssdPage /></RoleRoute>} />
         <Route path="emergency" element={<RoleRoute roles={['DOCTOR', 'NURSE', 'RECEPTION', 'ADMIN']}><EmergencyPage /></RoleRoute>} />
         <Route path="birth-death" element={<RoleRoute roles={['DOCTOR', 'NURSE', 'ADMIN']}><BirthDeathPage /></RoleRoute>} />
         <Route path="certificates" element={<RoleRoute roles={['DOCTOR', 'ADMIN']}><CertificatesPage /></RoleRoute>} />

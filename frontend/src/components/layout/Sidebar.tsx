@@ -125,6 +125,8 @@ export const navByRole: Record<string, NavItem[]> = {
     { label: 'Emergency',           icon: Siren,           path: '/app/emergency' },
     { label: 'Birth & Death',       icon: Baby,            path: '/app/birth-death' },
     { label: 'Medical Certificates', icon: Award,          path: '/app/certificates' },
+    { label: 'Duty Roster',         icon: Calendar,        path: '/app/duty-roster' },
+    { label: 'CSSD',                icon: Shield,          path: '/app/cssd' },
     { label: 'Patient Feedback',    icon: Star,            path: '/app/feedback' },
     { label: 'Reports',             icon: BarChart3,       path: '/app/admin/reports',       module: 'MOD_REPORTS' },
     { label: 'Audit Logs',          icon: Shield,          path: '/app/admin/audit',         module: 'MOD_AUDIT' },

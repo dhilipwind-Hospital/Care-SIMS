@@ -49,6 +49,8 @@ import { InfectionControlModule } from './modules/infection-control/infection-co
 import { ConsentModule } from './modules/consent/consent.module';
 import { DietModule } from './modules/diet/diet.module';
 import { MortuaryModule } from './modules/mortuary/mortuary.module';
+import { DutyRosterModule } from './modules/duty-roster/duty-roster.module';
+import { CssdModule } from './modules/cssd/cssd.module';
 import { EmergencyModule } from './modules/emergency/emergency.module';
 import { BirthDeathModule } from './modules/birth-death/birth-death.module';
 import { CertificatesModule } from './modules/certificates/certificates.module';
@@ -110,6 +112,8 @@ import { WsGatewayModule } from './modules/ws-gateway/ws-gateway.module';
     ConsentModule,
     DietModule,
     MortuaryModule,
+    DutyRosterModule,
+    CssdModule,
     EmergencyModule,
     BirthDeathModule,
     CertificatesModule,
