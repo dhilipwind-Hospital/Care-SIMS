@@ -386,16 +386,18 @@ model Patient {
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
-  queueTokens    QueueToken[]
-  appointments   Appointment[]
-  consultations  Consultation[]
-  prescriptions  Prescription[]
-  labOrders      LabOrder[]
-  triageRecords  TriageRecord[]
-  vitals         Vital[]
-  admissions     Admission[]
-  invoices       Invoice[]
-  accessLogs     PatientAccessLog[]
+  queueTokens         QueueToken[]
+  appointments        Appointment[]
+  consultations       Consultation[]
+  prescriptions       Prescription[]
+  labOrders           LabOrder[]
+  triageRecords       TriageRecord[]
+  vitals              Vital[]
+  admissions          Admission[]
+  invoices            Invoice[]
+  accessLogs          PatientAccessLog[]
+  emergencyVisits     EmergencyVisit[]
+  medicalCertificates MedicalCertificate[]
 
   @@map("patients")
 }
@@ -1090,6 +1092,138 @@ model MedicationReconciliation {
 
   @@index([tenantId, admissionId])
   @@map("medication_reconciliations")
+}
+
+// ─────────────────────────────────────────
+// EMERGENCY DEPARTMENT
+// ─────────────────────────────────────────
+
+model EmergencyVisit {
+  id                String    @id @default(uuid())
+  tenantId          String    @map("tenant_id")
+  visitNumber       String    @unique @map("visit_number")
+  locationId        String    @map("location_id")
+  patientId         String    @map("patient_id")
+  triageCategory    String    @default("GREEN") @map("triage_category") // RED, YELLOW, GREEN, BLACK
+  chiefComplaint    String    @map("chief_complaint")
+  arrivalMode       String    @default("WALK_IN") @map("arrival_mode") // WALK_IN, AMBULANCE, REFERRED, POLICE, BROUGHT_DEAD
+  arrivalTime       DateTime  @default(now()) @map("arrival_time")
+  vitalsOnArrival   Json?     @map("vitals_on_arrival")
+  gcsOnArrival      Int?      @map("gcs_on_arrival")
+  assignedDoctorId  String?   @map("assigned_doctor_id")
+  assignedBedId     String?   @map("assigned_bed_id")
+  isMlc             Boolean   @default(false) @map("is_mlc")
+  mlcNumber         String?   @map("mlc_number")
+  policeStation     String?   @map("police_station")
+  broughtBy         String?   @map("brought_by")
+  broughtByRelation String?   @map("brought_by_relation")
+  broughtByPhone    String?   @map("brought_by_phone")
+  disposition       String?   // DISCHARGED, ADMITTED, TRANSFERRED, DAMA, ABSCONDED, EXPIRED
+  dispositionTime   DateTime? @map("disposition_time")
+  admissionId       String?   @map("admission_id")
+  status            String    @default("WAITING") // WAITING, BEING_SEEN, UNDER_OBSERVATION, ADMITTED, DISCHARGED, TRANSFERRED, DAMA, EXPIRED
+  notes             String?
+  createdById       String?   @map("created_by")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@index([tenantId, status])
+  @@map("emergency_visits")
+}
+
+model BirthRecord {
+  id                  String    @id @default(uuid())
+  tenantId            String    @map("tenant_id")
+  locationId          String    @map("location_id")
+  motherPatientId     String    @map("mother_patient_id")
+  fatherName          String?   @map("father_name")
+  dateOfBirth         DateTime  @map("date_of_birth")
+  timeOfBirth         String?   @map("time_of_birth")
+  gender              String
+  weightGrams         Int?      @map("weight_grams")
+  lengthCm            Decimal?  @map("length_cm") @db.Decimal(5, 1)
+  apgarScore1min      Int?      @map("apgar_1min")
+  apgarScore5min      Int?      @map("apgar_5min")
+  deliveryType        String    @default("NORMAL") @map("delivery_type") // NORMAL, LSCS, FORCEPS, VACUUM, BREECH
+  birthOrder          String    @default("SINGLE") @map("birth_order") // SINGLE, TWIN_1, TWIN_2, TRIPLET
+  attendingDoctorId   String?   @map("attending_doctor_id")
+  registrationNumber  String?   @map("registration_number")
+  birthCertIssued     Boolean   @default(false) @map("birth_cert_issued")
+  notes               String?
+  createdById         String?   @map("created_by")
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId])
+  @@map("birth_records")
+}
+
+model DeathRecord {
+  id                  String    @id @default(uuid())
+  tenantId            String    @map("tenant_id")
+  locationId          String    @map("location_id")
+  patientId           String    @map("patient_id")
+  dateOfDeath         DateTime  @map("date_of_death")
+  timeOfDeath         String?   @map("time_of_death")
+  causeOfDeath        String    @map("cause_of_death")
+  icdCode             String?   @map("icd_code")
+  mannerOfDeath       String    @default("NATURAL") @map("manner_of_death") // NATURAL, ACCIDENT, SUICIDE, HOMICIDE, UNDETERMINED
+  attendingDoctorId   String?   @map("attending_doctor_id")
+  registrationNumber  String?   @map("registration_number")
+  deathCertIssued     Boolean   @default(false) @map("death_cert_issued")
+  postMortemRequired  Boolean   @default(false) @map("post_mortem_required")
+  postMortemDone      Boolean   @default(false) @map("post_mortem_done")
+  notes               String?
+  createdById         String?   @map("created_by")
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId])
+  @@map("death_records")
+}
+
+model MedicalCertificate {
+  id                String    @id @default(uuid())
+  tenantId          String    @map("tenant_id")
+  certificateNumber String    @unique @map("certificate_number")
+  patientId         String    @map("patient_id")
+  certificateType   String    @map("certificate_type") // FITNESS, MEDICAL_LEAVE, DISABILITY, WOUND, MLC, BIRTH, DEATH, CUSTOM
+  issuedDate        DateTime  @default(now()) @map("issued_date")
+  validUntil        DateTime? @map("valid_until")
+  findings          String?
+  recommendations   String?
+  restrictions      String?
+  customBody        String?   @map("custom_body")
+  issuedById        String    @map("issued_by")
+  printedAt         DateTime? @map("printed_at")
+  notes             String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@index([tenantId])
+  @@map("medical_certificates")
+}
+
+model FeedbackSurvey {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  patientId       String    @map("patient_id")
+  visitType       String    @map("visit_type") // OPD, IPD, ED
+  departmentId    String?   @map("department_id")
+  doctorId        String?   @map("doctor_id")
+  overallRating   Int?      @map("overall_rating") // 1-5
+  npsScore        Int?      @map("nps_score") // 0-10
+  responses       Json?     // [{question, rating, comment}]
+  comments        String?
+  status          String    @default("PENDING") // PENDING, COMPLETED, REVIEWED
+  submittedAt     DateTime? @map("submitted_at")
+  reviewedById    String?   @map("reviewed_by")
+  reviewedAt      DateTime? @map("reviewed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId])
+  @@map("feedback_surveys")
 }
 
 // ─────────────────────────────────────────

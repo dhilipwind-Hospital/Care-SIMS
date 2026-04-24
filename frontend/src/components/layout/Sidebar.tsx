@@ -12,7 +12,7 @@ import {
   UserPlus, ArrowRightLeft, Sparkles, FileBadge, LogOut, Search, Lock,
   Droplets, ScanLine, ShieldCheck, GitBranch, Monitor, Video,
   HeartPulse, Dumbbell, Ambulance, Clock, Package, Wrench,
-  MessageSquare, Bug, FileCheck, UtensilsCrossed, Skull,
+  MessageSquare, Bug, FileCheck, UtensilsCrossed, Skull, Siren, Baby, Award, Star,
 } from 'lucide-react';
 
 export type NavItem = { label: string; icon: React.ElementType; path: string; module?: string };
@@ -27,7 +27,9 @@ export const navByRole: Record<string, NavItem[]> = {
     { label: 'Insurance/TPA',        icon: ShieldCheck,     path: '/app/insurance',       module: 'MOD_INSURANCE' },
     { label: 'Ambulance',            icon: Ambulance,       path: '/app/ambulance',       module: 'MOD_AMBULANCE' },
     { label: 'Visitor Management',   icon: UserPlus,        path: '/app/visitors',        module: 'MOD_VISITOR' },
+    { label: 'Emergency',            icon: Siren,           path: '/app/emergency' },
     { label: 'Grievance',            icon: MessageSquare,   path: '/app/grievance',       module: 'MOD_GRIEVANCE' },
+    { label: 'Patient Feedback',     icon: Star,            path: '/app/feedback' },
     { label: 'Notifications',        icon: Bell,            path: '/app/notifications' },
   ],
   DOCTOR: [
@@ -42,6 +44,9 @@ export const navByRole: Record<string, NavItem[]> = {
     { label: 'Telemedicine',       icon: Video,            path: '/app/telemedicine',        module: 'MOD_TELEMEDICINE' },
     { label: 'Consent Forms',      icon: FileCheck,        path: '/app/consent',             module: 'MOD_CONSENT' },
     { label: 'Discharge Summary',  icon: FileBadge,        path: '/app/discharge-summary',   module: 'MOD_DISCHARGE' },
+    { label: 'Medical Certificates', icon: Award,          path: '/app/certificates' },
+    { label: 'Birth & Death',      icon: Baby,             path: '/app/birth-death' },
+    { label: 'Emergency',          icon: Siren,            path: '/app/emergency' },
     { label: 'Shift Handover',     icon: ArrowRightLeft,   path: '/app/shift-handover',      module: 'MOD_SHIFT_HANDOVER' },
     { label: 'Notifications',      icon: Bell,             path: '/app/notifications' },
   ],
@@ -117,6 +122,10 @@ export const navByRole: Record<string, NavItem[]> = {
     { label: 'Visitor Management',  icon: UserPlus,        path: '/app/visitors',            module: 'MOD_VISITOR' },
     { label: 'Housekeeping',        icon: Sparkles,        path: '/app/housekeeping',        module: 'MOD_HOUSEKEEPING' },
     { label: 'Shift Handover',      icon: ArrowRightLeft,  path: '/app/shift-handover',      module: 'MOD_SHIFT_HANDOVER' },
+    { label: 'Emergency',           icon: Siren,           path: '/app/emergency' },
+    { label: 'Birth & Death',       icon: Baby,            path: '/app/birth-death' },
+    { label: 'Medical Certificates', icon: Award,          path: '/app/certificates' },
+    { label: 'Patient Feedback',    icon: Star,            path: '/app/feedback' },
     { label: 'Reports',             icon: BarChart3,       path: '/app/admin/reports',       module: 'MOD_REPORTS' },
     { label: 'Audit Logs',          icon: Shield,          path: '/app/admin/audit',         module: 'MOD_AUDIT' },
     { label: 'Org Settings',        icon: Settings,        path: '/app/admin/settings' },
