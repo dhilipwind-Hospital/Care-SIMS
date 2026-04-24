@@ -85,6 +85,57 @@ export class MedicationAdminService {
     });
   }
 
+  // ── Barcode Verification ──
+
+  async verifyMedicationBarcode(tenantId: string, dto: { marId: string; drugBarcode: string; patientBarcode: string }) {
+    const mar = await this.prisma.medicationAdministration.findFirst({ where: { id: dto.marId, tenantId } });
+    if (!mar) throw new NotFoundException('MAR record not found');
+
+    const errors: string[] = [];
+
+    // Verify drug barcode matches the scheduled drug
+    // In production this would look up a drug barcode database.
+    // For now, we check if the drug barcode matches any batch of the scheduled drug.
+    if (dto.drugBarcode) {
+      const batch = await this.prisma.drugBatch.findFirst({
+        where: { barcode: dto.drugBarcode, tenantId },
+      });
+      const drug = batch ? await this.prisma.drug.findUnique({ where: { id: batch.drugId } }) : null;
+      if (!batch || !drug) {
+        errors.push(`Drug barcode "${dto.drugBarcode}" not found in inventory`);
+      } else {
+        const drugLabel = drug.brandName || drug.genericName;
+        if (drugLabel.toLowerCase() !== mar.drugName.toLowerCase() && drug.genericName.toLowerCase() !== mar.drugName.toLowerCase()) {
+          errors.push(`WRONG DRUG: Scanned "${drugLabel}" but scheduled "${mar.drugName}"`);
+        } else if (batch.expiryDate && batch.expiryDate < new Date()) {
+          errors.push(`EXPIRED: ${drugLabel} batch expired ${batch.expiryDate.toLocaleDateString()}`);
+        }
+      }
+    }
+
+    // Verify patient barcode matches the patient on this MAR entry
+    if (dto.patientBarcode) {
+      const patient = await this.prisma.patient.findFirst({
+        where: { tenantId, OR: [{ patientId: dto.patientBarcode }, { id: dto.patientBarcode }] },
+      });
+      if (!patient) {
+        errors.push(`Patient barcode "${dto.patientBarcode}" not found`);
+      } else if (patient.id !== mar.patientId) {
+        errors.push(`WRONG PATIENT: Scanned patient does not match scheduled patient`);
+      }
+    }
+
+    return {
+      verified: errors.length === 0,
+      errors,
+      marId: dto.marId,
+      drugName: mar.drugName,
+      dosage: mar.dosage,
+      route: mar.route,
+      scheduledTime: mar.scheduledTime,
+    };
+  }
+
   // ── Medication Reconciliation ──
 
   async createReconciliation(tenantId: string, userId: string, dto: any) {

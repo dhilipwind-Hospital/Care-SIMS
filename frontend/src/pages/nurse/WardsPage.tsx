@@ -18,6 +18,11 @@ const STATUS_STYLES: Record<string, string> = {
   MAINTENANCE: 'bg-gray-100 text-gray-500 border-gray-200',
   RESERVED: 'bg-amber-100 text-amber-700 border-amber-200',
   AVAILABLE: 'bg-green-100 text-green-700 border-green-200',
+  CLEANING: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+};
+
+const STATUS_ICONS: Record<string, string> = {
+  OCCUPIED: '🛏️', AVAILABLE: '✅', MAINTENANCE: '🔧', RESERVED: '📋', CLEANING: '🧹',
 };
 
 export default function WardsPage() {
@@ -231,33 +236,56 @@ export default function WardsPage() {
                 <div className="h-full rounded-full transition-all"
                   style={{ width: `${occupancyPct}%`, background: occupancyPct > 80 ? '#EF4444' : occupancyPct > 60 ? '#F59E0B' : '#10B981' }} />
               </div>
-              {/* Bed grid */}
+              {/* Visual Bed Map */}
               {beds.length > 0 ? (
-                <div className="grid grid-cols-6 sm:grid-cols-8 lg:grid-cols-10 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                   {beds.map((bed: any) => {
                     const activeAdmission = bed.admissions?.find((a: any) => a.status === 'ACTIVE');
                     const patientName = activeAdmission?.patient
                       ? `${activeAdmission.patient.firstName} ${activeAdmission.patient.lastName}`
                       : null;
+                    const statusIcon = STATUS_ICONS[bed.status] || '🛏️';
                     return (
                       <div key={bed.id}
-                        title={`Bed ${bed.bedNumber} · ${bed.type || 'STANDARD'} · ${bed.status}${patientName ? ` · ${patientName}` : ''}`}
-                        className={`relative rounded-lg p-2 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:scale-105 border ${STATUS_STYLES[bed.status] || STATUS_STYLES.AVAILABLE}`}
-                        style={{ minHeight: 72 }}
-                        onClick={() => {
-                          if (bed.status === 'AVAILABLE') updateBedStatus(bed.id, 'RESERVED');
-                          else if (bed.status === 'RESERVED') updateBedStatus(bed.id, 'AVAILABLE');
-                        }}>
-                        <div className="text-xs font-bold">{bed.bedNumber}</div>
-                        <div className="text-[10px] opacity-70 mt-0.5">{bed.type || 'STD'}</div>
-                        <span className={`mt-1 text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded-full ${STATUS_STYLES[bed.status] || ''}`}>
-                          {bed.status}
-                        </span>
+                        className={`relative rounded-xl p-3 border-2 transition-all hover:shadow-md ${STATUS_STYLES[bed.status] || STATUS_STYLES.AVAILABLE}`}>
+                        {/* Header: bed number + icon */}
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-bold">{bed.bedNumber}</span>
+                          <span className="text-lg">{statusIcon}</span>
+                        </div>
+                        {/* Type */}
+                        <div className="text-[10px] uppercase tracking-wide opacity-60 mb-1">{bed.type || 'Standard'}</div>
+                        {/* Patient name if occupied */}
                         {patientName && (
-                          <div className="text-[9px] mt-1 text-gray-600 truncate w-full" title={patientName}>
+                          <div className="text-xs font-medium text-gray-800 truncate mb-1" title={patientName}>
                             {patientName}
                           </div>
                         )}
+                        {activeAdmission && (
+                          <div className="text-[10px] text-gray-500">Since {new Date(activeAdmission.admissionDate || activeAdmission.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</div>
+                        )}
+                        {/* Status badge */}
+                        <div className={`mt-2 text-[10px] font-bold uppercase text-center px-2 py-1 rounded-full ${STATUS_STYLES[bed.status] || ''}`}>
+                          {bed.status === 'CLEANING' ? 'Cleaning' : bed.status}
+                        </div>
+                        {/* Quick actions */}
+                        <div className="flex gap-1 mt-2">
+                          {bed.status === 'AVAILABLE' && (
+                            <>
+                              <button onClick={() => updateBedStatus(bed.id, 'RESERVED')} className="flex-1 text-[10px] py-1 bg-amber-50 text-amber-700 rounded font-medium hover:bg-amber-100">Reserve</button>
+                              <button onClick={() => updateBedStatus(bed.id, 'MAINTENANCE')} className="flex-1 text-[10px] py-1 bg-gray-50 text-gray-600 rounded font-medium hover:bg-gray-100">Maint.</button>
+                            </>
+                          )}
+                          {bed.status === 'RESERVED' && (
+                            <button onClick={() => updateBedStatus(bed.id, 'AVAILABLE')} className="flex-1 text-[10px] py-1 bg-green-50 text-green-700 rounded font-medium hover:bg-green-100">Release</button>
+                          )}
+                          {bed.status === 'MAINTENANCE' && (
+                            <button onClick={() => updateBedStatus(bed.id, 'AVAILABLE')} className="flex-1 text-[10px] py-1 bg-green-50 text-green-700 rounded font-medium hover:bg-green-100">Mark Available</button>
+                          )}
+                          {bed.status === 'CLEANING' && (
+                            <button onClick={() => updateBedStatus(bed.id, 'AVAILABLE')} className="flex-1 text-[10px] py-1 bg-green-50 text-green-700 rounded font-medium hover:bg-green-100">Mark Clean</button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -274,6 +302,25 @@ export default function WardsPage() {
           );
         })}
       </div>
+
+      {/* Bed Map Legend */}
+      {wards.length > 0 && (
+        <div className="flex items-center justify-center gap-5 text-xs text-gray-500">
+          {[
+            { status: 'AVAILABLE', label: 'Available', icon: '✅' },
+            { status: 'OCCUPIED', label: 'Occupied', icon: '🛏️' },
+            { status: 'RESERVED', label: 'Reserved', icon: '📋' },
+            { status: 'CLEANING', label: 'Cleaning', icon: '🧹' },
+            { status: 'MAINTENANCE', label: 'Maintenance', icon: '🔧' },
+          ].map(item => (
+            <div key={item.status} className="flex items-center gap-1.5">
+              <span>{item.icon}</span>
+              <div className={`w-3 h-3 rounded border ${STATUS_STYLES[item.status]}`} />
+              <span>{item.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Add/Edit Ward Modal */}
       {showWardModal && (

@@ -21,6 +21,7 @@ export class MedicationAdminController {
   @Patch(':id/administer') administer(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.recordAdministration(tid, id, body, uid); }
   @Get('pending') pending(@CurrentUser('tenantId') tid: string, @Query('locationId') lid: string) { return this.svc.getPendingForNurse(tid, lid); }
   @Post('prn') schedulePrn(@CurrentUser('tenantId') tid: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.schedulePrnDose(tid, body, uid); }
+  @Post('verify-barcode') verifyBarcode(@CurrentUser('tenantId') tid: string, @Body() body: any) { return this.svc.verifyMedicationBarcode(tid, body); }
   @Post('reconciliation') createReconciliation(@CurrentUser('tenantId') tid: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.createReconciliation(tid, uid, body); }
   @Get('reconciliation/:admissionId') getReconciliation(@CurrentUser('tenantId') tid: string, @Param('admissionId') aid: string) { return this.svc.getReconciliation(tid, aid); }
 }
