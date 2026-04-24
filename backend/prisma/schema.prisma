@@ -737,6 +737,10 @@ model Admission {
   status               String    @default("ACTIVE")
   billingCleared       Boolean   @default(false) @map("billing_cleared")
   pharmacyCleared      Boolean   @default(false) @map("pharmacy_cleared")
+  preAdmissionChecklist Json?    @map("pre_admission_checklist")
+  packageName          String?   @map("package_name")
+  packageAmount        Decimal?  @map("package_amount") @db.Decimal(12, 2)
+  dailyBedCharge       Decimal?  @map("daily_bed_charge") @db.Decimal(10, 2)
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
 
@@ -1061,10 +1065,30 @@ model MedicationAdministration {
   status              String    @default("SCHEDULED")
   withheldReason      String?   @map("withheld_reason")
   notes               String?
+  isPrn               Boolean   @default(false) @map("is_prn")
+  prnReason           String?   @map("prn_reason")
+  prnMaxDailyDoses    Int?      @map("prn_max_daily_doses")
   createdAt           DateTime  @default(now()) @map("created_at")
 
   @@index([tenantId, admissionId])
   @@map("medication_administrations")
+}
+
+model MedicationReconciliation {
+  id              String   @id @default(uuid())
+  tenantId        String   @map("tenant_id")
+  admissionId     String   @map("admission_id")
+  patientId       String   @map("patient_id")
+  reconcType      String   @default("ADMISSION") @map("reconc_type") // ADMISSION or DISCHARGE
+  homeMedications Json?    @map("home_medications")  // [{ drug, dose, frequency, route, continue }]
+  hospitalMeds    Json?    @map("hospital_meds")     // [{ drug, dose, frequency, route, source }]
+  discrepancies   Json?                              // [{ drug, issue, resolution }]
+  reconciledById  String   @map("reconciled_by_id")
+  reconciledAt    DateTime @default(now()) @map("reconciled_at")
+  notes           String?
+
+  @@index([tenantId, admissionId])
+  @@map("medication_reconciliations")
 }
 
 // ─────────────────────────────────────────

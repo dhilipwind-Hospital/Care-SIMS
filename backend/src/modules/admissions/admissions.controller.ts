@@ -26,4 +26,6 @@ export class AdmissionsController {
   @Put(':id') update(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: UpdateAdmissionDto) { return this.svc.updateAdmission(tid, id, body); }
   @Patch(':id/transfer-bed') transfer(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: TransferBedDto) { return this.svc.transferBed(tid, id, body.newBedId); }
   @Patch(':id/discharge') discharge(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: DischargeDto) { return this.svc.discharge(tid, id, body); }
+  @Patch(':id/pre-admission-checklist') updateChecklist(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body('checklist') checklist: any) { return this.svc.updatePreAdmissionChecklist(tid, id, checklist); }
+  @Post('bed-charges') addBedCharges(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string) { return this.svc.addBedCharges(tid, uid); }
 }

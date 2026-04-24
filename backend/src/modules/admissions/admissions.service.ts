@@ -41,6 +41,10 @@ export class AdmissionsService {
             departmentId: dto.departmentId, admissionType: dto.admissionType || 'PLANNED',
             diagnosisOnAdmission: dto.diagnosisOnAdmission,
             expectedDischargeDate: dto.expectedDischargeDate ? new Date(dto.expectedDischargeDate) : null,
+            packageName: dto.packageName || null,
+            packageAmount: dto.packageAmount || null,
+            dailyBedCharge: dto.dailyBedCharge || null,
+            preAdmissionChecklist: dto.preAdmissionChecklist || null,
             status: 'ACTIVE',
           },
           include: { patient: { select: { patientId: true, firstName: true, lastName: true } }, ward: true },
@@ -119,11 +123,61 @@ export class AdmissionsService {
     });
   }
 
+  async updatePreAdmissionChecklist(tenantId: string, id: string, checklist: any) {
+    const a = await this.prisma.admission.findFirst({ where: { id, tenantId } });
+    if (!a) throw new NotFoundException('Admission not found');
+    return this.prisma.admission.update({ where: { id }, data: { preAdmissionChecklist: checklist } });
+  }
+
+  async addBedCharges(tenantId: string, userId: string) {
+    // Find all active admissions with a daily bed charge set
+    const active = await this.prisma.admission.findMany({
+      where: { tenantId, status: 'ACTIVE', dailyBedCharge: { not: null } },
+      include: { patient: true },
+    });
+    let chargedCount = 0;
+    for (const adm of active) {
+      if (!adm.dailyBedCharge || Number(adm.dailyBedCharge) <= 0) continue;
+      // Find or create a running invoice for this admission
+      let invoice = await this.prisma.invoice.findFirst({
+        where: { tenantId, patientId: adm.patientId, invoiceType: 'IPD', status: { in: ['DRAFT', 'FINALIZED', 'PARTIAL'] } },
+      });
+      if (!invoice) {
+        invoice = await this.prisma.invoice.create({
+          data: { tenantId, invoiceNumber: `BED-${adm.admissionNumber}`, locationId: adm.locationId, patientId: adm.patientId, invoiceType: 'IPD', status: 'DRAFT', subtotal: 0, netTotal: 0, paidAmount: 0, createdById: userId },
+        });
+      }
+      const amount = Number(adm.dailyBedCharge);
+      await this.prisma.invoiceLineItem.create({
+        data: { invoiceId: invoice.id, description: `Bed charge — ${new Date().toLocaleDateString('en-IN')}`, category: 'BED_CHARGE', quantity: 1, unitPrice: amount, amount },
+      });
+      await this.prisma.invoice.update({
+        where: { id: invoice.id },
+        data: { subtotal: { increment: amount }, netTotal: { increment: amount } },
+      });
+      chargedCount++;
+    }
+    return { message: `Bed charges added for ${chargedCount} admissions` };
+  }
+
   async discharge(tenantId: string, id: string, dto: any) {
     const discharged = await this.prisma.$transaction(async (tx) => {
-      const admission = await tx.admission.findFirst({ where: { id, tenantId }, include: { patient: true, ward: true } });
+      const admission = await tx.admission.findFirst({ where: { id, tenantId }, include: { patient: true, ward: true, bed: true } });
       if (!admission) throw new NotFoundException('Admission not found');
-      if (admission.bedId) await tx.bed.update({ where: { id: admission.bedId }, data: { status: 'AVAILABLE' } });
+      if (admission.bedId) {
+        // Set bed to CLEANING instead of AVAILABLE — housekeeping will mark it available
+        await tx.bed.update({ where: { id: admission.bedId }, data: { status: 'CLEANING' } });
+        // Auto-create housekeeping task for bed cleaning
+        await tx.housekeepingTask.create({
+          data: {
+            tenantId, locationId: admission.locationId,
+            wardId: admission.wardId, bedId: admission.bedId,
+            roomOrArea: `${(admission as any).ward?.name || 'Ward'} — Bed ${(admission as any).bed?.bedNumber || admission.bedId}`,
+            taskType: 'BED_CLEANING', priority: 'HIGH', status: 'PENDING',
+            description: `Post-discharge bed cleaning for ${(admission as any).patient?.firstName || ''} ${(admission as any).patient?.lastName || ''} (${admission.admissionNumber})`,
+          },
+        });
+      }
       return tx.admission.update({
         where: { id },
         data: { status: 'DISCHARGED', dischargeDate: new Date(), dischargeType: dto.dischargeType, dischargeDiagnosis: dto.dischargeDiagnosis, dischargeSummary: dto.dischargeSummary },
