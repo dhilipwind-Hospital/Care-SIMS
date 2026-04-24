@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import Sidebar from './Sidebar';
@@ -11,6 +11,18 @@ export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const isPlatform = user?.role === 'PLATFORM_OWNER' || user?.role === 'PLATFORM_ADMIN';
   const brandName = isPlatform ? 'Ayphen HMS' : (user?.tenantName || 'Hospital');
+
+  // Dynamic favicon based on tenant logo
+  useEffect(() => {
+    const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+    if (!link) return;
+    if (user?.tenantLogoUrl && !isPlatform) {
+      link.href = user.tenantLogoUrl;
+    } else {
+      link.href = '/favicon.svg';
+    }
+    return () => { link.href = '/favicon.svg'; };
+  }, [user?.tenantLogoUrl, isPlatform]);
 
   return (
     <div className="flex h-screen" style={{ background: 'var(--hms-bg)' }}>

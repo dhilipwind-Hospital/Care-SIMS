@@ -143,7 +143,7 @@ export default function StaffRegisterPage() {
             <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
               <Heart className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-gray-900">Ayphen HMS</span>
+            <span className="text-xl font-bold text-gray-900">{form.selectedOrgName || 'Ayphen HMS'}</span>
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Staff Access Request</h1>
           <p className="text-gray-500 text-sm mt-1">Request access to your hospital's HMS</p>
@@ -390,7 +390,7 @@ export default function StaffRegisterPage() {
         </div>
 
         <div className="text-center mt-4 text-xs text-gray-400">
-          Ayphen HMS © 2026 — Secure Medical Platform
+          {form.selectedOrgName || 'Ayphen HMS'} © 2026 — Secure Medical Platform
         </div>
       </div>
     </div>
