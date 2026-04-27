@@ -1333,6 +1333,202 @@ model HealthPackageBooking {
 }
 
 // ─────────────────────────────────────────
+// TIER 3: SPECIALIZED CLINICAL MODULES
+// ─────────────────────────────────────────
+
+model NicuAdmission {
+  id                String    @id @default(uuid())
+  tenantId          String    @map("tenant_id")
+  patientId         String    @map("patient_id")
+  motherPatientId   String?   @map("mother_patient_id")
+  admissionDate     DateTime  @default(now()) @map("admission_date")
+  gestationalWeeks  Int?      @map("gestational_weeks")
+  birthWeightGrams  Int?      @map("birth_weight_grams")
+  currentWeightGrams Int?     @map("current_weight_grams")
+  apgar1min         Int?      @map("apgar_1min")
+  apgar5min         Int?      @map("apgar_5min")
+  diagnosis         String?
+  feedType          String?   @map("feed_type") // BREAST, FORMULA, NGT, TPN, MIXED
+  feedVolumeMl      Decimal?  @map("feed_volume_ml") @db.Decimal(6, 1)
+  phototherapy      Boolean   @default(false)
+  ventilatorSupport String?   @map("ventilator_support") // NONE, CPAP, HFNC, MECHANICAL
+  icuBedId          String?   @map("icu_bed_id")
+  status            String    @default("ACTIVE") // ACTIVE, DISCHARGED, TRANSFERRED, EXPIRED
+  dischargeDate     DateTime? @map("discharge_date")
+  dischargeWeight   Int?      @map("discharge_weight_grams")
+  notes             String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@index([tenantId])
+  @@map("nicu_admissions")
+}
+
+model NicuDailyRecord {
+  id                String    @id @default(uuid())
+  tenantId          String    @map("tenant_id")
+  nicuAdmissionId   String    @map("nicu_admission_id")
+  recordDate        DateTime  @default(now()) @map("record_date")
+  weightGrams       Int?      @map("weight_grams")
+  feedType          String?   @map("feed_type")
+  feedVolumeMl      Decimal?  @map("feed_volume_ml") @db.Decimal(6, 1)
+  feedFrequency     String?   @map("feed_frequency")
+  urineOutput       Int?      @map("urine_output")
+  stoolCount        Int?      @map("stool_count")
+  bilirubinLevel    Decimal?  @map("bilirubin_level") @db.Decimal(5, 1)
+  phototherapy      Boolean   @default(false)
+  oxygenSupport     String?   @map("oxygen_support")
+  temperature       Decimal?  @db.Decimal(4, 1)
+  heartRate         Int?      @map("heart_rate")
+  spo2              Int?
+  apneaEpisodes     Int?      @map("apnea_episodes")
+  notes             String?
+  recordedById      String    @map("recorded_by")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId, nicuAdmissionId])
+  @@map("nicu_daily_records")
+}
+
+model CareProtocol {
+  id              String   @id @default(uuid())
+  tenantId        String   @map("tenant_id")
+  name            String
+  diagnosis       String?
+  icdCode         String?  @map("icd_code")
+  department      String?
+  durationDays    Int      @map("duration_days")
+  steps           Json     // [{day, activities, medications, labs, assessments}]
+  isActive        Boolean  @default(true) @map("is_active")
+  createdById     String?  @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  patientPathways PatientPathway[]
+
+  @@index([tenantId])
+  @@map("care_protocols")
+}
+
+model PatientPathway {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  protocolId      String    @map("protocol_id")
+  patientId       String    @map("patient_id")
+  admissionId     String?   @map("admission_id")
+  startDate       DateTime  @default(now()) @map("start_date")
+  currentDay      Int       @default(1) @map("current_day")
+  status          String    @default("ACTIVE") // ACTIVE, COMPLETED, DEVIATED, CANCELLED
+  completedSteps  Json?     @map("completed_steps") // [{day, step, completedAt}]
+  deviations      Json?     // [{day, planned, actual, reason}]
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  protocol CareProtocol @relation(fields: [protocolId], references: [id])
+
+  @@index([tenantId, patientId])
+  @@map("patient_pathways")
+}
+
+model WoundAssessment {
+  id              String   @id @default(uuid())
+  tenantId        String   @map("tenant_id")
+  patientId       String   @map("patient_id")
+  admissionId     String?  @map("admission_id")
+  woundType       String   @map("wound_type") // PRESSURE_ULCER, DIABETIC_ULCER, SURGICAL, BURN, TRAUMA, VENOUS
+  location        String
+  stage           String?  // I, II, III, IV, UNSTAGEABLE
+  lengthCm        Decimal? @map("length_cm") @db.Decimal(5, 1)
+  widthCm         Decimal? @map("width_cm") @db.Decimal(5, 1)
+  depthCm         Decimal? @map("depth_cm") @db.Decimal(5, 1)
+  woundBed        String?  @map("wound_bed") // GRANULATION, SLOUGH, NECROTIC, EPITHELIAL, MIXED
+  exudate         String?  // NONE, SEROUS, SANGUINOUS, PURULENT
+  periwoundSkin   String?  @map("periwound_skin")
+  treatment       String?
+  dressingType    String?  @map("dressing_type")
+  photoUrl        String?  @map("photo_url")
+  painScore       Int?     @map("pain_score")
+  assessedById    String   @map("assessed_by")
+  assessedAt      DateTime @default(now()) @map("assessed_at")
+  nextAssessment  DateTime? @map("next_assessment") @db.Date
+  notes           String?
+
+  @@index([tenantId, patientId])
+  @@map("wound_assessments")
+}
+
+model AntibioticUsage {
+  id              String   @id @default(uuid())
+  tenantId        String   @map("tenant_id")
+  patientId       String   @map("patient_id")
+  admissionId     String?  @map("admission_id")
+  drugName        String   @map("drug_name")
+  dose            String
+  route           String
+  frequency       String
+  indication      String?
+  cultureOrdered  Boolean  @default(false) @map("culture_ordered")
+  cultureSensitivity String? @map("culture_sensitivity")
+  isRestricted    Boolean  @default(false) @map("is_restricted")
+  approvedById    String?  @map("approved_by")
+  startDate       DateTime @map("start_date")
+  endDate         DateTime? @map("end_date")
+  durationDays    Int?     @map("duration_days")
+  deEscalated     Boolean  @default(false) @map("de_escalated")
+  status          String   @default("ACTIVE") // ACTIVE, COMPLETED, STOPPED, DE_ESCALATED
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, patientId])
+  @@map("antibiotic_usage")
+}
+
+model PalliativeCareRecord {
+  id              String   @id @default(uuid())
+  tenantId        String   @map("tenant_id")
+  patientId       String   @map("patient_id")
+  admissionId     String?  @map("admission_id")
+  recordType      String   @map("record_type") // ASSESSMENT, SYMPTOM_CHECK, FAMILY_MEETING, GOALS_OF_CARE, FOLLOW_UP
+  painScore       Int?     @map("pain_score")
+  painType        String?  @map("pain_type")
+  symptoms        Json?    // [{symptom, severity (0-10)}]
+  goalsOfCare     String?  @map("goals_of_care") // FULL_CODE, DNR, DNI, COMFORT_ONLY
+  advanceDirective String? @map("advance_directive")
+  familyMeetingNotes String? @map("family_meeting_notes")
+  medications     Json?    // comfort meds
+  assessedById    String   @map("assessed_by")
+  assessedAt      DateTime @default(now()) @map("assessed_at")
+  nextFollowUp    DateTime? @map("next_follow_up") @db.Date
+  notes           String?
+
+  @@index([tenantId, patientId])
+  @@map("palliative_care_records")
+}
+
+model HomeVisit {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  patientId       String    @map("patient_id")
+  visitDate       DateTime  @map("visit_date")
+  visitType       String    @map("visit_type") // POST_DISCHARGE, CHRONIC_CARE, WOUND_CARE, PHYSIOTHERAPY, PALLIATIVE
+  staffId         String    @map("staff_id")
+  address         String?
+  startTime       DateTime? @map("start_time")
+  endTime         DateTime? @map("end_time")
+  vitalsRecorded  Json?     @map("vitals_recorded")
+  servicesProvided Json?    @map("services_provided")
+  medications     String?
+  followUpDate    DateTime? @map("follow_up_date") @db.Date
+  status          String    @default("SCHEDULED") // SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED, NO_ACCESS
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId, patientId])
+  @@map("home_visits")
+}
+
+// ─────────────────────────────────────────
 // DUTY ROSTER & LEAVE MANAGEMENT
 // ─────────────────────────────────────────
 

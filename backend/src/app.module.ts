@@ -49,6 +49,12 @@ import { InfectionControlModule } from './modules/infection-control/infection-co
 import { ConsentModule } from './modules/consent/consent.module';
 import { DietModule } from './modules/diet/diet.module';
 import { MortuaryModule } from './modules/mortuary/mortuary.module';
+import { NicuModule } from './modules/nicu/nicu.module';
+import { ClinicalPathwaysModule } from './modules/clinical-pathways/clinical-pathways.module';
+import { WoundCareModule } from './modules/wound-care/wound-care.module';
+import { AntimicrobialStewardshipModule } from './modules/antimicrobial-stewardship/antimicrobial-stewardship.module';
+import { PalliativeCareModule } from './modules/palliative-care/palliative-care.module';
+import { HomeCareModule } from './modules/home-care/home-care.module';
 import { VendorModule } from './modules/vendor/vendor.module';
 import { PurchaseIndentModule } from './modules/purchase-indent/purchase-indent.module';
 import { CentralStoreModule } from './modules/central-store/central-store.module';
@@ -119,6 +125,12 @@ import { WsGatewayModule } from './modules/ws-gateway/ws-gateway.module';
     ConsentModule,
     DietModule,
     MortuaryModule,
+    NicuModule,
+    ClinicalPathwaysModule,
+    WoundCareModule,
+    AntimicrobialStewardshipModule,
+    PalliativeCareModule,
+    HomeCareModule,
     VendorModule,
     PurchaseIndentModule,
     CentralStoreModule,
