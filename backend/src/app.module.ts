@@ -49,6 +49,13 @@ import { InfectionControlModule } from './modules/infection-control/infection-co
 import { ConsentModule } from './modules/consent/consent.module';
 import { DietModule } from './modules/diet/diet.module';
 import { MortuaryModule } from './modules/mortuary/mortuary.module';
+import { VendorModule } from './modules/vendor/vendor.module';
+import { PurchaseIndentModule } from './modules/purchase-indent/purchase-indent.module';
+import { CentralStoreModule } from './modules/central-store/central-store.module';
+import { LinenModule } from './modules/linen/linen.module';
+import { WasteManagementModule } from './modules/waste-management/waste-management.module';
+import { QualityModule } from './modules/quality/quality.module';
+import { HealthPackagesModule } from './modules/health-packages/health-packages.module';
 import { DutyRosterModule } from './modules/duty-roster/duty-roster.module';
 import { CssdModule } from './modules/cssd/cssd.module';
 import { EmergencyModule } from './modules/emergency/emergency.module';
@@ -112,6 +119,13 @@ import { WsGatewayModule } from './modules/ws-gateway/ws-gateway.module';
     ConsentModule,
     DietModule,
     MortuaryModule,
+    VendorModule,
+    PurchaseIndentModule,
+    CentralStoreModule,
+    LinenModule,
+    WasteManagementModule,
+    QualityModule,
+    HealthPackagesModule,
     DutyRosterModule,
     CssdModule,
     EmergencyModule,
