@@ -83,6 +83,13 @@ import InfectionControlPage from './pages/infection-control/InfectionControlPage
 import ConsentPage from './pages/consent/ConsentPage';
 import DietPage from './pages/diet/DietPage';
 import MortuaryPage from './pages/mortuary/MortuaryPage';
+import VendorPage from './pages/vendor/VendorPage';
+import PurchaseIndentPage from './pages/purchase-indent/PurchaseIndentPage';
+import CentralStorePage from './pages/central-store/CentralStorePage';
+import LinenPage from './pages/linen/LinenPage';
+import WasteManagementPage from './pages/waste-management/WasteManagementPage';
+import QualityPage from './pages/quality/QualityPage';
+import HealthPackagesPage from './pages/health-packages/HealthPackagesPage';
 import DutyRosterPage from './pages/duty-roster/DutyRosterPage';
 import CssdPage from './pages/cssd/CssdPage';
 import EmergencyPage from './pages/emergency/EmergencyPage';
@@ -219,6 +226,13 @@ function AppRoutes() {
         <Route path="diet" element={<RoleRoute roles={['NURSE', 'ADMIN']}><DietPage /></RoleRoute>} />
         <Route path="infection-control" element={<RoleRoute roles={['NURSE', 'ADMIN']}><InfectionControlPage /></RoleRoute>} />
         <Route path="mortuary" element={<RoleRoute roles={['NURSE', 'ADMIN']}><MortuaryPage /></RoleRoute>} />
+        <Route path="vendors" element={<RoleRoute roles={['ADMIN', 'PHARMACY']}><VendorPage /></RoleRoute>} />
+        <Route path="purchase-indents" element={<RoleRoute roles={['ADMIN', 'NURSE', 'PHARMACY', 'LAB']}><PurchaseIndentPage /></RoleRoute>} />
+        <Route path="central-store" element={<RoleRoute roles={['ADMIN', 'NURSE', 'PHARMACY']}><CentralStorePage /></RoleRoute>} />
+        <Route path="linen" element={<RoleRoute roles={['ADMIN', 'NURSE']}><LinenPage /></RoleRoute>} />
+        <Route path="waste-management" element={<RoleRoute roles={['ADMIN', 'NURSE']}><WasteManagementPage /></RoleRoute>} />
+        <Route path="quality" element={<RoleRoute roles={['ADMIN']}><QualityPage /></RoleRoute>} />
+        <Route path="health-packages" element={<RoleRoute roles={['ADMIN', 'RECEPTION', 'DOCTOR']}><HealthPackagesPage /></RoleRoute>} />
         <Route path="duty-roster" element={<RoleRoute roles={['ADMIN', 'NURSE', 'DOCTOR', 'RECEPTION', 'PHARMACY', 'LAB', 'OT']}><DutyRosterPage /></RoleRoute>} />
         <Route path="cssd" element={<RoleRoute roles={['NURSE', 'OT', 'ADMIN']}><CssdPage /></RoleRoute>} />
         <Route path="emergency" element={<RoleRoute roles={['DOCTOR', 'NURSE', 'RECEPTION', 'ADMIN']}><EmergencyPage /></RoleRoute>} />
