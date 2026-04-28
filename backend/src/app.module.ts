@@ -49,6 +49,10 @@ import { InfectionControlModule } from './modules/infection-control/infection-co
 import { ConsentModule } from './modules/consent/consent.module';
 import { DietModule } from './modules/diet/diet.module';
 import { MortuaryModule } from './modules/mortuary/mortuary.module';
+import { PayrollModule } from './modules/payroll/payroll.module';
+import { WorkOrdersModule } from './modules/work-orders/work-orders.module';
+import { MlcRegisterModule } from './modules/mlc-register/mlc-register.module';
+import { MrdModule } from './modules/mrd/mrd.module';
 import { NicuModule } from './modules/nicu/nicu.module';
 import { ClinicalPathwaysModule } from './modules/clinical-pathways/clinical-pathways.module';
 import { WoundCareModule } from './modules/wound-care/wound-care.module';
@@ -125,6 +129,10 @@ import { WsGatewayModule } from './modules/ws-gateway/ws-gateway.module';
     ConsentModule,
     DietModule,
     MortuaryModule,
+    PayrollModule,
+    WorkOrdersModule,
+    MlcRegisterModule,
+    MrdModule,
     NicuModule,
     ClinicalPathwaysModule,
     WoundCareModule,

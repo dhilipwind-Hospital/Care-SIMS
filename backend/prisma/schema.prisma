@@ -1095,6 +1095,128 @@ model MedicationReconciliation {
 }
 
 // ─────────────────────────────────────────
+// TIER 4: FINANCE & ADMIN MODULES
+// ─────────────────────────────────────────
+
+model Payroll {
+  id                String   @id @default(uuid())
+  tenantId          String   @map("tenant_id")
+  staffId           String   @map("staff_id")
+  month             Int
+  year              Int
+  basicPay          Decimal  @map("basic_pay") @db.Decimal(10, 2)
+  da                Decimal  @default(0) @db.Decimal(10, 2)
+  hra               Decimal  @default(0) @db.Decimal(10, 2)
+  allowances        Decimal  @default(0) @db.Decimal(10, 2)
+  overtime          Decimal  @default(0) @db.Decimal(10, 2)
+  grossPay          Decimal  @map("gross_pay") @db.Decimal(10, 2)
+  pfDeduction       Decimal  @default(0) @map("pf_deduction") @db.Decimal(10, 2)
+  esiDeduction      Decimal  @default(0) @map("esi_deduction") @db.Decimal(10, 2)
+  tdsDeduction      Decimal  @default(0) @map("tds_deduction") @db.Decimal(10, 2)
+  otherDeductions   Decimal  @default(0) @map("other_deductions") @db.Decimal(10, 2)
+  totalDeductions   Decimal  @map("total_deductions") @db.Decimal(10, 2)
+  netPay            Decimal  @map("net_pay") @db.Decimal(10, 2)
+  status            String   @default("DRAFT") // DRAFT, PROCESSED, APPROVED, PAID
+  processedById     String?  @map("processed_by")
+  paidAt            DateTime? @map("paid_at")
+  notes             String?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, staffId, month, year])
+  @@index([tenantId])
+  @@map("payroll")
+}
+
+model PayrollConfig {
+  id              String   @id @default(uuid())
+  tenantId        String   @unique @map("tenant_id")
+  pfRate          Decimal  @default(12) @map("pf_rate") @db.Decimal(5, 2)
+  esiRate         Decimal  @default(0.75) @map("esi_rate") @db.Decimal(5, 2)
+  pfEmployerRate  Decimal  @default(12) @map("pf_employer_rate") @db.Decimal(5, 2)
+  esiEmployerRate Decimal  @default(3.25) @map("esi_employer_rate") @db.Decimal(5, 2)
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("payroll_config")
+}
+
+model WorkOrder {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  workOrderNumber String    @unique @map("work_order_number")
+  requestedById   String    @map("requested_by")
+  departmentId    String?   @map("department_id")
+  locationId      String?   @map("location_id")
+  category        String    // ELECTRICAL, PLUMBING, HVAC, CIVIL, BIOMEDICAL, IT, CARPENTRY, PAINTING
+  priority        String    @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  description     String
+  assignedToId    String?   @map("assigned_to")
+  assignedToName  String?   @map("assigned_to_name")
+  estimatedCost   Decimal?  @map("estimated_cost") @db.Decimal(10, 2)
+  actualCost      Decimal?  @map("actual_cost") @db.Decimal(10, 2)
+  status          String    @default("OPEN") // OPEN, ASSIGNED, IN_PROGRESS, COMPLETED, CLOSED, CANCELLED
+  startedAt       DateTime? @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  satisfactionRating Int?   @map("satisfaction_rating") // 1-5
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([tenantId, status])
+  @@map("work_orders")
+}
+
+model MlcRecord {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  mlcNumber       String    @unique @map("mlc_number")
+  patientId       String    @map("patient_id")
+  dateTime        DateTime  @map("date_time")
+  broughtBy       String    @map("brought_by") // SELF, POLICE, AMBULANCE, RELATIVE
+  policeStation   String?   @map("police_station")
+  firNumber       String?   @map("fir_number")
+  firDate         DateTime? @map("fir_date")
+  firSection      String?   @map("fir_section")
+  natureOfInjury  String    @map("nature_of_injury")
+  weaponUsed      String?   @map("weapon_used")
+  circumstance    String?
+  attendingDoctorId String? @map("attending_doctor_id")
+  woundCertificateId String? @map("wound_certificate_id")
+  informedPolice  Boolean   @default(false) @map("informed_police")
+  informedAt      DateTime? @map("informed_at")
+  status          String    @default("REGISTERED") // REGISTERED, UNDER_TREATMENT, DISCHARGED, REFERRED
+  notes           String?
+  createdById     String?   @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([tenantId])
+  @@map("mlc_records")
+}
+
+model MedicalRecordFile {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  patientId       String    @map("patient_id")
+  fileNumber      String    @unique @map("file_number")
+  currentLocation String?   @map("current_location") // Department or "RECORDS_ROOM"
+  checkedOutById  String?   @map("checked_out_by")
+  checkedOutAt    DateTime? @map("checked_out_at")
+  returnedAt      DateTime? @map("returned_at")
+  icdCodes        String[]  @map("icd_codes")
+  codingComplete  Boolean   @default(false) @map("coding_complete")
+  codedById       String?   @map("coded_by")
+  codedAt         DateTime? @map("coded_at")
+  incompleteNotes Boolean   @default(false) @map("incomplete_notes")
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([tenantId, patientId])
+  @@map("medical_record_files")
+}
+
+// ─────────────────────────────────────────
 // TIER 2: OPERATIONS MODULES
 // ─────────────────────────────────────────
 

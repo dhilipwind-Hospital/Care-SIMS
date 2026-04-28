@@ -83,6 +83,10 @@ import InfectionControlPage from './pages/infection-control/InfectionControlPage
 import ConsentPage from './pages/consent/ConsentPage';
 import DietPage from './pages/diet/DietPage';
 import MortuaryPage from './pages/mortuary/MortuaryPage';
+import PayrollPage from './pages/payroll/PayrollPage';
+import WorkOrdersPage from './pages/work-orders/WorkOrdersPage';
+import MlcRegisterPage from './pages/mlc-register/MlcRegisterPage';
+import MrdPage from './pages/mrd/MrdPage';
 import NicuPage from './pages/nicu/NicuPage';
 import ClinicalPathwaysPage from './pages/clinical-pathways/ClinicalPathwaysPage';
 import WoundCarePage from './pages/wound-care/WoundCarePage';
@@ -232,6 +236,10 @@ function AppRoutes() {
         <Route path="diet" element={<RoleRoute roles={['NURSE', 'ADMIN']}><DietPage /></RoleRoute>} />
         <Route path="infection-control" element={<RoleRoute roles={['NURSE', 'ADMIN']}><InfectionControlPage /></RoleRoute>} />
         <Route path="mortuary" element={<RoleRoute roles={['NURSE', 'ADMIN']}><MortuaryPage /></RoleRoute>} />
+        <Route path="payroll" element={<RoleRoute roles={['ADMIN']}><PayrollPage /></RoleRoute>} />
+        <Route path="work-orders" element={<RoleRoute roles={['ADMIN', 'NURSE', 'DOCTOR', 'RECEPTION']}><WorkOrdersPage /></RoleRoute>} />
+        <Route path="mlc" element={<RoleRoute roles={['DOCTOR', 'NURSE', 'RECEPTION', 'ADMIN']}><MlcRegisterPage /></RoleRoute>} />
+        <Route path="mrd" element={<RoleRoute roles={['ADMIN']}><MrdPage /></RoleRoute>} />
         <Route path="nicu" element={<RoleRoute roles={['DOCTOR', 'NURSE', 'ADMIN']}><NicuPage /></RoleRoute>} />
         <Route path="clinical-pathways" element={<RoleRoute roles={['DOCTOR', 'NURSE', 'ADMIN']}><ClinicalPathwaysPage /></RoleRoute>} />
         <Route path="wound-care" element={<RoleRoute roles={['DOCTOR', 'NURSE', 'ADMIN']}><WoundCarePage /></RoleRoute>} />
