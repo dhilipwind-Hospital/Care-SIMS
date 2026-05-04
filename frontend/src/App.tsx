@@ -111,6 +111,7 @@ import NotFoundPage from './pages/NotFoundPage';
 import MfaSetupPage from './pages/admin/MfaSetupPage';
 import ChangePasswordPage from './pages/admin/ChangePasswordPage';
 import ProfilePage from './pages/admin/ProfilePage';
+import FlowChartsPage from './pages/flowcharts/FlowChartsPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -277,6 +278,7 @@ function AppRoutes() {
         <Route path="platform/features" element={<RoleRoute roles={['PLATFORM_OWNER', 'PLATFORM_ADMIN']}><PlatformFeaturesPage /></RoleRoute>} />
         <Route path="platform/doctors" element={<RoleRoute roles={['PLATFORM_OWNER', 'PLATFORM_ADMIN']}><DoctorRegistryPage /></RoleRoute>} />
         <Route path="platform/audit" element={<RoleRoute roles={['PLATFORM_OWNER', 'PLATFORM_ADMIN']}><PlatformAuditPage /></RoleRoute>} />
+        <Route path="flowcharts" element={<ProtectedRoute><FlowChartsPage /></ProtectedRoute>} />
       </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

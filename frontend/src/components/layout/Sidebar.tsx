@@ -7,7 +7,7 @@ import { clearAuth } from '../../lib/auth';
 import ayphenLogo from '../../assets/ayphen-logo.svg';
 import {
   LayoutDashboard, Users, Calendar, ClipboardList, FlaskConical,
-  Activity, Bed, Pill, Scissors, FileText, BarChart3, Bell,
+  Activity, Bed, Pill, Scissors, FileText, BarChart3, Bell, GitMerge,
   Shield, Heart, CreditCard, UserCheck, Stethoscope, Building2, Layers, MapPin, Settings,
   UserPlus, ArrowRightLeft, Sparkles, FileBadge, LogOut, Search, Lock,
   Droplets, ScanLine, ShieldCheck, GitBranch, Monitor, Video,
@@ -145,6 +145,7 @@ export const navByRole: Record<string, NavItem[]> = {
     { label: 'Duty Roster',         icon: Calendar,        path: '/app/duty-roster' },
     { label: 'CSSD',                icon: Shield,          path: '/app/cssd' },
     { label: 'Patient Feedback',    icon: Star,            path: '/app/feedback' },
+    { label: 'Flow Charts',         icon: GitMerge,        path: '/app/flowcharts' },
     { label: 'Reports',             icon: BarChart3,       path: '/app/admin/reports',       module: 'MOD_REPORTS' },
     { label: 'Audit Logs',          icon: Shield,          path: '/app/admin/audit',         module: 'MOD_AUDIT' },
     { label: 'Org Settings',        icon: Settings,        path: '/app/admin/settings' },
