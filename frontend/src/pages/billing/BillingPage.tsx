@@ -174,6 +174,137 @@ export default function BillingPage() {
 
   const balance = selected ? Math.max(0, Number(selected.netTotal || 0) - Number(selected.paidAmount || 0)) : 0;
 
+  const handlePrintInvoice = (inv: any) => {
+    const printWin = window.open('', '_blank', 'width=900,height=700');
+    if (!printWin) return;
+    const fmt = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
+    const lineItems = inv.lineItems || inv.items || [];
+    const payments = inv.payments || [];
+    const patientName = inv.patient ? `${inv.patient.firstName || ''} ${inv.patient.lastName || ''}`.trim() : '—';
+    const html = `<!DOCTYPE html><html><head><title>Invoice ${inv.invoiceNumber || ''}</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: Arial, sans-serif; font-size: 13px; color: #111; padding: 32px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px double #0F766E; padding-bottom: 16px; margin-bottom: 20px; }
+    .hospital { }
+    .hospital-name { font-size: 22px; font-weight: 900; color: #0F766E; }
+    .hospital-sub { font-size: 11px; color: #666; margin-top: 2px; }
+    .invoice-meta { text-align: right; }
+    .invoice-title { font-size: 18px; font-weight: 800; letter-spacing: 2px; color: #333; }
+    .invoice-num { font-size: 14px; font-weight: 700; color: #0F766E; margin-top: 4px; }
+    .invoice-date { font-size: 11px; color: #666; margin-top: 2px; }
+    .status-badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; margin-top: 4px; }
+    .status-PAID { background: #dcfce7; color: #166534; }
+    .status-DRAFT { background: #fef9c3; color: #854d0e; }
+    .status-FINALIZED { background: #dbeafe; color: #1e40af; }
+    .status-CANCELLED { background: #f3f4f6; color: #6b7280; }
+    .bill-to { background: #f0fdfa; border: 1px solid #ccfbf1; border-radius: 6px; padding: 12px 16px; margin-bottom: 20px; }
+    .bill-to-title { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #0F766E; letter-spacing: 1px; margin-bottom: 6px; }
+    .bill-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .field label { font-size: 10px; color: #6b7280; text-transform: uppercase; }
+    .field p { font-size: 13px; font-weight: 500; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    th { background: #f0fdfa; color: #0F766E; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 10px; text-align: left; border: 1px solid #e5e7eb; }
+    td { padding: 8px 10px; border: 1px solid #e5e7eb; font-size: 12px; vertical-align: top; }
+    tr:nth-child(even) td { background: #fafafa; }
+    .totals { display: flex; justify-content: flex-end; margin-bottom: 20px; }
+    .totals-box { width: 300px; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; }
+    .totals-row { display: flex; justify-content: space-between; padding: 6px 12px; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+    .totals-row:last-child { border-bottom: none; }
+    .totals-net { background: #0F766E; color: white; font-weight: 800; font-size: 15px; }
+    .totals-paid { background: #f0fdf4; color: #166534; font-weight: 700; }
+    .totals-bal { background: #fff7ed; color: #c2410c; font-weight: 700; }
+    .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #0F766E; margin-bottom: 8px; margin-top: 16px; }
+    .signature-row { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; }
+    .sig-box { text-align: center; }
+    .sig-line { border-top: 1px solid #333; margin-bottom: 6px; margin-top: 40px; }
+    .sig-label { font-size: 11px; color: #555; }
+    @media print { body { padding: 20px; } }
+  </style></head><body>
+  <div class="header">
+    <div class="hospital">
+      <div class="hospital-name">AYPHEN HMS</div>
+      <div class="hospital-sub">Hospital Management System</div>
+    </div>
+    <div class="invoice-meta">
+      <div class="invoice-title">TAX INVOICE</div>
+      <div class="invoice-num">${inv.invoiceNumber || 'DRAFT'}</div>
+      <div class="invoice-date">${inv.createdAt ? new Date(inv.createdAt).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : '—'}</div>
+      <span class="status-badge status-${inv.status || 'DRAFT'}">${inv.status || 'DRAFT'}</span>
+    </div>
+  </div>
+
+  <div class="bill-to">
+    <div class="bill-to-title">Bill To</div>
+    <div class="bill-grid">
+      <div class="field"><label>Patient Name</label><p>${patientName}</p></div>
+      <div class="field"><label>Patient ID</label><p>${inv.patient?.patientId || '—'}</p></div>
+      <div class="field"><label>Invoice Type</label><p>${inv.invoiceType || '—'}</p></div>
+    </div>
+  </div>
+
+  ${lineItems.length > 0 ? `
+  <div class="section-title">Line Items</div>
+  <table>
+    <thead><tr>
+      <th>#</th><th>Description</th><th>Category</th><th style="text-align:right">Qty</th>
+      <th style="text-align:right">Unit Price</th><th style="text-align:right">Discount</th>
+      <th style="text-align:right">Tax %</th><th style="text-align:right">Amount</th>
+    </tr></thead>
+    <tbody>
+      ${lineItems.map((item: any, i: number) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${item.description || '—'}</td>
+          <td>${item.category || '—'}</td>
+          <td style="text-align:right">${item.quantity || 1}</td>
+          <td style="text-align:right">${fmt(item.unitPrice)}</td>
+          <td style="text-align:right">${item.discountPercent || 0}%</td>
+          <td style="text-align:right">${item.taxPercent || 0}%</td>
+          <td style="text-align:right"><strong>${fmt(item.lineTotal || item.total || (item.unitPrice * (item.quantity || 1)))}</strong></td>
+        </tr>`).join('')}
+    </tbody>
+  </table>` : '<p style="color:#6b7280;font-size:12px;margin-bottom:16px">No line items</p>'}
+
+  <div class="totals">
+    <div class="totals-box">
+      <div class="totals-row"><span>Subtotal</span><span>${fmt(inv.subtotal)}</span></div>
+      ${inv.discountAmount > 0 ? `<div class="totals-row"><span>Discount</span><span style="color:#dc2626">-${fmt(inv.discountAmount)}</span></div>` : ''}
+      ${inv.taxAmount > 0 ? `<div class="totals-row"><span>Tax</span><span>${fmt(inv.taxAmount)}</span></div>` : ''}
+      <div class="totals-row totals-net"><span>NET TOTAL</span><span>${fmt(inv.netTotal)}</span></div>
+      <div class="totals-row totals-paid"><span>Amount Paid</span><span>${fmt(inv.paidAmount)}</span></div>
+      <div class="totals-row totals-bal"><span>Balance Due</span><span>${fmt((inv.netTotal || 0) - (inv.paidAmount || 0))}</span></div>
+    </div>
+  </div>
+
+  ${payments.length > 0 ? `
+  <div class="section-title">Payment History</div>
+  <table>
+    <thead><tr><th>Date</th><th>Method</th><th style="text-align:right">Amount</th><th>Reference</th></tr></thead>
+    <tbody>
+      ${payments.map((p: any) => `
+        <tr>
+          <td>${p.paidAt ? new Date(p.paidAt).toLocaleDateString('en-IN') : '—'}</td>
+          <td>${p.paymentMethod || '—'}</td>
+          <td style="text-align:right">${fmt(p.amount)}</td>
+          <td>${p.referenceNumber || '—'}</td>
+        </tr>`).join('')}
+    </tbody>
+  </table>` : ''}
+
+  ${inv.notes ? `<div style="margin-top:12px;padding:10px 12px;background:#fafafa;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;color:#555"><strong>Notes:</strong> ${inv.notes}</div>` : ''}
+
+  <div class="signature-row">
+    <div class="sig-box"><div class="sig-line"></div><div class="sig-label">Cashier / Billing Executive</div></div>
+    <div class="sig-box"><div class="sig-line"></div><div class="sig-label">Authorized Signatory & Hospital Seal</div></div>
+  </div>
+
+  <script>window.onload=function(){window.print();}<\/script>
+  </body></html>`;
+    printWin.document.write(html);
+    printWin.document.close();
+  };
+
   const handlePrint = () => {
     if (!selected) return;
     const printWin = window.open('', '_blank', 'width=800,height=600');
@@ -450,6 +581,12 @@ export default function BillingPage() {
             </div>
             <div className="flex items-center gap-3">
               <StatusBadge status={selected.status} />
+              <button
+                onClick={() => handlePrintInvoice(selected)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg"
+              >
+                <Printer size={14} /> Print Invoice
+              </button>
               <button type="button" onClick={() => setShowDetailModal(false)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
             </div>
           </div>

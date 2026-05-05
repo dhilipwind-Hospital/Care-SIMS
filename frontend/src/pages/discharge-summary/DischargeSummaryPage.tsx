@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { FileText, CheckCircle, Clock, AlertTriangle, Eye, Edit2, X } from 'lucide-react';
+import { FileText, CheckCircle, Clock, AlertTriangle, Eye, Edit2, X, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import EmptyState from '../../components/ui/EmptyState';
@@ -32,6 +32,104 @@ export default function DischargeSummaryPage() {
   });
   const [editError, setEditError] = useState('');
   const [editSubmitting, setEditSubmitting] = useState(false);
+
+  const handlePrintDischarge = (d: any) => {
+    const printWin = window.open('', '_blank', 'width=900,height=700');
+    if (!printWin) return;
+    const duration = d.admissionDate && d.dischargeDate
+      ? Math.ceil((new Date(d.dischargeDate).getTime() - new Date(d.admissionDate).getTime()) / 86400000)
+      : null;
+    const html = `<!DOCTYPE html><html><head><title>Discharge Summary</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; font-size: 13px; color: #111; padding: 32px; }
+    .header { text-align: center; border-bottom: 3px double #0F766E; padding-bottom: 16px; margin-bottom: 20px; }
+    .hospital-name { font-size: 22px; font-weight: 900; color: #0F766E; letter-spacing: 1px; }
+    .doc-title { font-size: 16px; font-weight: 700; letter-spacing: 2px; margin-top: 4px; color: #333; }
+    .doc-meta { font-size: 11px; color: #666; margin-top: 6px; }
+    .section { margin-bottom: 16px; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; }
+    .section-title { background: #f0fdfa; color: #0F766E; font-weight: 700; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; padding: 6px 12px; border-bottom: 1px solid #e5e7eb; }
+    .section-body { padding: 10px 12px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .field label { font-size: 10px; color: #6b7280; text-transform: uppercase; font-weight: 600; }
+    .field p { font-size: 13px; color: #111; margin-top: 2px; }
+    .signature-row { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; }
+    .sig-box { text-align: center; }
+    .sig-line { border-top: 1px solid #333; margin-bottom: 6px; margin-top: 40px; }
+    .sig-label { font-size: 11px; color: #555; }
+    @media print { body { padding: 20px; } }
+  </style></head><body>
+  <div class="header">
+    <div class="hospital-name">AYPHEN HMS</div>
+    <div class="doc-title">DISCHARGE SUMMARY</div>
+    <div class="doc-meta">
+      Status: ${d.status || '—'} &nbsp;|&nbsp;
+      ${d.approvedAt ? 'Approved: ' + new Date(d.approvedAt).toLocaleDateString('en-IN') : 'Draft — Not yet approved'}
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Patient Information</div>
+    <div class="section-body grid-3">
+      <div class="field"><label>Patient ID</label><p>${d.patientId?.slice(0,8) || '—'}...</p></div>
+      <div class="field"><label>Admission Date</label><p>${d.admissionDate ? new Date(d.admissionDate).toLocaleDateString('en-IN') : '—'}</p></div>
+      <div class="field"><label>Discharge Date</label><p>${d.dischargeDate ? new Date(d.dischargeDate).toLocaleDateString('en-IN') : '—'}</p></div>
+      ${duration !== null ? `<div class="field"><label>Duration</label><p>${duration} day${duration !== 1 ? 's' : ''}</p></div>` : ''}
+      <div class="field"><label>Doctor ID</label><p>${d.doctorId?.slice(0,8) || '—'}...</p></div>
+      <div class="field"><label>Condition at Discharge</label><p>${d.conditionAtDischarge || '—'}</p></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Diagnosis</div>
+    <div class="section-body">
+      <div class="field" style="margin-bottom:8px"><label>On Admission</label><p>${d.diagnosisOnAdmission || '—'}</p></div>
+      <div class="field"><label>On Discharge</label><p>${d.diagnosisOnDischarge || '—'}</p></div>
+    </div>
+  </div>
+
+  ${d.treatmentGiven || d.proceduresPerformed ? `
+  <div class="section">
+    <div class="section-title">Treatment & Procedures</div>
+    <div class="section-body grid-2">
+      ${d.treatmentGiven ? `<div class="field"><label>Treatment Given</label><p style="white-space:pre-line">${d.treatmentGiven}</p></div>` : ''}
+      ${d.proceduresPerformed ? `<div class="field"><label>Procedures Performed</label><p style="white-space:pre-line">${d.proceduresPerformed}</p></div>` : ''}
+    </div>
+  </div>` : ''}
+
+  ${d.investigationSummary ? `
+  <div class="section">
+    <div class="section-title">Investigation Summary</div>
+    <div class="section-body"><div class="field"><p style="white-space:pre-line">${d.investigationSummary}</p></div></div>
+  </div>` : ''}
+
+  ${d.dischargeMedications ? `
+  <div class="section">
+    <div class="section-title">Discharge Medications</div>
+    <div class="section-body"><div class="field"><p style="white-space:pre-line">${d.dischargeMedications}</p></div></div>
+  </div>` : ''}
+
+  <div class="section">
+    <div class="section-title">Instructions & Follow-up</div>
+    <div class="section-body grid-2">
+      ${d.dietaryAdvice ? `<div class="field"><label>Dietary Advice</label><p>${d.dietaryAdvice}</p></div>` : ''}
+      ${d.activityRestrictions ? `<div class="field"><label>Activity Restrictions</label><p>${d.activityRestrictions}</p></div>` : ''}
+      ${d.followUpInstructions ? `<div class="field"><label>Follow-up Instructions</label><p>${d.followUpInstructions}</p></div>` : ''}
+      ${d.followUpDate ? `<div class="field"><label>Follow-up Date</label><p>${new Date(d.followUpDate).toLocaleDateString('en-IN')}</p></div>` : ''}
+    </div>
+  </div>
+
+  <div class="signature-row">
+    <div class="sig-box"><div class="sig-line"></div><div class="sig-label">Doctor's Signature</div></div>
+    <div class="sig-box"><div class="sig-line"></div><div class="sig-label">Hospital Seal & Authorized Signatory</div></div>
+  </div>
+
+  <script>window.onload=function(){window.print();}<\/script>
+  </body></html>`;
+    printWin.document.write(html);
+    printWin.document.close();
+  };
 
   const fetchSummaries = async () => {
     setLoading(true);
@@ -229,7 +327,15 @@ export default function DischargeSummaryPage() {
                   {viewDetail.admissionId ? `Admission: ${viewDetail.admissionId.slice(0, 8)}...` : 'Loading...'}
                 </p>
               </div>
-              <button onClick={() => setViewDetail(null)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handlePrintDischarge(viewDetail)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg"
+                >
+                  <Printer size={14} /> Print PDF
+                </button>
+                <button onClick={() => setViewDetail(null)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+              </div>
             </div>
             {detailLoading ? (
               <div className="p-12 text-center text-gray-400">Loading details...</div>
