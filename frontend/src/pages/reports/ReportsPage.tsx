@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import {
   Users, DollarSign, Activity, TrendingUp, BedDouble,
-  Clock, CalendarRange, FileText, Stethoscope, HeartPulse, Download,
+  Clock, CalendarRange, FileText, Stethoscope, HeartPulse, Download, Printer, FlaskConical,
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -20,7 +20,7 @@ const CHART_COLORS = ['#0F766E', '#3B82F6', '#EC4899', '#8B5CF6', '#F59E0B', '#1
 
 /* ── types ─────────────────────────────────────────────── */
 
-type Tab = 'patients' | 'revenue' | 'opd' | 'ipd';
+type Tab = 'patients' | 'revenue' | 'opd' | 'ipd' | 'lab';
 
 interface PatientData {
   total: number;
@@ -72,6 +72,7 @@ const TABS: { key: Tab; label: string; icon: typeof Users }[] = [
   { key: 'revenue', label: 'Revenue', icon: DollarSign },
   { key: 'opd', label: 'OPD Performance', icon: Stethoscope },
   { key: 'ipd', label: 'IPD Analytics', icon: BedDouble },
+  { key: 'lab', label: 'Lab Reports', icon: FlaskConical },
 ];
 
 /* ── main component ────────────────────────────────────── */
@@ -80,10 +81,11 @@ export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('patients');
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(defaultTo);
+  const [applied, setApplied] = useState({ from: defaultFrom(), to: defaultTo() });
 
   const handleExport = async () => {
     try {
-      const params = { from, to };
+      const params = { from: applied.from, to: applied.to };
       if (activeTab === 'patients') {
         const { data } = await api.get('/reports/patients', { params });
         const rows = [
@@ -92,7 +94,7 @@ export default function ReportsPage() {
         ];
         exportTableToCsv([
           { header: 'Category', key: 'category' }, { header: 'Label', key: 'label' }, { header: 'Count', key: 'count' },
-        ], rows, `patient-report-${from}-to-${to}.csv`);
+        ], rows, `patient-report-${applied.from}-to-${applied.to}.csv`);
       } else if (activeTab === 'revenue') {
         const { data } = await api.get('/reports/revenue', { params });
         exportTableToCsv([
@@ -103,17 +105,17 @@ export default function ReportsPage() {
           { metric: 'Outstanding', amount: data.outstanding },
           { metric: 'Invoice Count', amount: data.invoiceCount },
           { metric: 'Collection Rate %', amount: data.totalBilled > 0 ? ((data.totalCollected / data.totalBilled) * 100).toFixed(1) : '0' },
-        ], `revenue-report-${from}-to-${to}.csv`);
+        ], `revenue-report-${applied.from}-to-${applied.to}.csv`);
       } else if (activeTab === 'opd') {
         const { data } = await api.get('/reports/opd', { params });
-        const days = Math.max(1, Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / 86400000));
+        const days = Math.max(1, Math.ceil((new Date(applied.to).getTime() - new Date(applied.from).getTime()) / 86400000));
         exportTableToCsv([
           { header: 'Metric', key: 'metric' }, { header: 'Value', key: 'value' },
         ], [
           { metric: 'Total Consultations', value: data.totalConsultations },
           { metric: 'Period (days)', value: days },
           { metric: 'Avg Consultations/Day', value: (data.totalConsultations / days).toFixed(1) },
-        ], `opd-report-${from}-to-${to}.csv`);
+        ], `opd-report-${applied.from}-to-${applied.to}.csv`);
       } else if (activeTab === 'ipd') {
         const { data } = await api.get('/reports/ipd', { params });
         exportTableToCsv([
@@ -122,10 +124,131 @@ export default function ReportsPage() {
           { metric: 'Total Admissions', value: data.total },
           { metric: 'Currently Admitted', value: data.currentlyAdmitted },
           { metric: 'Discharged', value: data.discharged },
-        ], `ipd-report-${from}-to-${to}.csv`);
+        ], `ipd-report-${applied.from}-to-${applied.to}.csv`);
+      } else if (activeTab === 'lab') {
+        const { data } = await api.get('/reports/lab', { params });
+        exportTableToCsv([
+          { header: 'Metric', key: 'metric' }, { header: 'Value', key: 'value' },
+        ], [
+          { metric: 'Total Orders', value: data.totalOrders ?? 0 },
+          { metric: 'Completed', value: data.completed ?? 0 },
+          { metric: 'Pending', value: data.pending ?? 0 },
+          { metric: 'Critical Results', value: data.critical ?? 0 },
+        ], `lab-report-${applied.from}-to-${applied.to}.csv`);
       }
       toast.success('Report exported');
     } catch { toast.error('Export failed'); }
+  };
+
+  const handlePrintReport = async () => {
+    try {
+      const params = { from: applied.from, to: applied.to };
+      const { data } = await api.get('/reports/' + activeTab, { params });
+      const win = window.open('', '_blank', 'width=900,height=700');
+      if (!win) { toast.error('Popup blocked — allow popups and try again'); return; }
+
+      let bodyContent = '';
+      if (activeTab === 'patients') {
+        const genderRows = (data.byGender || []).map((g: any) =>
+          `<tr><td>${capitalize(g.gender)}</td><td style="text-align:right">${g._count}</td><td style="text-align:right">${data.total > 0 ? ((g._count / data.total) * 100).toFixed(1) : 0}%</td></tr>`
+        ).join('');
+        const regRows = (data.byRegistrationType || []).map((r: any) =>
+          `<tr><td>${capitalize(r.registrationType)}</td><td style="text-align:right">${r._count}</td></tr>`
+        ).join('');
+        bodyContent = `
+          <h2>Patient Statistics</h2>
+          <p class="meta">Total Patients: <strong>${data.total ?? 0}</strong></p>
+          <h3>Gender Distribution</h3>
+          <table><thead><tr><th>Gender</th><th>Count</th><th>%</th></tr></thead><tbody>${genderRows || '<tr><td colspan="3">No data</td></tr>'}</tbody></table>
+          <h3>Registration Type</h3>
+          <table><thead><tr><th>Type</th><th>Count</th></tr></thead><tbody>${regRows || '<tr><td colspan="2">No data</td></tr>'}</tbody></table>`;
+      } else if (activeTab === 'revenue') {
+        const rate = data.totalBilled > 0 ? ((data.totalCollected / data.totalBilled) * 100).toFixed(1) : '0';
+        const pct = Math.min(Number(rate), 100);
+        bodyContent = `
+          <h2>Revenue Report</h2>
+          <table>
+            <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+            <tbody>
+              <tr><td>Total Billed</td><td style="text-align:right">${currency(data.totalBilled ?? 0)}</td></tr>
+              <tr><td>Total Collected</td><td style="text-align:right">${currency(data.totalCollected ?? 0)}</td></tr>
+              <tr><td>Outstanding</td><td style="text-align:right">${currency(data.outstanding ?? 0)}</td></tr>
+              <tr><td>Invoice Count</td><td style="text-align:right">${data.invoiceCount ?? 0}</td></tr>
+              <tr><td>Collection Rate</td><td style="text-align:right">${rate}%</td></tr>
+            </tbody>
+          </table>
+          <h3>Collection Progress</h3>
+          <div style="background:#e5e7eb;border-radius:8px;height:16px;overflow:hidden;margin-top:8px">
+            <div style="background:linear-gradient(90deg,#0F766E,#14B8A6);height:100%;width:${pct}%;border-radius:8px"></div>
+          </div>
+          <p style="font-size:12px;color:#6b7280;margin-top:4px">Collected: ${rate}% &nbsp;|&nbsp; Outstanding: ${data.totalBilled > 0 ? ((data.outstanding / data.totalBilled) * 100).toFixed(1) : 0}%</p>`;
+      } else if (activeTab === 'opd') {
+        const days = Math.max(1, Math.ceil((new Date(applied.to).getTime() - new Date(applied.from).getTime()) / 86400000));
+        bodyContent = `
+          <h2>OPD Performance Report</h2>
+          <table>
+            <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+            <tbody>
+              <tr><td>Total Consultations</td><td style="text-align:right">${data.totalConsultations ?? 0}</td></tr>
+              <tr><td>Period (days)</td><td style="text-align:right">${days}</td></tr>
+              <tr><td>Avg Consultations / Day</td><td style="text-align:right">${((data.totalConsultations ?? 0) / days).toFixed(1)}</td></tr>
+            </tbody>
+          </table>`;
+      } else if (activeTab === 'ipd') {
+        const activeRate = data.total > 0 ? ((data.currentlyAdmitted / data.total) * 100).toFixed(1) : '0';
+        bodyContent = `
+          <h2>IPD Analytics Report</h2>
+          <table>
+            <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+            <tbody>
+              <tr><td>Total Admissions</td><td style="text-align:right">${data.total ?? 0}</td></tr>
+              <tr><td>Currently Admitted</td><td style="text-align:right">${data.currentlyAdmitted ?? 0}</td></tr>
+              <tr><td>Discharged</td><td style="text-align:right">${data.discharged ?? 0}</td></tr>
+              <tr><td>Active Admission Rate</td><td style="text-align:right">${activeRate}%</td></tr>
+            </tbody>
+          </table>`;
+      } else if (activeTab === 'lab') {
+        bodyContent = `
+          <h2>Lab Reports</h2>
+          <table>
+            <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+            <tbody>
+              <tr><td>Total Orders</td><td style="text-align:right">${data.totalOrders ?? 0}</td></tr>
+              <tr><td>Completed</td><td style="text-align:right">${data.completed ?? 0}</td></tr>
+              <tr><td>Pending</td><td style="text-align:right">${data.pending ?? 0}</td></tr>
+              <tr><td>Critical Results</td><td style="text-align:right">${data.critical ?? 0}</td></tr>
+            </tbody>
+          </table>`;
+      }
+
+      win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ayphen HMS – Report</title>
+        <style>
+          @media print { body { margin: 0; } .no-print { display: none; } }
+          body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; color: #1f2937; }
+          .header { background: linear-gradient(135deg, #0F766E, #14B8A6); color: white; padding: 24px 32px; }
+          .header h1 { margin: 0 0 4px; font-size: 22px; font-weight: 700; }
+          .header p { margin: 0; font-size: 13px; opacity: 0.85; }
+          .content { padding: 24px 32px; }
+          h2 { font-size: 18px; font-weight: 700; color: #0F766E; margin: 0 0 4px; }
+          h3 { font-size: 14px; font-weight: 600; color: #374151; margin: 20px 0 8px; }
+          .meta { font-size: 13px; color: #6b7280; margin: 0 0 16px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 13px; }
+          th { background: #f9fafb; padding: 8px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; border-bottom: 1px solid #e5e7eb; }
+          td { padding: 8px 12px; border-bottom: 1px solid #f3f4f6; color: #374151; }
+          tr:hover td { background: #f9fafb; }
+          .footer { padding: 12px 32px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #9ca3af; }
+        </style>
+      </head><body>
+        <div class="header">
+          <h1>Ayphen HMS</h1>
+          <p>Date Range: ${applied.from} to ${applied.to}</p>
+        </div>
+        <div class="content">${bodyContent}</div>
+        <div class="footer">Generated on ${new Date().toLocaleString('en-IN')} &nbsp;|&nbsp; Ayphen Hospital Management System</div>
+        <script>window.onload = function() { window.print(); };<\/script>
+      </body></html>`);
+      win.document.close();
+    } catch { toast.error('Failed to generate print report'); }
   };
 
   return (
@@ -133,7 +256,7 @@ export default function ReportsPage() {
       <TopBar title="Reports & Analytics" subtitle="Hospital performance overview" />
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+      <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl w-fit flex-wrap">
         {TABS.map(t => {
           const Icon = t.icon;
           const active = activeTab === t.key;
@@ -154,6 +277,24 @@ export default function ReportsPage() {
         })}
       </div>
 
+      {/* Quick presets */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-gray-400 font-medium">Quick:</span>
+        {[
+          { label: 'Today', fn: () => { const t = new Date().toISOString().slice(0,10); setFrom(t); setTo(t); } },
+          { label: 'This Week', fn: () => { const now = new Date(); const mon = new Date(now); mon.setDate(now.getDate() - now.getDay() + 1); setFrom(mon.toISOString().slice(0,10)); setTo(now.toISOString().slice(0,10)); } },
+          { label: 'This Month', fn: () => { const now = new Date(); setFrom(new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10)); setTo(now.toISOString().slice(0,10)); } },
+          { label: 'Last Month', fn: () => { const now = new Date(); const first = new Date(now.getFullYear(), now.getMonth()-1, 1); const last = new Date(now.getFullYear(), now.getMonth(), 0); setFrom(first.toISOString().slice(0,10)); setTo(last.toISOString().slice(0,10)); } },
+          { label: 'Last 3 Months', fn: () => { const now = new Date(); const t = new Date(now); t.setMonth(t.getMonth()-3); setFrom(t.toISOString().slice(0,10)); setTo(now.toISOString().slice(0,10)); } },
+          { label: 'This Year', fn: () => { const now = new Date(); setFrom(`${now.getFullYear()}-01-01`); setTo(now.toISOString().slice(0,10)); } },
+        ].map(p => (
+          <button key={p.label} onClick={p.fn}
+            className="px-3 py-1 text-xs font-medium rounded-full border border-gray-200 text-gray-600 hover:bg-teal-50 hover:border-teal-300 hover:text-teal-700 transition-colors">
+            {p.label}
+          </button>
+        ))}
+      </div>
+
       {/* Date range filter */}
       <div className="flex items-center gap-3 flex-wrap">
         <CalendarRange size={16} className="text-gray-400" />
@@ -171,16 +312,29 @@ export default function ReportsPage() {
           onChange={e => setTo(e.target.value)}
           className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:ring-2 focus:ring-teal-200 focus:border-teal-400 outline-none"
         />
-        <button onClick={handleExport} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors ml-auto">
-          <Download size={15} /> Export CSV
+        <button
+          onClick={() => setApplied({ from, to })}
+          className="flex items-center gap-2 px-4 py-1.5 text-sm font-semibold text-white rounded-lg transition-colors"
+          style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}
+        >
+          Apply
         </button>
+        <div className="ml-auto flex items-center gap-2">
+          <button onClick={handlePrintReport} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            <Printer size={15} /> Print Report
+          </button>
+          <button onClick={handleExport} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            <Download size={15} /> Export CSV
+          </button>
+        </div>
       </div>
 
       {/* Tab content */}
-      {activeTab === 'patients' && <PatientsTab from={from} to={to} />}
-      {activeTab === 'revenue' && <RevenueTab from={from} to={to} />}
-      {activeTab === 'opd' && <OpdTab from={from} to={to} />}
-      {activeTab === 'ipd' && <IpdTab from={from} to={to} />}
+      {activeTab === 'patients' && <PatientsTab from={applied.from} to={applied.to} />}
+      {activeTab === 'revenue' && <RevenueTab from={applied.from} to={applied.to} />}
+      {activeTab === 'opd' && <OpdTab from={applied.from} to={applied.to} />}
+      {activeTab === 'ipd' && <IpdTab from={applied.from} to={applied.to} />}
+      {activeTab === 'lab' && <LabTab from={applied.from} to={applied.to} />}
     </div>
   );
 }
@@ -630,6 +784,58 @@ function IpdTab({ from, to }: { from: string; to: string }) {
               <span>Active: {data.currentlyAdmitted} of {data.total}</span>
               <span>{occupancyRate}%</span>
             </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ── Lab Reports Tab ───────────────────────────────────── */
+
+function LabTab({ from, to }: { from: string; to: string }) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetch = useCallback(() => {
+    setLoading(true);
+    api.get('/reports/lab', { params: { from, to } })
+      .then(r => setData(r.data))
+      .catch(() => { toast.error('Failed to load lab report'); setData(null); })
+      .finally(() => setLoading(false));
+  }, [from, to]);
+
+  useEffect(() => { fetch(); }, [fetch]);
+
+  return (
+    <div className="space-y-6">
+      {loading ? <SkeletonKpiRow count={4} /> : !data ? (
+        <EmptyState title="No lab data" description="Unable to load lab statistics for the selected period." />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <KpiCard label="Total Orders" value={data.totalOrders ?? 0} icon={Activity} color="#0F766E" />
+            <KpiCard label="Completed" value={data.completed ?? 0} icon={Activity} color="#10B981" />
+            <KpiCard label="Pending" value={data.pending ?? 0} icon={Clock} color="#F59E0B" />
+            <KpiCard label="Critical Results" value={data.critical ?? 0} icon={Activity} color="#EF4444" />
+          </div>
+          <div className="hms-card p-5">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4">Lab Orders by Status</h3>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={[
+                { name: 'Completed', value: data.completed ?? 0 },
+                { name: 'Pending', value: data.pending ?? 0 },
+                { name: 'Critical', value: data.critical ?? 0 },
+              ]}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <RechartsTooltip />
+                <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                  {[0, 1, 2].map(i => <Cell key={i} fill={['#10B981', '#F59E0B', '#EF4444'][i]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </>
       )}
