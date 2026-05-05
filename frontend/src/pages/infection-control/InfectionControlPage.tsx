@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bug, AlertTriangle, Shield, CheckCircle, Trash2 } from 'lucide-react';
+import { Bug, AlertTriangle, Shield, CheckCircle, Trash2, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
@@ -33,9 +33,74 @@ export default function InfectionControlPage() {
   const handleResolve = (id: string) => { setResolveId(id); setOutcome(''); };
   const confirmResolve = async () => { if (!resolveId || !outcome.trim()) return; try { await api.patch(`/infection-control/${resolveId}/resolve`, { outcome }); toast.success('Infection record resolved'); fetchData(); } catch (err) { toast.error('Failed to resolve infection record'); } finally { setResolveId(null); setOutcome(''); } };
 
+  const handlePrintInfectionReport = () => {
+    const datePrinted = new Date().toLocaleString();
+    const rows = records.map(r => `
+      <tr style="background:${r.isHai ? '#fee2e2' : 'transparent'}">
+        <td style="padding:6px 10px;border:1px solid #d1d5db;">${r.recordType}</td>
+        <td style="padding:6px 10px;border:1px solid #d1d5db;">${r.organism || '—'}</td>
+        <td style="padding:6px 10px;border:1px solid #d1d5db;">${r.infectionSite || '—'}</td>
+        <td style="padding:6px 10px;border:1px solid #d1d5db;">${r.isolationType || 'NONE'}</td>
+        <td style="padding:6px 10px;border:1px solid #d1d5db;">${r.isHai ? 'Yes' : 'No'}</td>
+        <td style="padding:6px 10px;border:1px solid #d1d5db;">${r.status}</td>
+      </tr>`).join('');
+
+    const html = `<!DOCTYPE html><html><head><title>Infection Control Surveillance Report</title>
+      <style>body{font-family:Arial,sans-serif;padding:32px;color:#111;}h1{font-size:20px;margin:0;}h2{font-size:15px;margin:4px 0;}table{width:100%;border-collapse:collapse;margin-top:16px;}th{background:#f3f4f6;padding:7px 10px;border:1px solid #d1d5db;text-align:left;font-size:13px;}td{font-size:13px;}@media print{body{padding:16px;}}</style>
+      </head><body>
+      <div style="text-align:center;margin-bottom:24px;">
+        <h1>AYPHEN HMS</h1>
+        <h2>INFECTION CONTROL SURVEILLANCE REPORT</h2>
+        <p style="margin:4px 0;font-size:13px;">Date Printed: ${datePrinted}</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;">
+        <div style="border:1px solid #d1d5db;border-radius:8px;padding:12px;text-align:center;">
+          <div style="font-size:22px;font-weight:700;color:#EF4444;">${dashboard.active || 0}</div>
+          <div style="font-size:12px;color:#6b7280;">Active Cases</div>
+        </div>
+        <div style="border:1px solid #d1d5db;border-radius:8px;padding:12px;text-align:center;">
+          <div style="font-size:22px;font-weight:700;color:#F59E0B;">${dashboard.hai || 0}</div>
+          <div style="font-size:12px;color:#6b7280;">HAI Cases</div>
+        </div>
+        <div style="border:1px solid #d1d5db;border-radius:8px;padding:12px;text-align:center;">
+          <div style="font-size:22px;font-weight:700;color:#10B981;">${dashboard.resolved || 0}</div>
+          <div style="font-size:12px;color:#6b7280;">Resolved</div>
+        </div>
+        <div style="border:1px solid #d1d5db;border-radius:8px;padding:12px;text-align:center;">
+          <div style="font-size:22px;font-weight:700;color:#3B82F6;">${dashboard.total || 0}</div>
+          <div style="font-size:12px;color:#6b7280;">Total</div>
+        </div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Type</th><th>Organism</th><th>Site</th><th>Isolation</th><th>HAI</th><th>Status</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:32px;margin-top:48px;">
+        <div style="border-top:1px solid #374151;padding-top:8px;text-align:center;font-size:13px;">Infection Control Nurse</div>
+        <div style="border-top:1px solid #374151;padding-top:8px;text-align:center;font-size:13px;">Medical Officer</div>
+        <div style="border-top:1px solid #374151;padding-top:8px;text-align:center;font-size:13px;">Date</div>
+      </div>
+      </body></html>`;
+
+    const win = window.open('', '_blank');
+    if (win) { win.document.write(html); win.document.close(); win.print(); }
+  };
+
   return (
     <div className="p-6 space-y-6">
-      <TopBar title="Infection Control" subtitle="Monitor and manage infections" />
+      <TopBar title="Infection Control" subtitle="Monitor and manage infections"
+        actions={
+          <div className="flex gap-2">
+            <button onClick={handlePrintInfectionReport}
+              className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 text-sm font-medium">
+              <Printer size={14} /> Print Report
+            </button>
+            <button onClick={() => setShowForm(!showForm)} className="px-4 py-2 rounded-lg text-white font-medium" style={{ background: 'var(--accent)' }}>+ Report Infection</button>
+          </div>
+        }
+      />
       {loading ? <SkeletonKpiRow count={4} /> : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="Active Cases" value={dashboard.active || 0} icon={Bug} color="#EF4444" />
@@ -44,7 +109,6 @@ export default function InfectionControlPage() {
           <KpiCard label="Total" value={dashboard.total || 0} icon={Shield} color="#3B82F6" />
         </div>
       )}
-      <div className="flex justify-end"><button onClick={() => setShowForm(!showForm)} className="px-4 py-2 rounded-lg text-white font-medium" style={{ background: 'var(--accent)' }}>+ Report Infection</button></div>
       {showForm && (
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">Report Infection</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}

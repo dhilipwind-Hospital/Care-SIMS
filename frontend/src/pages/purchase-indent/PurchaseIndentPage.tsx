@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { FileText, Plus, X, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { FileText, Plus, X, Loader2, CheckCircle, XCircle, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
@@ -35,6 +35,65 @@ export default function PurchaseIndentPage() {
     catch { toast.error('Failed'); }
   };
 
+  const handlePrintIndent = (ind: any) => {
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    const rows = (ind.items || []).map((item: any, i: number) => `
+      <tr>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:center;">${i + 1}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee;">${item.itemName || '—'}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:center;">${item.quantity}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:center;">${item.unit || '—'}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:center;">${item.urgency || '—'}</td>
+      </tr>`).join('');
+    win.document.write(`<!DOCTYPE html><html><head><title>Purchase Indent</title>
+<style>
+  body{font-family:Arial,sans-serif;margin:0;padding:32px;color:#111;}
+  h1{margin:0;font-size:22px;font-weight:900;color:#0F766E;letter-spacing:1px;}
+  h2{margin:4px 0 12px;font-size:16px;font-weight:700;color:#111;}
+  hr{border:none;border-top:2px solid #0F766E;margin:12px 0;}
+  .box{border:1px solid #ccc;border-radius:6px;padding:16px;margin-bottom:16px;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;}
+  .field label{font-size:10px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.5px;}
+  .field span{display:block;font-size:13px;font-weight:600;color:#111;margin-top:2px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  thead th{background:#f3f4f6;padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#666;letter-spacing:.5px;}
+  .sig-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:40px;}
+  .sig-box{border-top:2px solid #111;padding-top:8px;font-size:12px;color:#444;}
+  @media print{body{padding:16px;}}
+</style></head><body>
+<h1>AYPHEN HMS</h1>
+<h2>PURCHASE INDENT</h2>
+<hr/>
+<div class="box">
+  <div class="grid">
+    <div class="field"><label>Indent #</label><span>${ind.indentNumber || '—'}</span></div>
+    <div class="field"><label>Date</label><span>${ind.createdAt ? new Date(ind.createdAt).toLocaleDateString() : '—'}</span></div>
+    <div class="field"><label>Status</label><span>${ind.status || '—'}</span></div>
+    <div class="field"><label>Department</label><span>${ind.department || '—'}</span></div>
+    <div class="field"><label>Requested By</label><span>${ind.requestedBy || '—'}</span></div>
+  </div>
+</div>
+<table>
+  <thead><tr>
+    <th style="width:40px;">#</th>
+    <th>Item Name</th>
+    <th style="width:80px;text-align:center;">Quantity</th>
+    <th style="width:70px;text-align:center;">Unit</th>
+    <th style="width:90px;text-align:center;">Urgency</th>
+  </tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="sig-row">
+  <div class="sig-box">Requested By: ___________</div>
+  <div class="sig-box">Approved By: ___________</div>
+  <div class="sig-box">Date: ___________</div>
+</div>
+<script>window.onload=function(){window.print();}</script>
+</body></html>`);
+    win.document.close();
+  };
+
   return (
     <div className="p-6 space-y-6">
       <TopBar title="Purchase Indents" subtitle="Department requisitions and approvals" actions={<button onClick={() => setShowForm(true)} className="btn-primary flex items-center gap-2"><Plus size={15} /> New Indent</button>} />
@@ -60,6 +119,9 @@ export default function PurchaseIndentPage() {
                 <button onClick={() => handleAction(ind.id, 'approve')} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium flex items-center gap-1"><CheckCircle size={11} /> Approve</button>
                 <button onClick={() => handleAction(ind.id, 'reject')} className="text-xs px-2 py-1 bg-red-50 text-red-700 rounded-md hover:bg-red-100 font-medium flex items-center gap-1"><XCircle size={11} /> Reject</button>
               </>)}
+              {(ind.status === 'APPROVED' || ind.status === 'SUBMITTED') && (
+                <button onClick={() => handlePrintIndent(ind)} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"><Printer size={12}/> Print</button>
+              )}
             </div></td>
           </tr>))}
       </tbody></table></div>

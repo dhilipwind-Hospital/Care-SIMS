@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import toast from 'react-hot-toast';
 import { Activity, RefreshCw, Calendar, Heart, Thermometer, Wind, Droplets } from 'lucide-react';
 import api from '../../lib/api';
@@ -30,6 +31,17 @@ export default function PatientVitalsPage() {
     { key: 'respiratoryRate',label: 'Resp. Rate',    unit: '/min', icon: Wind,         color: '#10B981', bg: '#F0FDF4', fmt: (v: any) => v?.respiratoryRate != null ? String(v.respiratoryRate) : null },
     { key: 'weightKg',      label: 'Weight',         unit: 'kg',   icon: Activity,     color: '#8B5CF6', bg: '#F5F3FF', fmt: (v: any) => v?.weightKg != null ? String(v.weightKg) : null },
   ];
+
+  const chartData = useMemo(() =>
+    vitals.slice().reverse().slice(-15).map(v => ({
+      time: v.recordedAt ? new Date(v.recordedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—',
+      bp: v.systolicBp,
+      hr: v.heartRate,
+      spo2: v.spo2,
+      temp: v.temperatureC,
+    })),
+    [vitals]
+  );
 
   const latest = vitals[0];
 
@@ -88,6 +100,28 @@ export default function PatientVitalsPage() {
               {latest.notes && (
                 <p className="text-xs text-gray-500 italic mt-2 px-1">Note: {latest.notes}</p>
               )}
+            </div>
+          )}
+
+          {/* Vitals Trend Chart */}
+          {chartData.length >= 2 && (
+            <div className="mb-6">
+              <h2 className="text-sm font-bold text-gray-700 mb-3">Vitals Trend</h2>
+              <div className="bg-white rounded-2xl border border-gray-100 p-4">
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Line type="monotone" dataKey="bp" stroke="#EF4444" name="Systolic BP" dot={false} strokeWidth={2} connectNulls />
+                    <Line type="monotone" dataKey="hr" stroke="#EC4899" name="Heart Rate" dot={false} strokeWidth={2} connectNulls />
+                    <Line type="monotone" dataKey="spo2" stroke="#3B82F6" name="SpO₂" dot={false} strokeWidth={2} connectNulls />
+                    <Line type="monotone" dataKey="temp" stroke="#F59E0B" name="Temp (°C)" dot={false} strokeWidth={2} connectNulls />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           )}
 
