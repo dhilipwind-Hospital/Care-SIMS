@@ -10,7 +10,6 @@ import Pagination from '../../components/ui/Pagination';
 import ExportButton from '../../components/ui/ExportButton';
 import api from '../../lib/api';
 import { formatTime, formatDateTime } from '../../lib/format';
-import { useAuth } from '../../context/AuthContext';
 
 const PAGE_SIZE = 20;
 
@@ -23,7 +22,6 @@ const FLAG_OPTIONS = [
 ];
 
 export default function LabPage() {
-  const { user } = useAuth();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');

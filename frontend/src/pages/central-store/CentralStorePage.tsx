@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Package, Plus, X, Loader2, ArrowDownUp, AlertTriangle } from 'lucide-react';
+import { Package, Plus, X, Loader2, ArrowDownUp, AlertTriangle, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import EmptyState from '../../components/ui/EmptyState';
@@ -28,9 +28,63 @@ export default function CentralStorePage() {
   const handleAddItem = async () => { if (!form.itemCode.trim() || !form.name.trim()) { toast.error('Code and name required'); return; } setSubmitting(true); try { await api.post('/central-store/items', { ...form, reorderLevel: Number(form.reorderLevel) }); toast.success('Item added'); setShowForm(false); fetchData(); } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); } finally { setSubmitting(false); } };
   const handleTx = async () => { if (!txForm.itemId || !txForm.quantity) { toast.error('Select item and quantity'); return; } setSubmitting(true); try { await api.post('/central-store/transactions', { ...txForm, quantity: Number(txForm.quantity) }); toast.success('Transaction recorded'); setShowTxForm(false); fetchData(); } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); } finally { setSubmitting(false); } };
 
+  const handlePrintStockReport = () => {
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    const dateStr = new Date().toLocaleString('en-IN', { dateStyle: 'long', timeStyle: 'short' });
+    const belowReorder = items.filter(it => it.currentStock <= it.reorderLevel).length;
+    const rows = items.map(it => {
+      const isLow = it.currentStock <= it.reorderLevel;
+      const isOut = it.currentStock === 0;
+      const statusColor = isOut ? '#dc2626' : isLow ? '#d97706' : '#16a34a';
+      const statusBg = isOut ? '#fee2e2' : isLow ? '#fef3c7' : '#dcfce7';
+      const statusLabel = isOut ? 'OUT OF STOCK' : isLow ? 'LOW' : 'OK';
+      return `<tr style="border-bottom:1px solid #e5e7eb;">
+        <td style="padding:8px 12px;font-size:13px;">${it.name || '—'}</td>
+        <td style="padding:8px 12px;font-size:12px;color:#6b7280;">${it.category || '—'}</td>
+        <td style="padding:8px 12px;font-size:13px;font-weight:700;color:${isLow ? '#dc2626' : '#111827'};">${it.currentStock}</td>
+        <td style="padding:8px 12px;font-size:12px;">${it.unit || '—'}</td>
+        <td style="padding:8px 12px;font-size:13px;">${it.reorderLevel}</td>
+        <td style="padding:8px 12px;"><span style="display:inline-block;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:700;background:${statusBg};color:${statusColor};">${statusLabel}</span></td>
+      </tr>`;
+    }).join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Central Store Stock Report</title></head><body style="font-family:Arial,sans-serif;margin:0;padding:32px;color:#1f2937;">
+<div style="max-width:740px;margin:0 auto;">
+  <div style="text-align:center;margin-bottom:24px;">
+    <h1 style="margin:0;font-size:26px;color:#0F766E;letter-spacing:2px;">AYPHEN HMS</h1>
+    <h2 style="margin:8px 0 0;font-size:16px;color:#374151;font-weight:600;text-transform:uppercase;letter-spacing:1px;">CENTRAL STORE STOCK REPORT</h2>
+    <hr style="border:none;border-top:2px solid #0F766E;margin:16px 0;" />
+    <p style="margin:0;font-size:12px;color:#6b7280;">Date Printed: ${dateStr}</p>
+  </div>
+  <div style="margin-bottom:16px;display:flex;gap:24px;">
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 20px;text-align:center;"><div style="font-size:22px;font-weight:700;color:#16a34a;">${items.length}</div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;">Total Items</div></div>
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 20px;text-align:center;"><div style="font-size:22px;font-weight:700;color:#dc2626;">${belowReorder}</div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;">Below Reorder Level</div></div>
+  </div>
+  <table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+    <thead><tr style="background:#f9fafb;">
+      <th style="padding:10px 12px;text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;">Item Name</th>
+      <th style="padding:10px 12px;text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;">Category</th>
+      <th style="padding:10px 12px;text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;">Current Stock</th>
+      <th style="padding:10px 12px;text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;">Unit</th>
+      <th style="padding:10px 12px;text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;">Reorder Level</th>
+      <th style="padding:10px 12px;text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;">Status</th>
+    </tr></thead>
+    <tbody>${rows || '<tr><td colspan="6" style="text-align:center;padding:20px;color:#9ca3af;">No items found</td></tr>'}</tbody>
+  </table>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:48px;">
+    <div style="text-align:center;"><div style="border-top:1px solid #374151;padding-top:8px;font-size:12px;color:#6b7280;">Store Manager</div></div>
+    <div style="text-align:center;"><div style="border-top:1px solid #374151;padding-top:8px;font-size:12px;color:#6b7280;">Purchase Officer</div></div>
+    <div style="text-align:center;"><div style="border-top:1px solid #374151;padding-top:8px;font-size:12px;color:#6b7280;">Date</div></div>
+  </div>
+</div>
+<script>window.onload=function(){window.print();}<\/script></body></html>`;
+    win.document.write(html);
+    win.document.close();
+  };
+
   return (
     <div className="p-6 space-y-6">
-      <TopBar title="Central Store" subtitle="General store inventory management" />
+      <TopBar title="Central Store" subtitle="General store inventory management" actions={<button onClick={handlePrintStockReport} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"><Printer size={15} /> Print Report</button>} />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Items" value={dashboard.totalItems || 0} icon={Package} color="#0F766E" />
         <KpiCard label="Low Stock" value={dashboard.lowStock || 0} icon={AlertTriangle} color="#F59E0B" />

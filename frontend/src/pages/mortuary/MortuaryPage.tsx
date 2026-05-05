@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Skull, Clock, CheckCircle, FileText, Pencil, Trash2 } from 'lucide-react';
+import { Skull, Clock, CheckCircle, FileText, Pencil, Trash2, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -63,6 +63,47 @@ export default function MortuaryPage() {
   const handleRelease = (id: string) => { setReleaseId(id); setReleaseForm({ releasedTo: '', releasedToRelation: '', releasedToId: '' }); };
   const confirmRelease = async () => { if (!releaseId || !releaseForm.releasedTo.trim()) return; try { await api.patch(`/mortuary/${releaseId}/release`, releaseForm); toast.success('Body released successfully'); fetchData(); } catch (err) { toast.error('Failed to release record'); } finally { setReleaseId(null); setReleaseForm({ releasedTo: '', releasedToRelation: '', releasedToId: '' }); } };
 
+  const handlePrintDeathCertificate = (r: any) => {
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Death Certificate</title></head><body style="font-family:Arial,sans-serif;margin:0;padding:32px;color:#111;">
+<div style="text-align:center;margin-bottom:8px;">
+  <h1 style="color:#0F766E;font-size:26px;margin:0;">AYPHEN HMS</h1>
+  <h2 style="font-size:20px;margin:6px 0 4px;">DEATH CERTIFICATE</h2>
+  <hr style="border:none;border-top:2px solid #0F766E;margin:8px 0;" />
+</div>
+<div style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:6px;padding:10px 16px;text-align:center;font-weight:bold;color:#991B1B;margin-bottom:20px;font-size:13px;">
+  OFFICIAL DEATH CERTIFICATE — FOR LEGAL PURPOSES ONLY
+</div>
+<div style="border:1px solid #D1D5DB;border-radius:8px;padding:20px;margin-bottom:20px;">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;">
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Certificate #</span><div style="font-weight:600;margin-top:2px;">${r.deathCertificateNo || r.recordNumber || '—'}</div></div>
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Date of Death</span><div style="font-weight:600;margin-top:2px;">${r.dateOfDeath ? new Date(r.dateOfDeath).toLocaleDateString() : '—'}</div></div>
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Time of Death</span><div style="font-weight:600;margin-top:2px;">${r.timeOfDeath || '—'}</div></div>
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Patient Name</span><div style="font-weight:600;margin-top:2px;">${r.deceasedName || r.patientId || '—'}</div></div>
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Ward / Location</span><div style="font-weight:600;margin-top:2px;">${r.ward || r.location || '—'}</div></div>
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Cause of Death</span><div style="font-weight:600;margin-top:2px;">${r.causeOfDeath || '—'}</div></div>
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Secondary Cause</span><div style="font-weight:600;margin-top:2px;">${r.secondaryCause || '—'}</div></div>
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Doctor Name</span><div style="font-weight:600;margin-top:2px;">${r.doctorName || r.attendingDoctor || '—'}</div></div>
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Doctor Reg #</span><div style="font-weight:600;margin-top:2px;">${r.doctorRegNo || '—'}</div></div>
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Manner of Death</span><div style="font-weight:600;margin-top:2px;">${r.mannerOfDeath || '—'}</div></div>
+  </div>
+</div>
+${r.notes ? `<div style="margin-bottom:20px;"><div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">Notes</div><div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:6px;padding:12px;font-size:13px;">${r.notes}</div></div>` : ''}
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:40px;">
+  <div style="text-align:center;"><div style="border-top:1px solid #374151;padding-top:8px;font-size:12px;color:#374151;">Certifying Doctor</div></div>
+  <div style="text-align:center;"><div style="border-top:1px solid #374151;padding-top:8px;font-size:12px;color:#374151;">Medical Superintendent</div></div>
+  <div style="text-align:center;"><div style="border-top:1px solid #374151;padding-top:8px;font-size:12px;color:#374151;">Registrar</div></div>
+</div>
+<div style="margin-top:28px;font-size:11px;color:#6B7280;text-align:center;border-top:1px solid #E5E7EB;padding-top:12px;">
+  This certificate is issued under the Registration of Births and Deaths Act.
+</div>
+<script>window.onload=function(){window.print();}<\/script>
+</body></html>`;
+    win.document.write(html);
+    win.document.close();
+  };
+
   return (
     <div className="p-6 space-y-6">
       <TopBar title="Mortuary" subtitle="Manage mortuary records and releases" />
@@ -103,7 +144,7 @@ export default function MortuaryPage() {
           <td className="p-3">{new Date(r.dateOfDeath).toLocaleDateString()}</td>
           <td className="p-3 max-w-[120px] truncate">{r.causeOfDeath || '—'}</td>
           <td className="p-3"><StatusBadge status={r.status} /></td>
-          <td className="p-3 flex gap-1">{r.status !== 'RELEASED' && <button onClick={() => editRecord(r)} className="text-xs p-1 text-gray-500 hover:text-teal-700 rounded-md hover:bg-gray-100" title="Edit"><Pencil size={14} /></button>}{r.status === 'IN_CUSTODY' && <button onClick={() => handleRelease(r.id)} className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 font-medium">Release</button>}<button onClick={() => handleDelete(r.id)} className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600" title="Delete record"><Trash2 size={14} /></button></td>
+          <td className="p-3 flex gap-1">{r.status !== 'RELEASED' && <button onClick={() => editRecord(r)} className="text-xs p-1 text-gray-500 hover:text-teal-700 rounded-md hover:bg-gray-100" title="Edit"><Pencil size={14} /></button>}{r.status === 'IN_CUSTODY' && <button onClick={() => handleRelease(r.id)} className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 font-medium">Release</button>}<button onClick={() => handlePrintDeathCertificate(r)} className="p-1 rounded hover:bg-purple-50 text-purple-500 hover:text-purple-700" title="Print Death Certificate"><Printer size={14} /></button><button onClick={() => handleDelete(r.id)} className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600" title="Delete record"><Trash2 size={14} /></button></td>
         </tr>
       ))}</tbody></table></div>
       {releaseId && (

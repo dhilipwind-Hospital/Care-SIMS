@@ -33,7 +33,6 @@ export default function WasteManagementPage() {
   const handleSubmit = async () => { if (!form.weightKg) { toast.error('Weight required'); return; } setSubmitting(true); try { await api.post('/waste-management', { ...form, weightKg: Number(form.weightKg) }); toast.success('Collection recorded'); setShowForm(false); fetchData(); } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); } finally { setSubmitting(false); } };
 
   const handlePrintManifest = (r: any) => {
-    const cfg = WASTE_COLORS[r.wasteCategory] || WASTE_COLORS.BLACK;
     const categoryColorStyle = r.wasteCategory === 'YELLOW'
       ? 'background:#FACC15;color:#111;'
       : r.wasteCategory === 'RED'

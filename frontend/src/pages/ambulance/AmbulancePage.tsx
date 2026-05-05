@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Ambulance, Truck, MapPin, CheckCircle } from 'lucide-react';
+import { Ambulance, Truck, MapPin, CheckCircle, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -38,6 +38,54 @@ export default function AmbulancePage() {
   const arriveTrip = async (id: string) => { try { await api.patch(`/ambulance/trips/${id}/arrive`); toast.success('Arrival recorded'); fetchData(); } catch (err) { toast.error('Failed to update trip status'); } };
   const departTrip = async (id: string) => { try { await api.patch(`/ambulance/trips/${id}/depart`); toast.success('Departure recorded'); fetchData(); } catch (err) { toast.error('Failed to update trip status'); } };
   const completeTrip = async (id: string) => { try { await api.patch(`/ambulance/trips/${id}/complete`); toast.success('Trip completed'); fetchData(); } catch (err) { toast.error('Failed to complete trip'); } };
+
+  const handlePrintDispatchReport = (r: any) => {
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    const dispatchId = r.id ? String(r.id).slice(0, 8) : '—';
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ambulance Dispatch Report</title></head><body style="font-family:Arial,sans-serif;margin:0;padding:32px;color:#111;">
+<div style="text-align:center;margin-bottom:8px;">
+  <h1 style="color:#0F766E;font-size:26px;margin:0;">AYPHEN HMS</h1>
+  <h2 style="font-size:20px;margin:6px 0 4px;">AMBULANCE DISPATCH REPORT</h2>
+  <hr style="border:none;border-top:2px solid #0F766E;margin:8px 0;" />
+</div>
+<div style="border:1px solid #D1D5DB;border-radius:8px;padding:20px;margin-bottom:20px;">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;">
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Dispatch # / ID</span><div style="font-weight:600;margin-top:2px;">${r.tripNumber || dispatchId}</div></div>
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Call Time</span><div style="font-weight:600;margin-top:2px;">${r.callTime ? new Date(r.callTime).toLocaleString() : r.createdAt ? new Date(r.createdAt).toLocaleString() : '—'}</div></div>
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Dispatch Time</span><div style="font-weight:600;margin-top:2px;">${r.dispatchTime ? new Date(r.dispatchTime).toLocaleString() : r.updatedAt ? new Date(r.updatedAt).toLocaleString() : '—'}</div></div>
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Vehicle Number</span><div style="font-weight:600;margin-top:2px;">${r.vehicleNumber || r.ambulance?.vehicleNumber || '—'}</div></div>
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Driver</span><div style="font-weight:600;margin-top:2px;">${r.driverName || r.ambulance?.driverName || '—'}</div></div>
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Paramedic</span><div style="font-weight:600;margin-top:2px;">${r.paramedicName || r.paramedic || '—'}</div></div>
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Pickup Location</span><div style="font-weight:600;margin-top:2px;">${r.pickupAddress || '—'}</div></div>
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Destination</span><div style="font-weight:600;margin-top:2px;">${r.dropAddress || r.destination || '—'}</div></div>
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Patient Name</span><div style="font-weight:600;margin-top:2px;">${r.patientName || '—'}</div></div>
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Priority / Type</span><div style="font-weight:600;margin-top:2px;">${r.tripType || '—'}</div></div>
+  </div>
+</div>
+<div style="border:1px solid #D1D5DB;border-radius:8px;padding:20px;margin-bottom:20px;">
+  <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.05em;">Trip Details</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px 24px;">
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Departure</span><div style="font-weight:600;margin-top:2px;">${r.departureTime ? new Date(r.departureTime).toLocaleString() : '—'}</div></div>
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Arrival</span><div style="font-weight:600;margin-top:2px;">${r.arrivalTime ? new Date(r.arrivalTime).toLocaleString() : '—'}</div></div>
+    <div><span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Total Distance (km)</span><div style="font-weight:600;margin-top:2px;">${r.distanceKm != null ? r.distanceKm : '—'}</div></div>
+  </div>
+</div>
+<div style="margin-bottom:20px;">
+  <span style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Status</span>
+  <div style="display:inline-block;margin-top:6px;padding:4px 12px;border-radius:9999px;background:#D1FAE5;color:#065F46;font-weight:600;font-size:12px;">${r.status || '—'}</div>
+</div>
+${r.notes ? `<div style="margin-bottom:20px;"><div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">Notes</div><div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:6px;padding:12px;font-size:13px;">${r.notes}</div></div>` : ''}
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:40px;">
+  <div style="text-align:center;"><div style="border-top:1px solid #374151;padding-top:8px;font-size:12px;color:#374151;">Dispatcher</div></div>
+  <div style="text-align:center;"><div style="border-top:1px solid #374151;padding-top:8px;font-size:12px;color:#374151;">Driver</div></div>
+  <div style="text-align:center;"><div style="border-top:1px solid #374151;padding-top:8px;font-size:12px;color:#374151;">Supervisor</div></div>
+</div>
+<script>window.onload=function(){window.print();}<\/script>
+</body></html>`;
+    win.document.write(html);
+    win.document.close();
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -100,7 +148,7 @@ export default function AmbulancePage() {
             <td className="p-3 max-w-[120px] truncate">{t.pickupAddress || '—'}</td>
             <td className="p-3"><StatusBadge status={t.status} /></td>
             <td className="p-3">
-              <div className="flex gap-1.5">
+              <div className="flex gap-1.5 items-center">
                 {t.status === 'DISPATCHED' && (
                   <button onClick={() => arriveTrip(t.id)} className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 font-medium">Arrived</button>
                 )}
@@ -110,6 +158,7 @@ export default function AmbulancePage() {
                 {t.status === 'DEPARTED' && (
                   <button onClick={() => completeTrip(t.id)} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium">Complete</button>
                 )}
+                <button onClick={() => handlePrintDispatchReport(t)} className="p-1 rounded hover:bg-purple-50 text-purple-500 hover:text-purple-700" title="Print Dispatch Report"><Printer size={14} /></button>
               </div>
             </td>
           </tr>

@@ -219,7 +219,7 @@ export default function RadiologyPage() {
     if (!w) return;
 
     const resultsHtml = order.results && order.results.length > 0
-      ? order.results.map((r: any, idx: number) => `
+      ? order.results.map((r: any) => `
           <div style="border:1px solid ${r.isCritical ? '#fca5a5' : '#e5e7eb'};background:${r.isCritical ? '#fef2f2' : '#f9fafb'};border-radius:6px;padding:16px;margin-bottom:16px;">
             ${r.isCritical ? `<div style="color:#dc2626;font-weight:700;font-size:13px;margin-bottom:10px;padding:8px 12px;background:#fee2e2;border-radius:4px;border:1px solid #fca5a5;">&#9888; CRITICAL FINDING &mdash; Notify physician immediately</div>` : ''}
             ${r.findings ? `<div style="margin-bottom:10px;"><div style="font-weight:600;color:#374151;font-size:12px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Findings</div><div style="color:#111827;white-space:pre-wrap;font-size:14px;">${r.findings}</div></div>` : ''}

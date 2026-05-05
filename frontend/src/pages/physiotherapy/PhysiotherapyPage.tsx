@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Dumbbell, Clock, Activity, CheckCircle, Eye, X, Trash2 } from 'lucide-react';
+import { Dumbbell, Clock, Activity, CheckCircle, Eye, X, Trash2, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -43,6 +43,37 @@ export default function PhysiotherapyPage() {
       const { data } = await api.get(`/physiotherapy/orders/${orderId}/sessions`);
       setSessions(data.data || data || []);
     } catch (err) { console.error('Failed to load sessions:', err); toast.error('Failed to load sessions'); } finally { setSessionsLoading(false); }
+  };
+
+  const handlePrintTherapyPlan = (r: any) => {
+    const modalities = Array.isArray(r.modalities) ? r.modalities.join(', ') : (r.modalities || r.exercises || '—');
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Physiotherapy Treatment Plan</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;font-size:13px;color:#1a1a1a;padding:32px;}h1{color:#0F766E;font-size:22px;font-weight:700;letter-spacing:1px;}h2{color:#0F766E;font-size:15px;font-weight:600;margin-top:4px;letter-spacing:0.5px;}hr{border:none;border-top:2px solid #0F766E;margin:14px 0 20px;}h3{font-size:13px;font-weight:700;color:#0F766E;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.4px;}.box{border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:16px;background:#fafafa;}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;}.field{margin-bottom:4px;}.label{font-size:11px;color:#666;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;}.value{font-size:13px;color:#111;margin-top:2px;}.full{grid-column:1/-1;}.sig-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:40px;}.sig-box{border-top:1px solid #333;padding-top:6px;font-size:11px;color:#555;text-align:center;}@media print{body{padding:20px;}}</style></head><body>
+    <h1>AYPHEN HMS</h1><h2>PHYSIOTHERAPY TREATMENT PLAN</h2><hr/>
+    <div class="box"><div class="grid">
+      <div class="field"><div class="label">Order #</div><div class="value">${r.orderNumber || r.id || '—'}</div></div>
+      <div class="field"><div class="label">Date</div><div class="value">${r.startDate ? new Date(r.startDate).toLocaleDateString() : new Date().toLocaleDateString()}</div></div>
+      <div class="field"><div class="label">Patient</div><div class="value">${r.patientId || '—'}</div></div>
+      <div class="field"><div class="label">Referring Doctor</div><div class="value">${r.doctorId || '—'}</div></div>
+      <div class="field full"><div class="label">Diagnosis</div><div class="value">${r.diagnosis || '—'}</div></div>
+      <div class="field full"><div class="label">Chief Complaint</div><div class="value">${r.chiefComplaint || r.complaint || '—'}</div></div>
+    </div></div>
+    <div class="box"><h3>Treatment Details</h3><div class="grid">
+      <div class="field"><div class="label">Sessions Prescribed</div><div class="value">${r.totalSessions || '—'}</div></div>
+      <div class="field"><div class="label">Sessions Completed</div><div class="value">${r.completedSessions ?? '0'}</div></div>
+      <div class="field"><div class="label">Frequency per Week</div><div class="value">${r.frequency || '—'}</div></div>
+      <div class="field"><div class="label">Status</div><div class="value">${r.status || '—'}</div></div>
+      <div class="field full"><div class="label">Modalities / Exercises</div><div class="value">${modalities}</div></div>
+    </div></div>
+    <div class="box"><h3>Goals</h3><p style="font-size:13px;color:#111;">${r.goals || r.treatmentGoals || '—'}</p></div>
+    <div class="box"><h3>Notes</h3><p style="font-size:13px;color:#111;">${r.notes || r.treatmentPlan || '—'}</p></div>
+    <div class="sig-grid">
+      <div class="sig-box">Physiotherapist</div>
+      <div class="sig-box">Referring Doctor</div>
+      <div class="sig-box">Date</div>
+    </div>
+    <script>window.onload=function(){window.print();}<\/script></body></html>`;
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (win) { win.document.write(html); win.document.close(); }
   };
 
   const active = orders.filter(o => o.status === 'ACTIVE').length;
@@ -99,6 +130,7 @@ export default function PhysiotherapyPage() {
               {o.status === 'ACTIVE' && o.completedSessions < o.totalSessions && (
                 <button onClick={() => addSession(o.id)} className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">+ Session</button>
               )}
+              <button onClick={() => handlePrintTherapyPlan(o)} className="p-1 rounded hover:bg-purple-50 text-purple-400 hover:text-purple-600" title="Print treatment plan"><Printer size={14} /></button>
               <button onClick={() => handleDelete(o.id)} className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600" title="Delete order"><Trash2 size={14} /></button>
             </div>
           </td>

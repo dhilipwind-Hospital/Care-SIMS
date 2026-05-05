@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Building2, Plus, X, Loader2 } from 'lucide-react';
+import { Building2, Plus, X, Loader2, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import EmptyState from '../../components/ui/EmptyState';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -19,6 +19,45 @@ export default function VendorPage() {
 
   const fetchData = async () => { setLoading(true); try { const { data } = await api.get('/vendors', { params: { page, limit: 20 } }); setVendors(data.data || []); setTotal(data.meta?.total || 0); } catch { toast.error('Failed to load vendors'); } finally { setLoading(false); } };
   useEffect(() => { fetchData(); }, [page]);
+
+  const handlePrintVendorProfile = (v: any) => {
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    const vendorCode = (v.id || '').toString().slice(0, 8).toUpperCase();
+    const statusColor = v.status === 'ACTIVE' ? '#16a34a' : v.status === 'INACTIVE' ? '#dc2626' : '#6b7280';
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Vendor Profile - ${v.name}</title></head><body style="font-family:Arial,sans-serif;margin:0;padding:32px;color:#1f2937;">
+<div style="max-width:740px;margin:0 auto;">
+  <div style="text-align:center;margin-bottom:24px;">
+    <h1 style="margin:0;font-size:26px;color:#0F766E;letter-spacing:2px;">AYPHEN HMS</h1>
+    <h2 style="margin:8px 0 0;font-size:16px;color:#374151;font-weight:600;text-transform:uppercase;letter-spacing:1px;">VENDOR PROFILE / PURCHASE ORDER</h2>
+    <hr style="border:none;border-top:2px solid #0F766E;margin:16px 0;" />
+  </div>
+  <div style="border:1px solid #e5e7eb;border-radius:8px;padding:24px;margin-bottom:20px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div><span style="font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;">Vendor Name</span><p style="margin:4px 0 0;font-size:14px;font-weight:700;color:#111827;">${v.name || '—'}</p></div>
+      <div><span style="font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;">Vendor Code / ID</span><p style="margin:4px 0 0;font-size:14px;font-family:monospace;color:#0F766E;">${vendorCode}</p></div>
+      <div><span style="font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;">Contact Person</span><p style="margin:4px 0 0;font-size:14px;color:#374151;">${v.contactPerson || '—'}</p></div>
+      <div><span style="font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;">Phone</span><p style="margin:4px 0 0;font-size:14px;color:#374151;">${v.phone || '—'}</p></div>
+      <div><span style="font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;">Email</span><p style="margin:4px 0 0;font-size:14px;color:#374151;">${v.email || '—'}</p></div>
+      <div><span style="font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;">Address</span><p style="margin:4px 0 0;font-size:14px;color:#374151;">${v.address || '—'}</p></div>
+      <div><span style="font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;">Category / Type</span><p style="margin:4px 0 0;font-size:14px;color:#374151;">${v.category || '—'}</p></div>
+      <div><span style="font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;">GST Number</span><p style="margin:4px 0 0;font-size:14px;font-family:monospace;color:#374151;">${v.gstNumber || '—'}</p></div>
+      <div><span style="font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;">Payment Terms</span><p style="margin:4px 0 0;font-size:14px;color:#374151;">${v.paymentTerms || '—'}</p></div>
+      <div><span style="font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;">Bank Details</span><p style="margin:4px 0 0;font-size:14px;color:#374151;">${v.bankDetails || '—'}</p></div>
+    </div>
+    ${v.status ? `<div style="margin-top:16px;"><span style="font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;">Status</span><p style="margin:4px 0 0;"><span style="display:inline-block;padding:3px 12px;border-radius:12px;font-size:12px;font-weight:700;background:${statusColor}22;color:${statusColor};border:1px solid ${statusColor}66;">${v.status}</span></p></div>` : ''}
+    ${v.notes ? `<div style="margin-top:16px;"><span style="font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600;">Notes</span><p style="margin:4px 0 0;font-size:13px;color:#374151;background:#f9fafb;padding:10px;border-radius:6px;border:1px solid #e5e7eb;">${v.notes}</p></div>` : ''}
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:48px;">
+    <div style="text-align:center;"><div style="border-top:1px solid #374151;padding-top:8px;font-size:12px;color:#6b7280;">Purchase Officer</div></div>
+    <div style="text-align:center;"><div style="border-top:1px solid #374151;padding-top:8px;font-size:12px;color:#6b7280;">Finance</div></div>
+    <div style="text-align:center;"><div style="border-top:1px solid #374151;padding-top:8px;font-size:12px;color:#6b7280;">Date</div></div>
+  </div>
+</div>
+<script>window.onload=function(){window.print();}<\/script></body></html>`;
+    win.document.write(html);
+    win.document.close();
+  };
 
   const handleSubmit = async () => {
     if (!form.name.trim()) { toast.error('Vendor name required'); return; }
@@ -44,7 +83,7 @@ export default function VendorPage() {
               <td className="px-4 py-3"><StatusBadge status={v.category} /></td>
               <td className="px-4 py-3 text-xs font-mono text-gray-500">{v.gstNumber || '—'}</td>
               <td className="px-4 py-3">{v.rating ? <span className="text-amber-500">{'★'.repeat(v.rating)}{'☆'.repeat(5 - v.rating)}</span> : '—'}</td>
-              <td className="px-4 py-3"><button className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">View</button></td>
+              <td className="px-4 py-3 flex items-center gap-2"><button className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">View</button><button onClick={() => handlePrintVendorProfile(v)} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"><Printer size={12} /> Print</button></td>
             </tr>))}
         </tbody></table></div>
         <Pagination page={page} totalPages={Math.ceil(total / 20)} onPageChange={setPage} totalItems={total} pageSize={20} />
