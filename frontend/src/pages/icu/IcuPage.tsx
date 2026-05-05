@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Monitor, Bed, AlertTriangle, CheckCircle, Activity, History, X, FileText, Loader2, UserPlus, ArrowRightLeft } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -144,6 +145,17 @@ export default function IcuPage() {
       setHistoryBed(null);
     } finally { setHistoryLoading(false); }
   };
+
+  // Auto-refresh monitoring history every 30s when history modal is open
+  useEffect(() => {
+    if (!historyBed) return;
+    const interval = setInterval(() => {
+      api.get(`/icu/monitoring/admission/${historyBed.admissionId}`)
+        .then(r => setHistoryRecords(r.data.data || r.data || []))
+        .catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [historyBed]);
 
   // Rounds handlers
   const openRounds = async (bed: any) => {
@@ -507,6 +519,35 @@ export default function IcuPage() {
               </div>
             ) : (
               <div className="p-6 space-y-4">
+                {(() => {
+                  const chartData = historyRecords.slice(-20).map((r: any) => ({
+                    time: r.recordedAt ? new Date(r.recordedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—',
+                    hr: r.heartRate || null,
+                    spo2: r.spo2 || null,
+                    sbp: r.systolicBp || null,
+                    temp: r.temperatureC ? Number(r.temperatureC) : null,
+                  }));
+                  return chartData.length >= 2 ? (
+                    <div className="mb-6">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                        <Activity size={16} className="text-teal-600" /> Vitals Trend
+                      </h4>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                          <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#9ca3af' }} />
+                          <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} />
+                          <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                          <Legend wrapperStyle={{ fontSize: 11 }} />
+                          <Line type="monotone" dataKey="hr" name="Heart Rate" stroke="#ef4444" strokeWidth={2} dot={false} connectNulls />
+                          <Line type="monotone" dataKey="spo2" name="SpO2 %" stroke="#3b82f6" strokeWidth={2} dot={false} connectNulls />
+                          <Line type="monotone" dataKey="sbp" name="Systolic BP" stroke="#f97316" strokeWidth={2} dot={false} connectNulls />
+                          <Line type="monotone" dataKey="temp" name="Temp °C" stroke="#10b981" strokeWidth={2} dot={false} connectNulls />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : null;
+                })()}
                 {historyRecords.map((r, i) => (
                   <div key={r.id || i} className="bg-gray-50 rounded-xl p-4 border-l-4 border-l-teal-500">
                     <div className="flex items-center justify-between mb-3">

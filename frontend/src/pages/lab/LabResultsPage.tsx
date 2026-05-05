@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { FlaskConical, CheckCircle, AlertTriangle, Clock, Search } from 'lucide-react';
+import { FlaskConical, CheckCircle, AlertTriangle, Clock, Search, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -32,6 +32,107 @@ export default function LabResultsPage() {
     L: 'text-amber-600 font-semibold',
     HH: 'text-red-600 font-bold',
     LL: 'text-red-600 font-bold',
+  };
+
+  const handlePrintLabReport = (order: any) => {
+    const printWin = window.open('', '_blank', 'width=900,height=700');
+    if (!printWin) return;
+    const results = order.results || order.testResults || [];
+    const patientName = order.patient
+      ? `${order.patient.firstName || ''} ${order.patient.lastName || ''}`.trim()
+      : order.patientName || '—';
+    const flagColorPrint: Record<string, string> = {
+      HH: 'color:#dc2626;font-weight:bold',
+      LL: 'color:#dc2626;font-weight:bold',
+      H: 'color:#d97706;font-weight:600',
+      L: 'color:#d97706;font-weight:600',
+      NORMAL: 'color:#111',
+    };
+    const html = `<!DOCTYPE html><html><head><title>Lab Report</title>
+    <style>
+      * { margin:0; padding:0; box-sizing:border-box; }
+      body { font-family: Arial, sans-serif; font-size: 13px; color: #111; padding: 32px; }
+      .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom: 3px double #0F766E; padding-bottom:16px; margin-bottom:20px; }
+      .hospital-name { font-size:22px; font-weight:900; color:#0F766E; }
+      .hospital-sub { font-size:11px; color:#666; margin-top:2px; }
+      .report-meta { text-align:right; }
+      .report-title { font-size:18px; font-weight:800; letter-spacing:2px; color:#333; }
+      .report-num { font-size:13px; color:#0F766E; font-weight:700; margin-top:4px; }
+      .report-date { font-size:11px; color:#666; margin-top:2px; }
+      .patient-box { background:#f0fdfa; border:1px solid #ccfbf1; border-radius:6px; padding:12px 16px; margin-bottom:20px; display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+      .field label { font-size:10px; color:#6b7280; text-transform:uppercase; font-weight:600; display:block; }
+      .field p { font-size:13px; font-weight:500; }
+      .section-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:#0F766E; margin-bottom:8px; margin-top:16px; }
+      table { width:100%; border-collapse:collapse; margin-bottom:16px; }
+      th { background:#f0fdfa; color:#0F766E; font-size:11px; font-weight:700; text-transform:uppercase; padding:8px 10px; text-align:left; border:1px solid #e5e7eb; }
+      td { padding:8px 10px; border:1px solid #e5e7eb; font-size:12px; }
+      tr:nth-child(even) td { background:#fafafa; }
+      .critical-row td { background:#fff1f2 !important; }
+      .notes-box { background:#fafafa; border:1px solid #e5e7eb; border-radius:6px; padding:12px 16px; margin-bottom:16px; font-size:12px; }
+      .footer { display:grid; grid-template-columns:1fr 1fr; gap:32px; margin-top:40px; padding-top:16px; border-top:1px solid #e5e7eb; }
+      .sig-box { text-align:center; }
+      .sig-line { border-top:1px solid #333; margin-top:40px; margin-bottom:6px; }
+      .sig-label { font-size:11px; color:#555; }
+      .status-badge { display:inline-block; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+      @media print { body { padding:20px; } }
+    </style></head><body>
+    <div class="header">
+      <div>
+        <div class="hospital-name">AYPHEN HMS</div>
+        <div class="hospital-sub">Laboratory Services</div>
+      </div>
+      <div class="report-meta">
+        <div class="report-title">LAB REPORT</div>
+        <div class="report-num">${order.orderNumber || order.id?.slice(0,8) || '—'}</div>
+        <div class="report-date">Reported: ${order.reportedAt ? new Date(order.reportedAt).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })}</div>
+        <span class="status-badge" style="background:${order.status === 'VALIDATED' ? '#dcfce7' : '#dbeafe'};color:${order.status === 'VALIDATED' ? '#166534' : '#1e40af'}">${order.status || '—'}</span>
+      </div>
+    </div>
+
+    <div class="patient-box">
+      <div class="field"><label>Patient Name</label><p>${patientName}</p></div>
+      <div class="field"><label>Patient ID</label><p>${order.patient?.patientId || order.patientId || '—'}</p></div>
+      <div class="field"><label>Ordered By</label><p>${order.doctor ? (order.doctor.firstName || '') + ' ' + (order.doctor.lastName || '') : (order.doctorName || '—')}</p></div>
+      <div class="field"><label>Sample Date</label><p>${order.collectedAt ? new Date(order.collectedAt).toLocaleDateString('en-IN') : '—'}</p></div>
+    </div>
+
+    <div class="section-title">Test Results</div>
+    <table>
+      <thead><tr>
+        <th>Test Name</th><th>Result</th><th>Unit</th><th>Reference Range</th><th>Flag</th><th>Method</th>
+      </tr></thead>
+      <tbody>
+        ${results.length > 0 ? results.map((r: any) => `
+          <tr class="${r.abnormalFlag === 'HH' || r.abnormalFlag === 'LL' ? 'critical-row' : ''}">
+            <td>${r.testName || r.name || '—'}</td>
+            <td style="${flagColorPrint[r.abnormalFlag] || flagColorPrint.NORMAL}"><strong>${r.resultValue || r.value || '—'}</strong></td>
+            <td>${r.resultUnit || r.unit || '—'}</td>
+            <td>${r.referenceRange || '—'}</td>
+            <td style="${flagColorPrint[r.abnormalFlag] || flagColorPrint.NORMAL}">${r.abnormalFlag || 'Normal'}</td>
+            <td>${r.method || '—'}</td>
+          </tr>`).join('') : '<tr><td colspan="6" style="text-align:center;color:#9ca3af">No results entered</td></tr>'}
+      </tbody>
+    </table>
+
+    ${order.notes || order.labNotes ? `
+    <div class="notes-box">
+      <strong>Lab Notes:</strong> ${order.notes || order.labNotes}
+    </div>` : ''}
+
+    ${results.some((r: any) => r.abnormalFlag === 'HH' || r.abnormalFlag === 'LL') ? `
+    <div style="background:#fff1f2;border:1px solid #fecaca;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#dc2626;font-weight:600">
+      ⚠ CRITICAL VALUES PRESENT — Physician has been notified
+    </div>` : ''}
+
+    <div class="footer">
+      <div class="sig-box"><div class="sig-line"></div><div class="sig-label">Lab Technician</div></div>
+      <div class="sig-box"><div class="sig-line"></div><div class="sig-label">Pathologist / Authorized Signatory</div></div>
+    </div>
+
+    <script>window.onload=function(){window.print();}<\/script>
+    </body></html>`;
+    printWin.document.write(html);
+    printWin.document.close();
   };
 
   return (
@@ -87,7 +188,13 @@ export default function LabResultsPage() {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-gray-900">Result Detail</h3>
-                <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-xs">Close</button>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => handlePrintLabReport(selected)}
+                    className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">
+                    <Printer size={12} /> Print Report
+                  </button>
+                  <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-xs">Close</button>
+                </div>
               </div>
               <div className="space-y-2 text-sm mb-5">
                 <div><span className="text-gray-500">Patient:</span> <span className="font-medium">{selected.patient?.firstName} {selected.patient?.lastName}</span></div>
@@ -113,7 +220,6 @@ export default function LabResultsPage() {
                 ))}
                 {(!selected.resultEntries?.length && !selected.entries?.length) && <p className="text-sm text-gray-400 text-center py-4">No result entries</p>}
               </div>
-              <button onClick={async () => { await api.post(`/lab/results/${selected.id}/print`); }} className="mt-4 w-full py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50">Print Result</button>
             </div>
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm text-center py-16">

@@ -151,56 +151,103 @@ export default function LabPage() {
     }
   };
 
-  const handlePrintReport = (o: any) => {
-    const printWin = window.open('', '_blank', 'width=800,height=600');
+  const handlePrintLabReport = (order: any) => {
+    const printWin = window.open('', '_blank', 'width=900,height=700');
     if (!printWin) return;
-    const resultRows = (o.results || o.tests || []).map((r: any) =>
-      `<tr>
-        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${r.testName || r.name || '—'}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600;${r.isCritical ? 'color:#dc2626' : ''}">${r.result || r.value || '—'}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${r.unit || '—'}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${r.referenceRange || r.normalRange || '—'}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${r.isCritical ? '<span style="color:#dc2626;font-weight:700">CRITICAL</span>' : 'Normal'}</td>
-      </tr>`
-    ).join('');
-    const orgName = user?.tenantName || 'Hospital';
-    const orgContact = [user?.tenantPrimaryPhone, user?.tenantPrimaryEmail].filter(Boolean).join(' · ');
-    const orgLogoImg = user?.tenantLogoUrl ? `<img src="${user.tenantLogoUrl}" alt="${orgName}" style="height:40px;max-width:160px;object-fit:contain;margin-bottom:4px" />` : '';
-    const html = `<!DOCTYPE html><html><head><title>Lab Report — ${o.orderNumber}</title>
-      <style>body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:40px;color:#1f2937}
-      .header{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #0f766e;padding-bottom:16px;margin-bottom:24px}
-      .logo{font-size:20px;font-weight:700;color:#0f766e}
-      table{width:100%;border-collapse:collapse;font-size:13px}
-      th{background:#f9fafb;text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase;color:#6b7280;border-bottom:2px solid #e5e7eb}
-      .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
-      .info-item{font-size:13px}.info-label{color:#6b7280;font-size:11px;margin-bottom:2px}
-      .footer{margin-top:48px;display:flex;justify-content:space-between;font-size:13px;color:#6b7280}
-      @media print{body{padding:20px}}</style></head>
-      <body>
-        <div class="header">
-          <div>${orgLogoImg}<div class="logo">${orgName}</div>${orgContact ? `<div style="font-size:11px;color:#6b7280;margin-top:2px">${orgContact}</div>` : ''}</div>
-          <div style="text-align:right;font-size:13px;color:#6b7280">
-            <div style="font-weight:600;color:#1f2937">${o.orderNumber}</div>
-            <div>${new Date(o.createdAt || Date.now()).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</div>
-          </div>
-        </div>
-        <h2 style="text-align:center;margin:0 0 20px;font-size:16px;color:#0f766e">LABORATORY REPORT</h2>
-        <div class="info-grid">
-          <div class="info-item"><div class="info-label">Patient</div><strong>${o.patient?.firstName || ''} ${o.patient?.lastName || ''}</strong> (${o.patient?.patientId || '—'})</div>
-          <div class="info-item"><div class="info-label">Referred By</div><strong>${o.doctor ? 'Dr. ' + o.doctor.firstName + ' ' + (o.doctor.lastName || '') : '—'}</strong></div>
-          <div class="info-item"><div class="info-label">Sample Collected</div>${o.collectedAt ? new Date(o.collectedAt).toLocaleString('en-IN') : '—'}</div>
-          <div class="info-item"><div class="info-label">Status</div>${o.status?.replace(/_/g, ' ')}</div>
-        </div>
-        <table>
-          <thead><tr><th>Test</th><th>Result</th><th>Unit</th><th>Reference Range</th><th>Flag</th></tr></thead>
-          <tbody>${resultRows || '<tr><td colspan="5" style="text-align:center;padding:20px;color:#9ca3af">No results available</td></tr>'}</tbody>
-        </table>
-        <div class="footer">
-          <div><div style="margin-bottom:30px">Lab Technician</div><div>_________________________</div></div>
-          <div><div style="margin-bottom:30px">Pathologist</div><div>_________________________</div></div>
-        </div>
-        <script>window.onload=function(){window.print();}<\/script>
-      </body></html>`;
+    const results = order.results || order.testResults || [];
+    const patientName = order.patient
+      ? `${order.patient.firstName || ''} ${order.patient.lastName || ''}`.trim()
+      : order.patientName || '—';
+    const flagColor: Record<string, string> = {
+      HH: 'color:#dc2626;font-weight:bold',
+      LL: 'color:#dc2626;font-weight:bold',
+      H: 'color:#d97706;font-weight:600',
+      L: 'color:#d97706;font-weight:600',
+      NORMAL: 'color:#111',
+    };
+    const html = `<!DOCTYPE html><html><head><title>Lab Report</title>
+    <style>
+      * { margin:0; padding:0; box-sizing:border-box; }
+      body { font-family: Arial, sans-serif; font-size: 13px; color: #111; padding: 32px; }
+      .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom: 3px double #0F766E; padding-bottom:16px; margin-bottom:20px; }
+      .hospital-name { font-size:22px; font-weight:900; color:#0F766E; }
+      .hospital-sub { font-size:11px; color:#666; margin-top:2px; }
+      .report-meta { text-align:right; }
+      .report-title { font-size:18px; font-weight:800; letter-spacing:2px; color:#333; }
+      .report-num { font-size:13px; color:#0F766E; font-weight:700; margin-top:4px; }
+      .report-date { font-size:11px; color:#666; margin-top:2px; }
+      .patient-box { background:#f0fdfa; border:1px solid #ccfbf1; border-radius:6px; padding:12px 16px; margin-bottom:20px; display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+      .field label { font-size:10px; color:#6b7280; text-transform:uppercase; font-weight:600; display:block; }
+      .field p { font-size:13px; font-weight:500; }
+      .section-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:#0F766E; margin-bottom:8px; margin-top:16px; }
+      table { width:100%; border-collapse:collapse; margin-bottom:16px; }
+      th { background:#f0fdfa; color:#0F766E; font-size:11px; font-weight:700; text-transform:uppercase; padding:8px 10px; text-align:left; border:1px solid #e5e7eb; }
+      td { padding:8px 10px; border:1px solid #e5e7eb; font-size:12px; }
+      tr:nth-child(even) td { background:#fafafa; }
+      .critical-row td { background:#fff1f2 !important; }
+      .notes-box { background:#fafafa; border:1px solid #e5e7eb; border-radius:6px; padding:12px 16px; margin-bottom:16px; font-size:12px; }
+      .footer { display:grid; grid-template-columns:1fr 1fr; gap:32px; margin-top:40px; padding-top:16px; border-top:1px solid #e5e7eb; }
+      .sig-box { text-align:center; }
+      .sig-line { border-top:1px solid #333; margin-top:40px; margin-bottom:6px; }
+      .sig-label { font-size:11px; color:#555; }
+      .status-badge { display:inline-block; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+      @media print { body { padding:20px; } }
+    </style></head><body>
+    <div class="header">
+      <div>
+        <div class="hospital-name">AYPHEN HMS</div>
+        <div class="hospital-sub">Laboratory Services</div>
+      </div>
+      <div class="report-meta">
+        <div class="report-title">LAB REPORT</div>
+        <div class="report-num">${order.orderNumber || order.id?.slice(0,8) || '—'}</div>
+        <div class="report-date">Reported: ${order.reportedAt ? new Date(order.reportedAt).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })}</div>
+        <span class="status-badge" style="background:${order.status === 'VALIDATED' ? '#dcfce7' : '#dbeafe'};color:${order.status === 'VALIDATED' ? '#166534' : '#1e40af'}">${order.status || '—'}</span>
+      </div>
+    </div>
+
+    <div class="patient-box">
+      <div class="field"><label>Patient Name</label><p>${patientName}</p></div>
+      <div class="field"><label>Patient ID</label><p>${order.patient?.patientId || order.patientId || '—'}</p></div>
+      <div class="field"><label>Ordered By</label><p>${order.doctor ? (order.doctor.firstName || '') + ' ' + (order.doctor.lastName || '') : (order.doctorName || '—')}</p></div>
+      <div class="field"><label>Sample Date</label><p>${order.collectedAt ? new Date(order.collectedAt).toLocaleDateString('en-IN') : '—'}</p></div>
+    </div>
+
+    <div class="section-title">Test Results</div>
+    <table>
+      <thead><tr>
+        <th>Test Name</th><th>Result</th><th>Unit</th><th>Reference Range</th><th>Flag</th><th>Method</th>
+      </tr></thead>
+      <tbody>
+        ${results.length > 0 ? results.map((r: any) => `
+          <tr class="${r.abnormalFlag === 'HH' || r.abnormalFlag === 'LL' ? 'critical-row' : ''}">
+            <td>${r.testName || r.name || '—'}</td>
+            <td style="${flagColor[r.abnormalFlag] || flagColor.NORMAL}"><strong>${r.resultValue || r.value || '—'}</strong></td>
+            <td>${r.resultUnit || r.unit || '—'}</td>
+            <td>${r.referenceRange || '—'}</td>
+            <td style="${flagColor[r.abnormalFlag] || flagColor.NORMAL}">${r.abnormalFlag || 'Normal'}</td>
+            <td>${r.method || '—'}</td>
+          </tr>`).join('') : '<tr><td colspan="6" style="text-align:center;color:#9ca3af">No results entered</td></tr>'}
+      </tbody>
+    </table>
+
+    ${order.notes || order.labNotes ? `
+    <div class="notes-box">
+      <strong>Lab Notes:</strong> ${order.notes || order.labNotes}
+    </div>` : ''}
+
+    ${results.some((r: any) => r.abnormalFlag === 'HH' || r.abnormalFlag === 'LL') ? `
+    <div style="background:#fff1f2;border:1px solid #fecaca;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#dc2626;font-weight:600">
+      ⚠ CRITICAL VALUES PRESENT — Physician has been notified
+    </div>` : ''}
+
+    <div class="footer">
+      <div class="sig-box"><div class="sig-line"></div><div class="sig-label">Lab Technician</div></div>
+      <div class="sig-box"><div class="sig-line"></div><div class="sig-label">Pathologist / Authorized Signatory</div></div>
+    </div>
+
+    <script>window.onload=function(){window.print();}<\/script>
+    </body></html>`;
     printWin.document.write(html);
     printWin.document.close();
   };
@@ -286,7 +333,7 @@ export default function LabPage() {
                           {actionId === o.id ? 'Updating...' : 'Mark Resulted'}</button>
                       )}
                       {['RESULTED', 'VALIDATED'].includes(o.status) && (
-                        <button onClick={() => handlePrintReport(o)}
+                        <button onClick={() => handlePrintLabReport(o)}
                           className="flex items-center gap-1 text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 font-medium">
                           <Printer size={11} /> Print Report
                         </button>

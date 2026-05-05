@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { ClipboardList, AlertTriangle, CheckCircle, Clock, Pencil, Trash2 } from 'lucide-react';
+import { ClipboardList, AlertTriangle, CheckCircle, Clock, Pencil, Trash2, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import EmptyState from '../../components/ui/EmptyState';
@@ -107,6 +107,121 @@ export default function ShiftHandoverPage() {
     } catch (err) { toast.error('Failed to delete handover'); }
   };
 
+  const handlePrintHandover = (h: any) => {
+    const printWin = window.open('', '_blank', 'width=900,height=700');
+    if (!printWin) return;
+    const criticalAlerts = Array.isArray(h.criticalAlerts)
+      ? h.criticalAlerts
+      : (h.criticalAlerts ? h.criticalAlerts.split('\n').filter(Boolean) : []);
+    const pendingTasks = h.pendingTasks?.items || (typeof h.pendingTasks === 'string' ? h.pendingTasks.split('\n').filter(Boolean) : []);
+    const shiftColors: Record<string, string> = {
+      MORNING: '#fef9c3', AFTERNOON: '#fff7ed', EVENING: '#fdf4ff', NIGHT: '#eff6ff',
+    };
+    const html = `<!DOCTYPE html><html><head><title>Shift Handover Report</title>
+    <style>
+      * { margin:0; padding:0; box-sizing:border-box; }
+      body { font-family: Arial, sans-serif; font-size: 13px; color: #111; padding: 32px; }
+      .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px double #0F766E; padding-bottom:16px; margin-bottom:20px; }
+      .hospital-name { font-size:22px; font-weight:900; color:#0F766E; }
+      .hospital-sub { font-size:11px; color:#666; margin-top:2px; }
+      .report-meta { text-align:right; }
+      .report-title { font-size:18px; font-weight:800; letter-spacing:2px; color:#333; }
+      .shift-badge { display:inline-block; padding:4px 14px; border-radius:20px; font-size:13px; font-weight:700; margin-top:6px; background:${shiftColors[h.shiftType] || '#f3f4f6'}; color:#333; }
+      .handover-box { background:#f0fdfa; border:1px solid #ccfbf1; border-radius:6px; padding:14px 16px; margin-bottom:20px; display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+      .field label { font-size:10px; color:#6b7280; text-transform:uppercase; font-weight:600; display:block; margin-bottom:3px; }
+      .field p { font-size:13px; font-weight:500; }
+      .section { margin-bottom:16px; border:1px solid #e5e7eb; border-radius:6px; overflow:hidden; }
+      .section-title { background:#f0fdfa; color:#0F766E; font-weight:700; font-size:11px; letter-spacing:1px; text-transform:uppercase; padding:6px 12px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; gap:6px; }
+      .section-body { padding:12px; }
+      .critical-section .section-title { background:#fff1f2; color:#dc2626; }
+      .critical-section .section-body { background:#fff8f8; }
+      ul { list-style:none; padding:0; }
+      ul li { padding:4px 0; border-bottom:1px solid #f9fafb; font-size:13px; }
+      ul li:before { content:"• "; color:#0F766E; font-weight:bold; }
+      ul li.critical:before { content:"⚠ "; color:#dc2626; }
+      ul li:last-child { border-bottom:none; }
+      .text-block { font-size:13px; line-height:1.6; white-space:pre-line; }
+      .status-row { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+      .status-badge { padding:3px 12px; border-radius:20px; font-size:12px; font-weight:700; }
+      .DRAFT { background:#fef9c3; color:#854d0e; }
+      .SUBMITTED { background:#dbeafe; color:#1e40af; }
+      .ACKNOWLEDGED { background:#dcfce7; color:#166534; }
+      .footer { display:grid; grid-template-columns:1fr 1fr 1fr; gap:24px; margin-top:40px; padding-top:16px; border-top:1px solid #e5e7eb; }
+      .sig-box { text-align:center; }
+      .sig-line { border-top:1px solid #333; margin-top:40px; margin-bottom:6px; }
+      .sig-label { font-size:11px; color:#555; }
+      @media print { body { padding:20px; } }
+    </style></head><body>
+    <div class="header">
+      <div>
+        <div class="hospital-name">AYPHEN HMS</div>
+        <div class="hospital-sub">Nursing Services — Shift Handover</div>
+      </div>
+      <div class="report-meta">
+        <div class="report-title">SHIFT HANDOVER REPORT</div>
+        <span class="shift-badge">${h.shiftType || '—'} SHIFT</span>
+        <div style="font-size:11px;color:#666;margin-top:4px">${h.shiftDate ? new Date(h.shiftDate).toLocaleDateString('en-IN', { weekday:'long', day:'2-digit', month:'long', year:'numeric' }) : '—'}</div>
+      </div>
+    </div>
+
+    <div class="status-row">
+      <span>Status:</span>
+      <span class="status-badge ${h.status || 'DRAFT'}">${h.status || 'DRAFT'}</span>
+      ${h.acknowledgedAt ? `<span style="font-size:12px;color:#6b7280">Acknowledged: ${new Date(h.acknowledgedAt).toLocaleString('en-IN')}</span>` : ''}
+    </div>
+
+    <div class="handover-box">
+      <div class="field"><label>Outgoing Nurse</label><p>${h.handoverFromName || '—'}</p></div>
+      <div class="field"><label>Incoming Nurse</label><p>${h.handoverToName || '—'}</p></div>
+      <div class="field"><label>Ward / Location</label><p>${h.wardName || h.locationName || '—'}</p></div>
+    </div>
+
+    ${criticalAlerts.length > 0 ? `
+    <div class="section critical-section">
+      <div class="section-title">⚠ Critical Alerts</div>
+      <div class="section-body">
+        <ul>${criticalAlerts.map((a: string) => `<li class="critical">${a}</li>`).join('')}</ul>
+      </div>
+    </div>` : ''}
+
+    ${pendingTasks.length > 0 ? `
+    <div class="section">
+      <div class="section-title">Pending Tasks</div>
+      <div class="section-body">
+        <ul>${pendingTasks.map((t: string) => `<li>${t}</li>`).join('')}</ul>
+      </div>
+    </div>` : ''}
+
+    ${h.medicationNotes ? `
+    <div class="section">
+      <div class="section-title">Medication Notes</div>
+      <div class="section-body"><p class="text-block">${h.medicationNotes}</p></div>
+    </div>` : ''}
+
+    ${h.equipmentIssues ? `
+    <div class="section">
+      <div class="section-title">Equipment Issues</div>
+      <div class="section-body"><p class="text-block">${h.equipmentIssues}</p></div>
+    </div>` : ''}
+
+    ${h.generalNotes ? `
+    <div class="section">
+      <div class="section-title">General Notes</div>
+      <div class="section-body"><p class="text-block">${h.generalNotes}</p></div>
+    </div>` : ''}
+
+    <div class="footer">
+      <div class="sig-box"><div class="sig-line"></div><div class="sig-label">Outgoing Nurse<br>${h.handoverFromName || ''}</div></div>
+      <div class="sig-box"><div class="sig-line"></div><div class="sig-label">Incoming Nurse<br>${h.handoverToName || ''}</div></div>
+      <div class="sig-box"><div class="sig-line"></div><div class="sig-label">Charge Nurse / Supervisor</div></div>
+    </div>
+
+    <script>window.onload=function(){window.print();}<\/script>
+    </body></html>`;
+    printWin.document.write(html);
+    printWin.document.close();
+  };
+
   const shiftLabel = (s: string) => s === 'MORNING' ? 'Morning (6AM-2PM)' : s === 'AFTERNOON' ? 'Afternoon (2PM-10PM)' : 'Night (10PM-6AM)';
   const statusColor = (s: string) => s === 'ACKNOWLEDGED' ? 'bg-green-100 text-green-700' : s === 'SUBMITTED' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700';
 
@@ -172,6 +287,13 @@ export default function ShiftHandoverPage() {
                 {h.status === 'DRAFT' && <button onClick={() => handleSubmit(h.id)} className="text-sm text-blue-600 hover:underline">Submit</button>}
                 {h.status === 'DRAFT' && <button onClick={() => handleDelete(h.id)} className="text-sm text-red-500 hover:text-red-700" title="Delete draft"><Trash2 size={15} /></button>}
                 {h.status === 'SUBMITTED' && <button onClick={() => handleAcknowledge(h.id)} className="text-sm text-green-600 hover:underline">Acknowledge</button>}
+                <button
+                  onClick={() => handlePrintHandover(h)}
+                  className="p-1.5 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg"
+                  title="Print Handover Report"
+                >
+                  <Printer size={14} />
+                </button>
               </div>
             </div>
             {h.criticalAlerts?.length > 0 && (
