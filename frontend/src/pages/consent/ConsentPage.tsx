@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FileCheck, FileText, Clock, XCircle, Pencil, Trash2 } from 'lucide-react';
+import { FileCheck, FileText, Clock, XCircle, Pencil, Trash2, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TopBar from '../../components/layout/TopBar';
 import Pagination from '../../components/ui/Pagination';
@@ -74,6 +74,69 @@ export default function ConsentPage() {
   const handleRevoke = (id: string) => { setRevokeId(id); setRevokeReason(''); };
   const confirmRevoke = async () => { if (!revokeId || !revokeReason.trim()) return; try { await api.patch(`/consents/${revokeId}/revoke`, { reason: revokeReason }); toast.success('Consent revoked'); fetchData(); } catch (err) { toast.error('Failed to revoke consent'); } finally { setRevokeId(null); setRevokeReason(''); } };
 
+  const handlePrintConsent = (c: any) => {
+    const win = window.open('', '_blank');
+    if (!win) return;
+    const consentDate = c.consentDate ? new Date(c.consentDate).toLocaleDateString() : '—';
+    win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <title>Patient Consent Form</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 1.5cm; color: #111; }
+    h1 { color: #0F766E; font-size: 22px; margin: 0; }
+    h2 { font-size: 14px; letter-spacing: 1px; margin: 4px 0 0; color: #333; }
+    hr { border: none; border-top: 2px solid #0F766E; margin: 12px 0; }
+    .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; background: #f8f8f8; border: 1px solid #ddd; border-radius: 6px; padding: 14px; margin-bottom: 18px; }
+    .detail-item { font-size: 12px; }
+    .detail-label { font-weight: bold; color: #555; margin-bottom: 2px; }
+    .section-title { font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #0F766E; margin: 16px 0 6px; border-bottom: 1px solid #e0e0e0; padding-bottom: 4px; }
+    .section-body { font-size: 12px; color: #333; line-height: 1.6; }
+    .patient-statement { background: #f3f3f3; border-left: 4px solid #0F766E; padding: 12px 16px; border-radius: 4px; font-size: 12px; line-height: 1.7; margin: 18px 0; }
+    .sig-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; margin: 28px 0 10px; }
+    .sig-box { text-align: center; font-size: 12px; }
+    .sig-line { border-top: 1px solid #333; margin-bottom: 4px; margin-top: 40px; }
+    .sig-name { color: #555; }
+    .datetime-row { font-size: 12px; margin-top: 10px; display: flex; gap: 40px; }
+    @media print { body { margin: 1.5cm; } }
+  </style>
+</head>
+<body>
+  <h1>AYPHEN HMS</h1>
+  <h2>PATIENT CONSENT FORM</h2>
+  <hr />
+  <div class="details-grid">
+    <div class="detail-item"><div class="detail-label">Consent Type</div><div>${c.consentType || '—'}</div></div>
+    <div class="detail-item"><div class="detail-label">Procedure Name</div><div>${c.procedureName || '—'}</div></div>
+    <div class="detail-item"><div class="detail-label">Patient ID</div><div>${c.patientId || '—'}</div></div>
+    <div class="detail-item"><div class="detail-label">Doctor Name</div><div>${c.doctorName || '—'}</div></div>
+    <div class="detail-item"><div class="detail-label">Consent Given By</div><div>${c.consentGivenBy || '—'}</div></div>
+    <div class="detail-item"><div class="detail-label">Relationship</div><div>${c.relationship || '—'}</div></div>
+    <div class="detail-item"><div class="detail-label">Witness</div><div>${c.witnessName || '—'}</div></div>
+    <div class="detail-item"><div class="detail-label">Date</div><div>${consentDate}</div></div>
+  </div>
+  <div class="section-title">Description of Procedure</div>
+  <div class="section-body">${c.description || '—'}</div>
+  <div class="section-title">Risks and Complications</div>
+  <div class="section-body">${c.risks || '—'}</div>
+  <div class="section-title">Alternatives</div>
+  <div class="section-body">${c.alternatives || '—'}</div>
+  <div class="patient-statement">
+    I, <strong>${c.consentGivenBy || '___________'}</strong>, ${c.relationship ? c.relationship + ' to patient,' : ''} hereby give my informed consent for the procedure described above. I confirm that I have read and understood the above information and have had the opportunity to ask questions.
+  </div>
+  <div class="sig-grid">
+    <div class="sig-box"><div class="sig-line"></div><div class="sig-name">Patient / Guardian Signature<br/>${c.consentGivenBy || ''}</div></div>
+    <div class="sig-box"><div class="sig-line"></div><div class="sig-name">Doctor Signature<br/>${c.doctorName || ''}</div></div>
+    <div class="sig-box"><div class="sig-line"></div><div class="sig-name">Witness Signature<br/>${c.witnessName || ''}</div></div>
+  </div>
+  <div class="datetime-row"><span>Date: ___________</span><span>Time: ___________</span></div>
+</body>
+</html>`);
+    win.document.close();
+    win.focus();
+    win.print();
+  };
+
   const active = consents.filter(c => c.status === 'SIGNED').length;
   const revoked = consents.filter(c => c.status === 'REVOKED').length;
   const today = consents.filter(c => new Date(c.consentDate).toDateString() === new Date().toDateString()).length;
@@ -123,6 +186,9 @@ export default function ConsentPage() {
                 <button onClick={() => editRecord(c)} className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 font-medium" title="Edit consent"><Pencil size={13} className="inline mr-0.5" />Edit</button>
               )}
               {c.status === 'SIGNED' && <button onClick={() => handleRevoke(c.id)} className="text-xs px-2 py-1 bg-red-50 text-red-700 rounded-md hover:bg-red-100 font-medium">Revoke</button>}
+              {(c.status === 'ACTIVE' || c.status === 'SIGNED') && (
+                <button onClick={() => handlePrintConsent(c)} className="p-1.5 rounded hover:bg-purple-50 text-purple-500 hover:text-purple-700" title="Print Consent Form"><Printer size={14} /></button>
+              )}
               <button onClick={() => handleDelete(c.id)} className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600" title="Delete consent"><Trash2 size={14} /></button>
             </div>
           </td>

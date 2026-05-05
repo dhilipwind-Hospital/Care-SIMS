@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Heart, Plus, X } from 'lucide-react';
+import { Heart, Plus, Printer, X } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -68,6 +68,82 @@ export default function WoundCarePage() {
   const byType = dashboard.byType || {};
   const topType = Object.entries(byType).sort((a: any, b: any) => b[1] - a[1])[0];
 
+  const handlePrintWound = (r: any) => {
+    const win = window.open('', '_blank', 'width=800,height=900');
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Wound Care Assessment</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 13px; color: #1a1a1a; padding: 32px; }
+    .header { text-align: center; margin-bottom: 20px; }
+    .header-title { font-size: 22px; font-weight: bold; color: #0F766E; letter-spacing: 1px; }
+    .header-sub { font-size: 15px; font-weight: 600; color: #374151; margin-top: 4px; text-transform: uppercase; letter-spacing: 2px; }
+    hr { border: none; border-top: 2px solid #0F766E; margin: 14px 0; }
+    .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #6B7280; margin-bottom: 8px; }
+    .info-box { border: 1px solid #E5E7EB; border-radius: 8px; padding: 14px; margin-bottom: 16px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    .field { display: flex; flex-direction: column; gap: 2px; }
+    .field-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #9CA3AF; letter-spacing: 0.5px; }
+    .field-value { font-size: 13px; color: #111827; font-weight: 500; }
+    .text-block { border: 1px solid #E5E7EB; border-radius: 8px; padding: 12px; min-height: 56px; margin-bottom: 16px; color: #374151; }
+    .sig-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-top: 32px; }
+    .sig-cell { border-top: 1px solid #9CA3AF; padding-top: 6px; font-size: 11px; color: #6B7280; text-align: center; }
+    @media print { body { padding: 24px; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-title">AYPHEN HMS</div>
+    <div class="header-sub">Wound Care Assessment</div>
+  </div>
+  <hr />
+
+  <div class="section-title">Assessment Information</div>
+  <div class="info-box grid-2">
+    <div class="field"><span class="field-label">Patient ID</span><span class="field-value">${r.patientId || '—'}</span></div>
+    <div class="field"><span class="field-label">Assessment Date</span><span class="field-value">${r.assessedAt ? new Date(r.assessedAt).toLocaleDateString() : '—'}</span></div>
+    <div class="field"><span class="field-label">Wound Type</span><span class="field-value">${r.woundType ? r.woundType.replace(/_/g, ' ') : '—'}</span></div>
+    <div class="field"><span class="field-label">Location</span><span class="field-value">${r.location || '—'}</span></div>
+    <div class="field"><span class="field-label">Stage</span><span class="field-value">${r.stage || '—'}</span></div>
+  </div>
+
+  <div class="section-title">Measurements</div>
+  <div class="info-box grid-3">
+    <div class="field"><span class="field-label">Length</span><span class="field-value">${r.lengthCm ? r.lengthCm + ' cm' : '—'}</span></div>
+    <div class="field"><span class="field-label">Width</span><span class="field-value">${r.widthCm ? r.widthCm + ' cm' : '—'}</span></div>
+    <div class="field"><span class="field-label">Depth</span><span class="field-value">${r.depthCm ? r.depthCm + ' cm' : '—'}</span></div>
+  </div>
+
+  <div class="section-title">Clinical Findings</div>
+  <div class="info-box grid-2">
+    <div class="field"><span class="field-label">Wound Bed</span><span class="field-value">${r.woundBed || '—'}</span></div>
+    <div class="field"><span class="field-label">Exudate</span><span class="field-value">${r.exudate || '—'}</span></div>
+    <div class="field"><span class="field-label">Pain Score</span><span class="field-value">${r.painScore != null ? r.painScore + '/10' : '—'}</span></div>
+    <div class="field"><span class="field-label">Dressing Type</span><span class="field-value">${r.dressingType || '—'}</span></div>
+  </div>
+
+  <div class="section-title">Treatment Plan</div>
+  <div class="text-block">${r.treatment || '—'}</div>
+
+  <div class="section-title">Notes</div>
+  <div class="text-block">${r.notes || '—'}</div>
+
+  <div class="sig-row">
+    <div class="sig-cell">Nurse / Clinician</div>
+    <div class="sig-cell">Date</div>
+    <div class="sig-cell">Next Review Date</div>
+  </div>
+</body>
+</html>`);
+    win.document.close();
+    win.print();
+  };
+
   return (
     <div className="p-6 space-y-6">
       <TopBar title="Wound Care" subtitle="Chronic wound assessment and tracking" />
@@ -112,7 +188,14 @@ export default function WoundCarePage() {
                       <td className="px-4 py-3 text-sm text-gray-700">{r.painScore != null ? `${r.painScore}/10` : '—'}</td>
                       <td className="px-4 py-3 text-sm text-gray-700 max-w-[160px] truncate">{r.treatment || r.dressingType || '—'}</td>
                       <td className="px-4 py-3">
-                        <button className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">View</button>
+                        <div className="flex items-center gap-1">
+                          <button className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">View</button>
+                          <button onClick={() => handlePrintWound(r)}
+                            className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"
+                            title="Print Assessment">
+                            <Printer size={12} /> Print
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))

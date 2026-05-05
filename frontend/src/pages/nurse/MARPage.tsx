@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
-import { Pill, Clock, CheckCircle, AlertCircle, Calendar, Plus, X } from 'lucide-react';
+import { Pill, Clock, CheckCircle, AlertCircle, Calendar, Plus, X, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -83,6 +83,55 @@ export default function MARPage() {
     r.patient?.firstName?.toLowerCase().includes(search.toLowerCase())
   ), [records, search]);
 
+  const handlePrintMAR = () => {
+    const rows = marData.map((m: any) => {
+      const statusColor = m.status === 'ADMINISTERED' ? '#15803d' : m.status === 'WITHHELD' ? '#dc2626' : '#1d4ed8';
+      return `<tr>
+        <td style="border:1px solid #d1d5db;padding:8px;">${m.drugName || ''}</td>
+        <td style="border:1px solid #d1d5db;padding:8px;">${m.dosage || m.dose || ''}</td>
+        <td style="border:1px solid #d1d5db;padding:8px;">${m.route || ''}</td>
+        <td style="border:1px solid #d1d5db;padding:8px;">${m.frequency || ''}</td>
+        <td style="border:1px solid #d1d5db;padding:8px;">${m.scheduledTime ? new Date(m.scheduledTime).toLocaleString() : '—'}</td>
+        <td style="border:1px solid #d1d5db;padding:8px;">${m.administeredTime ? new Date(m.administeredTime).toLocaleString() : '—'}</td>
+        <td style="border:1px solid #d1d5db;padding:8px;color:${statusColor};font-weight:600;">${m.status || ''}</td>
+      </tr>`;
+    }).join('');
+
+    const html = `<!DOCTYPE html><html><head><title>MAR</title></head><body style="font-family:Arial,sans-serif;padding:24px;">
+      <div style="text-align:center;margin-bottom:16px;">
+        <div style="color:#0F766E;font-size:20px;font-weight:700;">AYPHEN HMS</div>
+        <div style="font-size:16px;font-weight:600;margin-top:4px;">MEDICATION ADMINISTRATION RECORD</div>
+        <div style="font-size:13px;color:#374151;margin-top:4px;">Admission ID: ${marAdmissionId}</div>
+        <div style="font-size:12px;color:#6b7280;margin-top:2px;">Date Printed: ${new Date().toLocaleString()}</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#f3f4f6;">
+            <th style="border:1px solid #d1d5db;padding:8px;text-align:left;">Drug</th>
+            <th style="border:1px solid #d1d5db;padding:8px;text-align:left;">Dose</th>
+            <th style="border:1px solid #d1d5db;padding:8px;text-align:left;">Route</th>
+            <th style="border:1px solid #d1d5db;padding:8px;text-align:left;">Frequency</th>
+            <th style="border:1px solid #d1d5db;padding:8px;text-align:left;">Scheduled</th>
+            <th style="border:1px solid #d1d5db;padding:8px;text-align:left;">Administered</th>
+            <th style="border:1px solid #d1d5db;padding:8px;text-align:left;">Status</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="display:flex;justify-content:space-between;margin-top:40px;font-size:13px;color:#374151;">
+        <div>Verified By: ___________</div>
+        <div>Nurse Signature: ___________</div>
+        <div>Date/Time: ___________</div>
+      </div>
+    </body></html>`;
+
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.print();
+  };
+
   return (
     <div className="p-3 sm:p-6 space-y-6">
       <TopBar title="Medication Administration (MAR)" subtitle="Record and track medication administration" />
@@ -104,6 +153,11 @@ export default function MARPage() {
           <input className="hms-input w-full sm:w-64" placeholder="Enter Admission ID" value={marAdmissionId} onChange={e => setMarAdmissionId(e.target.value)} onKeyDown={e => e.key === 'Enter' && fetchMAR_Grid()} />
           <button onClick={fetchMAR_Grid} className="px-4 py-2 rounded-lg text-white font-medium text-sm" style={{ background: 'var(--accent)' }}>Load MAR</button>
           {showMarGrid && <button onClick={() => { setShowMarGrid(false); setMarData([]); }} className="text-sm text-gray-500 hover:text-gray-700">Clear</button>}
+          {showMarGrid && marData.length > 0 && (
+            <button onClick={handlePrintMAR} className="flex items-center gap-1 px-3 py-2 rounded-lg border border-purple-200 text-purple-700 text-sm font-medium hover:bg-purple-50">
+              <Printer size={14} /> Print MAR
+            </button>
+          )}
         </div>
         {showMarGrid && (
           <div className="overflow-x-auto">
