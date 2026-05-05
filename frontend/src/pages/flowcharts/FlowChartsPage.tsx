@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import TopBar from '../../components/layout/TopBar';
+import { ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // ─── Primitive building blocks ────────────────────────────────────────────────
 
@@ -161,31 +162,6 @@ function Edge({ edge, nodes }: { edge: FEdge; nodes: FNode[] }) {
         </text>
       )}
     </g>
-  );
-}
-
-function FlowChart({ def }: { def: FlowDef }) {
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-teal-50 to-white">
-        <h3 className="font-bold text-gray-900 text-base">{def.title}</h3>
-        <p className="text-xs text-gray-500 mt-0.5">{def.subtitle}</p>
-      </div>
-      <div className="overflow-x-auto p-4">
-        <svg viewBox={def.viewBox ?? '0 0 900 600'} className="w-full" style={{ minWidth: 600 }}>
-          <defs>
-            <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-              <path d="M0,0 L0,6 L8,3 z" fill="#94A3B8" />
-            </marker>
-            <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
-              <feDropShadow dx="0" dy="1" stdDeviation="2" floodColor="#00000018" />
-            </filter>
-          </defs>
-          {def.edges.map((e, i) => <Edge key={i} edge={e} nodes={def.nodes} />)}
-          {def.nodes.map(n => <NodeShape key={n.id} n={n} />)}
-        </svg>
-      </div>
-    </div>
   );
 }
 
@@ -496,61 +472,198 @@ const masterFlow: FlowDef = {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { key: 'master',    label: 'Master Flow',    def: masterFlow },
+  { key: 'master',    label: 'Master',         def: masterFlow },
   { key: 'opd',       label: 'OPD',            def: opdFlow },
   { key: 'ipd',       label: 'IPD',            def: ipdFlow },
   { key: 'emergency', label: 'Emergency',      def: emergencyFlow },
   { key: 'ot',        label: 'OT / CSSD',      def: otFlow },
   { key: 'pharmacy',  label: 'Pharmacy',       def: pharmacyFlow },
   { key: 'billing',   label: 'Billing',        def: billingFlow },
-  { key: 'staff',     label: 'Staff / Payroll',def: staffFlow },
+  { key: 'staff',     label: 'Payroll',        def: staffFlow },
   { key: 'platform',  label: 'Platform',       def: platformFlow },
 ];
 
-export default function FlowChartsPage() {
-  const [active, setActive] = useState('master');
-  const def = TABS.find(t => t.key === active)!.def;
+const LEGEND = [
+  { shape: 'pill',    color: '#0F766E', label: 'Start / End' },
+  { shape: 'rect',    color: '#1D4ED8', label: 'Process' },
+  { shape: 'diamond', color: '#B45309', label: 'Decision' },
+  { shape: 'rect',    color: '#F8FAFC', border: '#CBD5E1', label: 'Data' },
+];
+
+function ZoomableChart({ def }: { def: FlowDef }) {
+  const [zoom, setZoom] = useState(1);
+  const MIN = 0.4; const MAX = 2.5; const STEP = 0.2;
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const zoomIn  = () => setZoom(z => Math.min(MAX, +(z + STEP).toFixed(1)));
+  const zoomOut = () => setZoom(z => Math.max(MIN, +(z - STEP).toFixed(1)));
+  const reset   = () => setZoom(1);
 
   return (
-    <div className="p-6 space-y-6">
-      <TopBar title="Business Flow Charts" subtitle="End-to-end process flows for all modules" />
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      {/* card header */}
+      <div className="flex items-start justify-between px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-teal-50 to-white gap-2">
+        <div className="min-w-0">
+          <p className="font-bold text-gray-900 text-sm leading-tight truncate">{def.title}</p>
+          <p className="text-xs text-gray-500 mt-0.5 leading-tight line-clamp-2">{def.subtitle}</p>
+        </div>
+        {/* zoom controls */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button onClick={zoomOut} disabled={zoom <= MIN}
+            className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            <ZoomOut size={14} className="text-gray-600" />
+          </button>
+          <span className="text-xs font-semibold text-gray-600 w-10 text-center tabular-nums">
+            {Math.round(zoom * 100)}%
+          </span>
+          <button onClick={zoomIn} disabled={zoom >= MAX}
+            className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            <ZoomIn size={14} className="text-gray-600" />
+          </button>
+          <button onClick={reset}
+            className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors ml-0.5">
+            <RotateCcw size={13} className="text-gray-600" />
+          </button>
+        </div>
+      </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap gap-4 text-xs">
-        {[
-          { shape: 'pill',    color: '#0F766E', label: 'Start / End' },
-          { shape: 'rect',    color: '#1D4ED8', label: 'Process' },
-          { shape: 'diamond', color: '#B45309', label: 'Decision' },
-          { shape: 'rect',    color: '#F8FAFC', label: 'Data / IO', border: '#CBD5E1', text: '#1E293B' },
-        ].map(l => (
+      {/* scrollable / zoomable SVG area */}
+      <div
+        ref={containerRef}
+        className="overflow-auto bg-gray-50"
+        style={{ maxHeight: 'calc(100svh - 280px)', minHeight: 260, WebkitOverflowScrolling: 'touch' }}
+      >
+        <div
+          style={{
+            transformOrigin: 'top left',
+            transform: `scale(${zoom})`,
+            transition: 'transform 0.15s ease',
+            display: 'inline-block',
+            padding: 12,
+          }}
+        >
+          <svg
+            viewBox={def.viewBox ?? '0 0 900 600'}
+            style={{ display: 'block' }}
+            width={parseInt((def.viewBox ?? '0 0 900 600').split(' ')[2])}
+            height={parseInt((def.viewBox ?? '0 0 900 600').split(' ')[3])}
+          >
+            <defs>
+              <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#94A3B8" />
+              </marker>
+              <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+                <feDropShadow dx="0" dy="1" stdDeviation="2" floodColor="#00000018" />
+              </filter>
+            </defs>
+            {def.edges.map((e, i) => <Edge key={i} edge={e} nodes={def.nodes} />)}
+            {def.nodes.map(n => <NodeShape key={n.id} n={n} />)}
+          </svg>
+        </div>
+      </div>
+
+      {/* pinch hint — only on touch devices */}
+      <p className="text-center text-[10px] text-gray-400 py-1.5 border-t border-gray-100 sm:hidden">
+        Pinch to zoom · Scroll to pan
+      </p>
+    </div>
+  );
+}
+
+export default function FlowChartsPage() {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const tabBarRef = useRef<HTMLDivElement>(null);
+  const def = TABS[activeIdx].def;
+
+  const goTo = (idx: number) => {
+    setActiveIdx(idx);
+    // scroll the selected tab into view on mobile
+    setTimeout(() => {
+      const bar = tabBarRef.current;
+      if (!bar) return;
+      const btn = bar.children[idx] as HTMLElement;
+      btn?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }, 0);
+  };
+
+  return (
+    <div className="p-3 sm:p-6 space-y-3 sm:space-y-5">
+      <TopBar title="Flow Charts" subtitle="End-to-end process flows" />
+
+      {/* Legend — wraps on mobile */}
+      <div className="flex flex-wrap gap-3 text-xs">
+        {LEGEND.map(l => (
           <div key={l.label} className="flex items-center gap-1.5">
             {l.shape === 'diamond'
-              ? <svg width="18" height="14"><polygon points="9,1 17,7 9,13 1,7" fill={l.color} /></svg>
+              ? <svg width="14" height="11"><polygon points="7,1 13,5.5 7,10 1,5.5" fill={l.color} /></svg>
               : l.shape === 'pill'
-                ? <svg width="30" height="14"><rect x="1" y="1" width="28" height="12" rx="6" fill={l.color} /></svg>
-                : <svg width="18" height="14"><rect x="1" y="1" width="16" height="12" rx="2" fill={l.color} stroke={l.border ?? l.color} /></svg>
+                ? <svg width="24" height="11"><rect x="1" y="1" width="22" height="9" rx="4.5" fill={l.color} /></svg>
+                : <svg width="14" height="11"><rect x="1" y="1" width="12" height="9" rx="2" fill={l.color} stroke={l.border ?? l.color} strokeWidth="1" /></svg>
             }
-            <span className="text-gray-600">{l.label}</span>
+            <span className="text-gray-500">{l.label}</span>
           </div>
         ))}
       </div>
 
-      {/* Tab bar */}
-      <div className="flex flex-wrap gap-1 bg-gray-100 rounded-xl p-1 w-fit">
-        {TABS.map(t => (
-          <button key={t.key} onClick={() => setActive(t.key)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              active === t.key
-                ? 'bg-white text-teal-700 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}>
-            {t.label}
-          </button>
-        ))}
+      {/* Tab bar — horizontal scroll on mobile */}
+      <div className="flex items-center gap-1">
+        {/* prev arrow — mobile only */}
+        <button
+          onClick={() => goTo(Math.max(0, activeIdx - 1))}
+          disabled={activeIdx === 0}
+          className="sm:hidden p-1 rounded-lg bg-gray-100 disabled:opacity-30 flex-shrink-0"
+        >
+          <ChevronLeft size={16} className="text-gray-600" />
+        </button>
+
+        <div
+          ref={tabBarRef}
+          className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto flex-1"
+          style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
+        >
+          {TABS.map((t, i) => (
+            <button
+              key={t.key}
+              onClick={() => goTo(i)}
+              className={`px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap flex-shrink-0 transition-all ${
+                activeIdx === i
+                  ? 'bg-white text-teal-700 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* next arrow — mobile only */}
+        <button
+          onClick={() => goTo(Math.min(TABS.length - 1, activeIdx + 1))}
+          disabled={activeIdx === TABS.length - 1}
+          className="sm:hidden p-1 rounded-lg bg-gray-100 disabled:opacity-30 flex-shrink-0"
+        >
+          <ChevronRight size={16} className="text-gray-600" />
+        </button>
       </div>
 
-      {/* Chart */}
-      <FlowChart def={def} />
+      {/* flow counter */}
+      <p className="text-xs text-gray-400 -mt-1">
+        {activeIdx + 1} of {TABS.length} — {def.title}
+      </p>
+
+      {/* Chart with zoom */}
+      <ZoomableChart key={activeIdx} def={def} />
+
+      {/* swipe hint mobile */}
+      <div className="flex justify-center gap-1.5 sm:hidden pb-1">
+        {TABS.map((_, i) => (
+          <button key={i} onClick={() => goTo(i)}
+            className={`h-1.5 rounded-full transition-all ${
+              i === activeIdx ? 'w-5 bg-teal-600' : 'w-1.5 bg-gray-300'
+            }`}
+          />
+        ))}
+      </div>
     </div>
   );
 }
