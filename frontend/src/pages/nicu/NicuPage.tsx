@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Baby, Plus, X, Loader2 } from 'lucide-react';
+import { Baby, Plus, X, Loader2, Printer } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
@@ -28,6 +28,37 @@ export default function NicuPage() {
   useEffect(() => { fetchData(); }, [page]);
 
   const handleSubmit = async () => { if (!form.patientId) { toast.error('Patient ID required'); return; } setSubmitting(true); try { await api.post('/nicu', { ...form, gestationalWeeks: form.gestationalWeeks ? Number(form.gestationalWeeks) : undefined, birthWeightGrams: form.birthWeightGrams ? Number(form.birthWeightGrams) : undefined, apgar1min: form.apgar1min ? Number(form.apgar1min) : undefined, apgar5min: form.apgar5min ? Number(form.apgar5min) : undefined }); toast.success('NICU admission created'); setShowForm(false); fetchData(); } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); } finally { setSubmitting(false); } };
+
+  const handlePrintNicuSummary = (a: any) => {
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>NICU Admission Summary</title></head><body style="font-family:Arial,sans-serif;padding:32px;color:#1a1a1a;max-width:800px;margin:0 auto;">
+<h1 style="margin:0;font-size:22px;font-weight:900;color:#0F766E;">AYPHEN HMS</h1>
+<h2 style="margin:4px 0 12px;font-size:16px;font-weight:700;">NICU ADMISSION SUMMARY</h2>
+<hr style="border:none;border-top:2px solid #0F766E;margin:12px 0;"/>
+<div style="background:#fdf2f8;border:1px solid #f9a8d4;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px;font-weight:700;color:#9d174d;text-align:center;letter-spacing:0.5px;">NEONATAL INTENSIVE CARE UNIT — CONFIDENTIAL</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;margin-bottom:20px;font-size:13px;">
+  <div><span style="color:#555;font-weight:600;">Admission #:</span> ${(a.id||'').slice(0,8)}</div>
+  <div><span style="color:#555;font-weight:600;">Admission Date:</span> ${a.admissionDate ? new Date(a.admissionDate).toLocaleDateString() : '—'}</div>
+  <div><span style="color:#555;font-weight:600;">Gestational Age:</span> ${a.gestationalWeeks ? a.gestationalWeeks+' weeks' : '—'}</div>
+  <div><span style="color:#555;font-weight:600;">Birth Weight:</span> ${a.birthWeightGrams ? a.birthWeightGrams+' g' : '—'}</div>
+  <div><span style="color:#555;font-weight:600;">APGAR 1 min:</span> ${a.apgar1min ?? '—'}</div>
+  <div><span style="color:#555;font-weight:600;">APGAR 5 min:</span> ${a.apgar5min ?? '—'}</div>
+  <div><span style="color:#555;font-weight:600;">Feed Type:</span> ${a.feedType||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">Ventilator Support:</span> ${a.ventilatorSupport||'NONE'}</div>
+  <div><span style="color:#555;font-weight:600;">Diagnosis:</span> ${a.diagnosis||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">Status:</span> ${a.status||'—'}</div>
+</div>
+${a.carePlan ? `<div style="margin-bottom:16px;padding:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;font-size:13px;"><strong>Care Plan:</strong><br/>${a.carePlan}</div>` : ''}
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:40px;">
+  <div style="border-top:1px solid #333;padding-top:6px;font-size:12px;text-align:center;">Neonatologist</div>
+  <div style="border-top:1px solid #333;padding-top:6px;font-size:12px;text-align:center;">NICU Nurse</div>
+  <div style="border-top:1px solid #333;padding-top:6px;font-size:12px;text-align:center;">Date: ${new Date().toLocaleDateString()}</div>
+</div>
+<script>window.onload=function(){window.print();}</script></body></html>`;
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+  };
 
   const fetchVitals = async (admissionId: string) => {
     setVitalsLoading(true);
@@ -71,10 +102,16 @@ export default function NicuPage() {
             <td className="px-4 py-3"><StatusBadge status={a.ventilatorSupport || 'NONE'} /></td>
             <td className="px-4 py-3"><StatusBadge status={a.status} /></td>
             <td className="px-4 py-3">
-              <button onClick={() => { setVitalsAdmission(a); fetchVitals(a.id); }}
-                className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">
-                Vitals
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => { setVitalsAdmission(a); fetchVitals(a.id); }}
+                  className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">
+                  Vitals
+                </button>
+                <button onClick={() => handlePrintNicuSummary(a)}
+                  className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1">
+                  <Printer size={11} /> Print
+                </button>
+              </div>
             </td>
           </tr>))}
       </tbody></table></div>

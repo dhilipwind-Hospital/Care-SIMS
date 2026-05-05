@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Sparkles, Clock, CheckCircle, AlertTriangle, User, Pencil, Trash2 } from 'lucide-react';
+import { Sparkles, Clock, CheckCircle, AlertTriangle, User, Pencil, Trash2, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
@@ -21,6 +21,36 @@ export default function HousekeepingPage() {
   const [formError, setFormError] = useState('');
   const [assignModal, setAssignModal] = useState<string | null>(null);
   const [assigneeName, setAssigneeName] = useState('');
+
+  const handlePrintTask = (r: any) => {
+    const priorityColor = (p: string) => p === 'URGENT' ? '#DC2626' : p === 'HIGH' ? '#EA580C' : p === 'NORMAL' ? '#2563EB' : '#16A34A';
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Housekeeping Task Sheet</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111;font-size:13px;}h1,h2{margin:0;}table{width:100%;border-collapse:collapse;}td,th{padding:7px 10px;border:1px solid #ddd;}th{background:#f3f4f6;font-weight:600;text-align:left;}@media print{body{padding:20px;}}</style></head><body>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+      <div><h1 style="margin:0;font-size:22px;font-weight:900;color:#0F766E;">AYPHEN HMS</h1><h2 style="margin:4px 0 12px;font-size:16px;font-weight:700;">HOUSEKEEPING TASK SHEET</h2></div>
+      <div style="text-align:right;font-size:11px;color:#555;">Printed: ${new Date().toLocaleString()}</div>
+    </div>
+    <hr style="border:none;border-top:2px solid #0F766E;margin:12px 0;"/>
+    <table style="margin-bottom:16px;">
+      <tr><td style="width:25%;background:#f9fafb;font-weight:600;">Task #</td><td>${(r.id || '').slice(0,8).toUpperCase()}</td><td style="width:25%;background:#f9fafb;font-weight:600;">Date / Time</td><td>${r.createdAt ? new Date(r.createdAt).toLocaleString() : new Date().toLocaleString()}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Task Type</td><td>${(r.taskType || '—').replace(/_/g, ' ')}</td><td style="background:#f9fafb;font-weight:600;">Area / Location</td><td>${r.roomOrArea || '—'}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Floor / Ward</td><td>${r.floor || r.ward || '—'}</td><td style="background:#f9fafb;font-weight:600;">Priority</td><td><span style="color:${priorityColor(r.priority)};font-weight:700;">${r.priority || '—'}</span></td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Assigned To</td><td>${r.assignedToName || '—'}</td><td style="background:#f9fafb;font-weight:600;">Supervisor</td><td>${r.supervisorName || r.requestedByName || '—'}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Due Time</td><td>${r.dueTime || r.dueDate ? new Date(r.dueDate || r.dueTime).toLocaleString() : '—'}</td><td style="background:#f9fafb;font-weight:600;">Status</td><td><span style="font-weight:700;">${(r.status || '—').replace(/_/g, ' ')}</span></td></tr>
+    </table>
+    ${r.description ? `<div style="font-weight:700;margin-bottom:6px;color:#0F766E;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Task Description</div><div style="background:#fafafa;border:1px solid #e5e7eb;border-radius:4px;padding:10px;margin-bottom:14px;">${r.description}</div>` : ''}
+    ${(r.checklist && r.checklist.length) ? `<div style="font-weight:700;margin-bottom:6px;color:#0F766E;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Checklist</div><table style="margin-bottom:14px;"><tbody>${r.checklist.map((item: string) => `<tr><td style="width:30px;">&#9744;</td><td>${item}</td></tr>`).join('')}</tbody></table>` : ''}
+    ${r.status === 'COMPLETED' && r.completionNotes ? `<div style="font-weight:700;margin-bottom:6px;color:#0F766E;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Completion Notes</div><div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;padding:10px;margin-bottom:14px;">${r.completionNotes}</div>` : ''}
+    <div style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;border-top:1px solid #ddd;padding-top:20px;">
+      <div style="text-align:center;"><div style="border-top:1px solid #111;margin-top:40px;padding-top:6px;font-size:11px;color:#555;">Housekeeping Staff</div></div>
+      <div style="text-align:center;"><div style="border-top:1px solid #111;margin-top:40px;padding-top:6px;font-size:11px;color:#555;">Supervisor</div></div>
+      <div style="text-align:center;"><div style="border-top:1px solid #111;margin-top:40px;padding-top:6px;font-size:11px;color:#555;">Date</div></div>
+    </div>
+    <script>window.onload=function(){window.print();}</script></body></html>`;
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+  };
 
   const fetchTasks = async () => {
     setLoading(true);
@@ -189,6 +219,7 @@ export default function HousekeepingPage() {
                     {t.status === 'ASSIGNED' && <button onClick={() => handleAction(t.id, 'start')} className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 font-medium">Start</button>}
                     {t.status === 'IN_PROGRESS' && <button onClick={() => handleAction(t.id, 'complete')} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium">Complete</button>}
                     {t.status === 'COMPLETED' && <button onClick={() => handleAction(t.id, 'verify')} className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">Verify</button>}
+                    <button onClick={() => handlePrintTask(t)} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"><Printer size={11} />Print</button>
                     <button onClick={() => handleDelete(t.id)} className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600" title="Delete task"><Trash2 size={14} /></button>
                   </div>
                 </td>

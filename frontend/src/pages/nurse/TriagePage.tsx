@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Search, X, ChevronRight } from 'lucide-react';
+import { Search, X, ChevronRight, Printer } from 'lucide-react';
 import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
 import api from '../../lib/api';
@@ -88,6 +88,45 @@ export default function TriagePage() {
       if (results.length === 0) toast('No triage records found for this patient');
     } catch (err: any) { toast.error(err.response?.data?.message || 'Patient lookup failed'); setPatientResults([]); }
     finally { setPatientLookupLoading(false); }
+  };
+
+  const handlePrintTriageCard = (r: any) => {
+    const priorityColor = r.triageLevel === 'RED' ? '#DC2626' : r.triageLevel === 'ORANGE' ? '#EA580C' : r.triageLevel === 'YELLOW' ? '#CA8A04' : r.triageLevel === 'GREEN' ? '#16A34A' : '#4B5563';
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Triage Assessment Card</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111;font-size:13px;}@media print{body{padding:16px;}}</style></head><body>
+<div style="text-align:center;margin-bottom:16px;">
+  <h1 style="margin:0;font-size:22px;font-weight:900;color:#0F766E;">AYPHEN HMS</h1>
+  <h2 style="margin:4px 0 12px;font-size:16px;font-weight:700;">TRIAGE ASSESSMENT CARD</h2>
+  <hr style="border:none;border-top:2px solid #0F766E;margin:12px 0;"/>
+</div>
+<div style="background:#EA580C;color:#fff;padding:8px 16px;border-radius:6px;font-weight:700;font-size:12px;text-align:center;margin-bottom:20px;letter-spacing:0.5px;">TRIAGE — TIME-CRITICAL DOCUMENT</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;margin-bottom:20px;">
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Triage #</span><div style="font-weight:700;margin-top:2px;">${(r.id || '').slice(0, 8)}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Date / Time</span><div style="font-weight:700;margin-top:2px;">${r.createdAt ? new Date(r.createdAt).toLocaleString('en-IN') : new Date().toLocaleString('en-IN')}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Patient</span><div style="font-weight:700;margin-top:2px;">${r.patient?.firstName || ''} ${r.patient?.lastName || ''} ${r.patientId ? '(' + r.patientId.slice(0,8) + ')' : ''}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Triage Category</span><div style="font-weight:900;margin-top:2px;font-size:15px;color:${priorityColor};">${r.triageLevel || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Chief Complaint</span><div style="font-weight:700;margin-top:2px;">${r.chiefComplaint || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Mechanism</span><div style="font-weight:700;margin-top:2px;">${r.briefHistory || r.mechanism || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">GCS Score</span><div style="font-weight:700;margin-top:2px;">${r.gcsScore || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Pain Score</span><div style="font-weight:700;margin-top:2px;">${r.painScore !== undefined && r.painScore !== null && r.painScore !== '' ? r.painScore + ' / 10' : '—'}</div></div>
+</div>
+<div style="margin-top:16px;padding:12px;background:#FFF7ED;border-left:4px solid #EA580C;border-radius:4px;">
+  <div style="font-weight:700;font-size:12px;margin-bottom:6px;color:#EA580C;">VITALS</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px;">
+    <div><span style="color:#555;">BP:</span> <span style="font-weight:700;">${r.systolicBp && r.diastolicBp ? r.systolicBp + '/' + r.diastolicBp + ' mmHg' : '—'}</span></div>
+    <div><span style="color:#555;">HR:</span> <span style="font-weight:700;">${r.heartRate ? r.heartRate + ' bpm' : '—'}</span></div>
+    <div><span style="color:#555;">SpO2:</span> <span style="font-weight:700;">${r.spo2 ? r.spo2 + '%' : '—'}</span></div>
+    <div><span style="color:#555;">Temp:</span> <span style="font-weight:700;">${r.temperatureC ? r.temperatureC + ' °C' : '—'}</span></div>
+    <div><span style="color:#555;">RR:</span> <span style="font-weight:700;">${r.respiratoryRate ? r.respiratoryRate + ' /min' : '—'}</span></div>
+    <div><span style="color:#555;">Wt:</span> <span style="font-weight:700;">${r.weightKg ? r.weightKg + ' kg' : '—'}</span></div>
+  </div>
+</div>
+${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;background:#F8F9FA;border-left:4px solid #6B7280;border-radius:4px;"><div style="font-weight:700;font-size:12px;margin-bottom:4px;">DISPOSITION / ACTION TAKEN</div><div>${r.disposition || r.nurseNotes || '—'}</div></div>` : ''}
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:40px;"><div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">Triage Nurse</div><div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">Emergency Doctor</div><div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">Date: ${new Date().toLocaleDateString('en-IN')}</div></div>
+<script>window.onload=function(){window.print();}</script></body></html>`;
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
   };
 
   const inp = 'w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 transition-all';
@@ -456,12 +495,13 @@ export default function TriagePage() {
                     return (
                       <div key={t.id} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${lvl?.bg || 'bg-gray-50'}`}>
                         <div className={`w-2 h-2 rounded-full flex-shrink-0 ${lvl?.dot || 'bg-gray-400'}`} />
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="text-xs font-semibold text-gray-800 truncate">
                             {t.patient?.firstName} {t.patient?.lastName}
                           </div>
                           <div className="text-xs text-gray-400 truncate">{t.chiefComplaint}</div>
                         </div>
+                        <button onClick={() => handlePrintTriageCard(t)} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1 flex-shrink-0"><Printer size={11} /> Print</button>
                       </div>
                     );
                   })}

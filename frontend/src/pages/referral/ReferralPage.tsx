@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { GitBranch, Clock, CheckCircle, Users, GitPullRequest, Pencil, Trash2 } from 'lucide-react';
+import { GitBranch, Clock, CheckCircle, Users, GitPullRequest, Pencil, Trash2, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
@@ -21,6 +21,50 @@ export default function ReferralPage() {
   const [form, setForm] = useState({ ...emptyForm });
   const [formError, setFormError] = useState('');
   const [viewMode, setViewMode] = useState<'all' | 'mine'>('all');
+
+  const handlePrintReferral = (r: any) => {
+    const urgencyColor = (u: string) => u === 'EMERGENCY' ? '#DC2626' : u === 'URGENT' ? '#EA580C' : '#16A34A';
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Referral Letter</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111;font-size:13px;}h1,h2{margin:0;}table{width:100%;border-collapse:collapse;}td,th{padding:7px 10px;border:1px solid #ddd;}th{background:#f3f4f6;font-weight:600;text-align:left;}@media print{body{padding:20px;}}</style></head><body>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+      <div><h1 style="margin:0;font-size:22px;font-weight:900;color:#0F766E;">AYPHEN HMS</h1><h2 style="margin:4px 0 12px;font-size:16px;font-weight:700;">REFERRAL LETTER</h2></div>
+      <div style="text-align:right;font-size:11px;color:#555;">Printed: ${new Date().toLocaleString()}</div>
+    </div>
+    <hr style="border:none;border-top:2px solid #0F766E;margin:12px 0;"/>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+      <div style="border:1px solid #e5e7eb;border-radius:4px;padding:12px;">
+        <div style="font-weight:700;color:#0F766E;margin-bottom:6px;font-size:12px;text-transform:uppercase;">To,</div>
+        <div style="font-weight:600;">${r.referredTo || r.toDoctorId || '—'}</div>
+        <div style="color:#555;font-size:12px;">${r.specialty || r.toDepartmentId || '—'}</div>
+      </div>
+      <div style="border:1px solid #e5e7eb;border-radius:4px;padding:12px;">
+        <div style="font-weight:700;color:#0F766E;margin-bottom:6px;font-size:12px;text-transform:uppercase;">From,</div>
+        <div style="font-weight:600;">${r.referringDoctor || r.fromDoctorId || '—'}</div>
+        <div style="color:#555;font-size:12px;">${r.fromDepartment || r.fromDepartmentId || '—'}</div>
+        <div style="color:#555;font-size:12px;">Date: ${r.createdAt ? new Date(r.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}</div>
+      </div>
+    </div>
+    <table style="margin-bottom:16px;">
+      <tr><td style="width:25%;background:#f9fafb;font-weight:600;">Referral #</td><td>${r.referralNumber || (r.id || '').slice(0,8).toUpperCase()}</td><td style="width:25%;background:#f9fafb;font-weight:600;">Date</td><td>${r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '—'}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Patient Name</td><td>${r.patientName || r.patientId || '—'}</td><td style="background:#f9fafb;font-weight:600;">Age / DOB</td><td>${r.patientAge || r.dob || '—'}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Diagnosis</td><td>${r.diagnosis || '—'}</td><td style="background:#f9fafb;font-weight:600;">Urgency</td><td><span style="color:${urgencyColor(r.urgency)};font-weight:700;">${r.urgency || 'ROUTINE'}</span></td></tr>
+    </table>
+    <div style="font-weight:700;margin-bottom:6px;color:#0F766E;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Reason for Referral</div>
+    <div style="background:#fafafa;border:1px solid #e5e7eb;border-radius:4px;padding:10px;margin-bottom:14px;">${r.reason || '—'}</div>
+    ${r.clinicalNotes ? `<div style="font-weight:700;margin-bottom:6px;color:#0F766E;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Clinical Summary / Notes</div><div style="background:#fafafa;border:1px solid #e5e7eb;border-radius:4px;padding:10px;margin-bottom:14px;">${r.clinicalNotes}</div>` : ''}
+    ${r.currentMedications ? `<div style="font-weight:700;margin-bottom:6px;color:#0F766E;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Current Medications</div><div style="background:#fafafa;border:1px solid #e5e7eb;border-radius:4px;padding:10px;margin-bottom:14px;">${r.currentMedications}</div>` : ''}
+    ${r.investigationsDone ? `<div style="font-weight:700;margin-bottom:6px;color:#0F766E;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Investigations Done</div><div style="background:#fafafa;border:1px solid #e5e7eb;border-radius:4px;padding:10px;margin-bottom:14px;">${r.investigationsDone}</div>` : ''}
+    <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:4px;padding:12px;margin-bottom:14px;"><strong>Request:</strong> Please review and manage this patient for ${r.reason || 'the referred condition'}.</div>
+    <div style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;border-top:1px solid #ddd;padding-top:20px;">
+      <div style="text-align:center;"><div style="border-top:1px solid #111;margin-top:40px;padding-top:6px;font-size:11px;color:#555;">Referring Doctor</div></div>
+      <div style="text-align:center;"><div style="border-top:1px solid #111;margin-top:40px;padding-top:6px;font-size:11px;color:#555;">Date</div></div>
+      <div style="text-align:center;"><div style="border-top:1px solid #111;margin-top:40px;padding-top:6px;font-size:11px;color:#555;">Stamp</div></div>
+    </div>
+    <script>window.onload=function(){window.print();}</script></body></html>`;
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -163,6 +207,7 @@ export default function ReferralPage() {
               {r.status === 'ACCEPTED' && (
                 <button onClick={() => completeReferral(r.id)} className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">Complete</button>
               )}
+              <button onClick={() => handlePrintReferral(r)} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"><Printer size={11} />Print</button>
             </div>
           </td>
         </tr>

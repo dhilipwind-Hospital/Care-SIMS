@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Shield, Package, Plus, X, Loader2, CheckCircle, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Shield, Package, Plus, X, Loader2, CheckCircle, AlertTriangle, ArrowRight, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -82,6 +82,40 @@ export default function CssdPage() {
     finally { setSubmitting(false); }
   };
 
+  const handlePrintSterilizationLog = (r: any) => {
+    const passed = r.biologicalIndicator === 'PASS' && r.chemicalIndicator === 'PASS';
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>CSSD Sterilization Log</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111;font-size:13px;}@media print{body{padding:16px;}}</style></head><body>
+<div style="text-align:center;margin-bottom:16px;">
+  <h1 style="margin:0;font-size:22px;font-weight:900;color:#0F766E;">AYPHEN HMS</h1>
+  <h2 style="margin:4px 0 12px;font-size:16px;font-weight:700;">CSSD STERILIZATION LOG</h2>
+  <hr style="border:none;border-top:2px solid #0F766E;margin:12px 0;"/>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;margin-bottom:20px;">
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Log #</span><div style="font-weight:700;margin-top:2px;">${(r.id || '').slice(0, 8)}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Date / Time</span><div style="font-weight:700;margin-top:2px;">${r.createdAt ? new Date(r.createdAt).toLocaleString('en-IN') : new Date().toLocaleString('en-IN')}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Item Name / Instruments</span><div style="font-weight:700;margin-top:2px;">${r.items?.map((i: any) => i.instrumentName || i.name).join(', ') || r.itemName || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Category / Load Type</span><div style="font-weight:700;margin-top:2px;">${r.loadType || r.category || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Sterilization Method</span><div style="font-weight:700;margin-top:2px;">${r.loadType || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Cycle # / Batch #</span><div style="font-weight:700;margin-top:2px;">${r.batchNumber || r.cycleNumber || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Temperature (°C)</span><div style="font-weight:700;margin-top:2px;">${r.temperature ? `${r.temperature} °C` : '134 °C'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Pressure</span><div style="font-weight:700;margin-top:2px;">${r.pressure ? `${r.pressure} bar` : '2.1 bar'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Duration</span><div style="font-weight:700;margin-top:2px;">${r.durationMins ? `${r.durationMins} min` : '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Operator</span><div style="font-weight:700;margin-top:2px;">${r.operator || r.machineId || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Expiry Date</span><div style="font-weight:700;margin-top:2px;">${r.expiryDate ? new Date(r.expiryDate).toLocaleDateString('en-IN') : '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Result</span><div style="font-weight:700;margin-top:2px;color:${passed ? '#16A34A' : '#DC2626'};">${passed ? 'PASS' : r.status || '—'}</div></div>
+</div>
+<div style="margin:16px 0;padding:12px 20px;border-radius:8px;font-weight:700;font-size:14px;text-align:center;background:${passed ? '#F0FDF4' : '#FFF5F5'};color:${passed ? '#16A34A' : '#DC2626'};border:2px solid ${passed ? '#16A34A' : '#DC2626'};">
+  ${passed ? '✓ STERILIZATION PASSED — SAFE FOR USE' : '✗ STERILIZATION FAILED — DO NOT USE'}
+</div>
+${r.notes ? `<div style="margin-top:12px;padding:12px;background:#F8F9FA;border-left:4px solid #6B7280;border-radius:4px;"><div style="font-weight:700;font-size:12px;margin-bottom:4px;">NOTES</div><div>${r.notes}</div></div>` : ''}
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:40px;"><div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">CSSD Technician</div><div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">Quality Officer</div><div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">Date: ${new Date().toLocaleDateString('en-IN')}</div></div>
+<script>window.onload=function(){window.print();}</script></body></html>`;
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+  };
+
   const addItem = () => setForm({ ...form, items: [...form.items, { instrumentName: '', instrumentSetId: '', departmentId: '' }] });
 
   return (
@@ -130,6 +164,7 @@ export default function CssdPage() {
                       <div className="flex gap-1">
                         {b.status === 'PENDING' && <button onClick={() => handleStartBatch(b.id)} className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 font-medium flex items-center gap-1"><ArrowRight size={11} /> Start</button>}
                         {b.status === 'IN_PROGRESS' && <button onClick={() => { setCompleteBatch(b); setCompleteForm({ biologicalIndicator: 'PASS', chemicalIndicator: 'PASS' }); }} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium">Complete</button>}
+                        <button onClick={() => handlePrintSterilizationLog(b)} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"><Printer size={11} /> Print</button>
                       </div>
                     </td>
                   </tr>

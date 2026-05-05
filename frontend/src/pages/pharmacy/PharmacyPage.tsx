@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Pill, Package, TrendingDown, X, Barcode, ClipboardList, CheckCircle } from 'lucide-react';
+import { Pill, Package, TrendingDown, X, Barcode, ClipboardList, CheckCircle, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import EmptyState from '../../components/ui/EmptyState';
@@ -35,6 +35,47 @@ export default function PharmacyPage() {
   const [rxTotal,       setRxTotal]       = useState(0);
   const [drugPage,      setDrugPage]      = useState(1);
   const [drugTotal,     setDrugTotal]     = useState(0);
+
+  const handlePrintDispense = (r: any) => {
+    const meds: any[] = r.medications || [];
+    const total = r.totalAmount || meds.reduce((s: number, m: any) => s + ((m.pricePerUnit || 0) * (m.quantity || 1)), 0);
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pharmacy Dispense Record</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111;font-size:13px;}h1,h2{margin:0;}table{width:100%;border-collapse:collapse;}td,th{padding:7px 10px;border:1px solid #ddd;}th{background:#f3f4f6;font-weight:600;text-align:left;}@media print{body{padding:20px;}}</style></head><body>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+      <div><h1 style="margin:0;font-size:22px;font-weight:900;color:#0F766E;">AYPHEN HMS</h1><h2 style="margin:4px 0 12px;font-size:16px;font-weight:700;">PHARMACY DISPENSE RECORD</h2></div>
+      <div style="text-align:right;font-size:11px;color:#555;">Printed: ${new Date().toLocaleString()}</div>
+    </div>
+    <hr style="border:none;border-top:2px solid #0F766E;margin:12px 0;"/>
+    <table style="margin-bottom:16px;">
+      <tr><td style="width:25%;background:#f9fafb;font-weight:600;">Dispense #</td><td>${(r.id || '').slice(0,8).toUpperCase()}</td><td style="width:25%;background:#f9fafb;font-weight:600;">Date / Time</td><td>${r.createdAt ? new Date(r.createdAt).toLocaleString() : new Date().toLocaleString()}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Patient Name</td><td>${r.patient ? `${r.patient.firstName || ''} ${r.patient.lastName || ''}`.trim() : (r.patientId || '—')}</td><td style="background:#f9fafb;font-weight:600;">Doctor</td><td>${r.doctor ? `Dr. ${r.doctor.firstName || ''} ${r.doctor.lastName || ''}`.trim() : (r.doctorId || '—')}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Prescription #</td><td colspan="3">${r.prescriptionNumber || (r.prescriptionId || '').slice(0,8).toUpperCase() || '—'}</td></tr>
+    </table>
+    <div style="font-weight:700;margin-bottom:8px;color:#0F766E;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Medications Dispensed</div>
+    <table style="margin-bottom:16px;">
+      <thead><tr><th style="width:30px;">#</th><th>Drug Name</th><th>Generic</th><th>Strength</th><th>Form</th><th>Qty</th><th>Days</th><th>Instructions</th></tr></thead>
+      <tbody>
+        ${meds.length ? meds.map((m: any, i: number) => `<tr><td>${i+1}</td><td>${m.medicationName || m.brandName || m.name || '—'}</td><td>${m.genericName || '—'}</td><td>${m.dosage || m.strength || '—'}</td><td>${m.dosageForm || m.form || '—'}</td><td>${m.quantity || '—'}</td><td>${m.duration || '—'}</td><td>${m.instructions || m.frequency || '—'}</td></tr>`).join('') : `<tr><td colspan="8" style="text-align:center;color:#888;">No medications</td></tr>`}
+      </tbody>
+    </table>
+    <div style="font-weight:700;margin-bottom:8px;color:#0F766E;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Pharmacist Counselling</div>
+    <table style="margin-bottom:16px;width:auto;">
+      <tbody>
+        <tr><td style="border:none;padding:4px 8px;">&#9744; Storage instructions provided</td><td style="border:none;padding:4px 8px;">&#9744; Side effects explained</td></tr>
+        <tr><td style="border:none;padding:4px 8px;">&#9744; Drug interactions discussed</td><td style="border:none;padding:4px 8px;">&#9744; Missed dose instructions given</td></tr>
+      </tbody>
+    </table>
+    ${total ? `<div style="text-align:right;margin-bottom:16px;"><span style="font-size:14px;font-weight:700;">Total Amount Charged: </span><span style="font-size:16px;font-weight:900;color:#0F766E;">₹${Number(total).toLocaleString('en-IN')}</span></div>` : ''}
+    <div style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;border-top:1px solid #ddd;padding-top:20px;">
+      <div style="text-align:center;"><div style="border-top:1px solid #111;margin-top:40px;padding-top:6px;font-size:11px;color:#555;">Dispensing Pharmacist</div></div>
+      <div style="text-align:center;"><div style="border-top:1px solid #111;margin-top:40px;padding-top:6px;font-size:11px;color:#555;">Checking Pharmacist</div></div>
+      <div style="text-align:center;"><div style="border-top:1px solid #111;margin-top:40px;padding-top:6px;font-size:11px;color:#555;">Date</div></div>
+    </div>
+    <script>window.onload=function(){window.print();}</script></body></html>`;
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -178,16 +219,16 @@ export default function PharmacyPage() {
               <table className="w-full">
                 <thead className="sticky top-0 z-10">
                   <tr>
-                    {['Rx #','Patient','Doctor','Items','Status','Time'].map(h => (
+                    {['Rx #','Patient','Doctor','Items','Status','Time',''].map(h => (
                       <th key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 py-3 text-left bg-gray-50">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
-                    <>{Array.from({ length: 5 }).map((_, i) => <SkeletonTableRow key={i} cols={6} />)}</>
+                    <>{Array.from({ length: 5 }).map((_, i) => <SkeletonTableRow key={i} cols={7} />)}</>
                   ) : filteredRx.length === 0 ? (
-                    <tr><td colSpan={6} className="p-0"><EmptyState title="No prescriptions" description="No prescriptions to display." /></td></tr>
+                    <tr><td colSpan={7} className="p-0"><EmptyState title="No prescriptions" description="No prescriptions to display." /></td></tr>
                   ) : filteredRx.map(rx => (
                     <tr
                       key={rx.id}
@@ -221,6 +262,9 @@ export default function PharmacyPage() {
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-400">
                         {rx.createdAt ? formatTime(rx.createdAt) : '—'}
+                      </td>
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <button onClick={() => handlePrintDispense(rx)} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"><Printer size={11} />Print</button>
                       </td>
                     </tr>
                   ))}

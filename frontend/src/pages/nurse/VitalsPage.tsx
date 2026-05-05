@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Search, X, CheckCircle } from 'lucide-react';
+import { Search, X, CheckCircle, Printer } from 'lucide-react';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import api from '../../lib/api';
 
@@ -95,6 +95,49 @@ export default function VitalsPage() {
       fetchQueue();
     } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to save vitals'); }
     finally { setSaving(false); }
+  };
+
+  const handlePrintVitals = (r: any) => {
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Patient Vitals Record</title></head><body style="font-family:Arial,sans-serif;padding:32px;color:#1a1a1a;max-width:800px;margin:0 auto;">
+<h1 style="margin:0;font-size:22px;font-weight:900;color:#0F766E;">AYPHEN HMS</h1>
+<h2 style="margin:4px 0 12px;font-size:16px;font-weight:700;">PATIENT VITALS RECORD</h2>
+<hr style="border:none;border-top:2px solid #0F766E;margin:12px 0;"/>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;margin-bottom:20px;font-size:13px;">
+  <div><span style="color:#555;font-weight:600;">Record #:</span> ${(r.id||'').slice(0,8)}</div>
+  <div><span style="color:#555;font-weight:600;">Date/Time:</span> ${r.recordedAt ? new Date(r.recordedAt).toLocaleString() : new Date().toLocaleString()}</div>
+  <div><span style="color:#555;font-weight:600;">Patient:</span> ${r.patientId||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">Ward:</span> ${r.ward||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">Recorded By:</span> ${r.recordedBy||'—'}</div>
+</div>
+<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px;">
+  <thead><tr style="background:#f0fdfa;">
+    <th style="border:1px solid #ccc;padding:8px;text-align:left;">Vital Sign</th>
+    <th style="border:1px solid #ccc;padding:8px;text-align:left;">Value</th>
+    <th style="border:1px solid #ccc;padding:8px;text-align:left;">Normal Range</th>
+  </tr></thead>
+  <tbody>
+    <tr><td style="border:1px solid #ccc;padding:8px;">Blood Pressure (Systolic)</td><td style="border:1px solid #ccc;padding:8px;">${r.systolicBp||'—'} mmHg</td><td style="border:1px solid #ccc;padding:8px;">90–120 mmHg</td></tr>
+    <tr><td style="border:1px solid #ccc;padding:8px;">Blood Pressure (Diastolic)</td><td style="border:1px solid #ccc;padding:8px;">${r.diastolicBp||'—'} mmHg</td><td style="border:1px solid #ccc;padding:8px;">60–80 mmHg</td></tr>
+    <tr><td style="border:1px solid #ccc;padding:8px;">Heart Rate</td><td style="border:1px solid #ccc;padding:8px;">${r.heartRate||'—'} bpm</td><td style="border:1px solid #ccc;padding:8px;">60–100 bpm</td></tr>
+    <tr><td style="border:1px solid #ccc;padding:8px;">Temperature (°C)</td><td style="border:1px solid #ccc;padding:8px;">${r.temperatureC||'—'} °C</td><td style="border:1px solid #ccc;padding:8px;">36.1–37.2 °C</td></tr>
+    <tr><td style="border:1px solid #ccc;padding:8px;">SpO2 (%)</td><td style="border:1px solid #ccc;padding:8px;">${r.spo2||'—'} %</td><td style="border:1px solid #ccc;padding:8px;">95–100 %</td></tr>
+    <tr><td style="border:1px solid #ccc;padding:8px;">Respiratory Rate</td><td style="border:1px solid #ccc;padding:8px;">${r.respiratoryRate||'—'} /min</td><td style="border:1px solid #ccc;padding:8px;">12–20 /min</td></tr>
+    <tr><td style="border:1px solid #ccc;padding:8px;">Weight (kg)</td><td style="border:1px solid #ccc;padding:8px;">${r.weightKg||'—'} kg</td><td style="border:1px solid #ccc;padding:8px;">—</td></tr>
+    <tr><td style="border:1px solid #ccc;padding:8px;">Blood Sugar</td><td style="border:1px solid #ccc;padding:8px;">${r.bloodSugar||'—'}</td><td style="border:1px solid #ccc;padding:8px;">70–140 mg/dL</td></tr>
+    ${r.hasAbnormal ? `<tr style="background:#fef2f2;"><td colspan="3" style="border:1px solid #ccc;padding:8px;color:#dc2626;font-weight:700;">⚠ ABNORMAL VALUES DETECTED — Immediate clinical review required</td></tr>` : ''}
+  </tbody>
+</table>
+${r.notes ? `<div style="margin-bottom:16px;padding:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;font-size:13px;"><strong>Notes:</strong> ${r.notes}</div>` : ''}
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:40px;">
+  <div style="border-top:1px solid #333;padding-top:6px;font-size:12px;text-align:center;">Nurse</div>
+  <div style="border-top:1px solid #333;padding-top:6px;font-size:12px;text-align:center;">Doctor</div>
+  <div style="border-top:1px solid #333;padding-top:6px;font-size:12px;text-align:center;">Date: ${new Date().toLocaleDateString()}</div>
+</div>
+<script>window.onload=function(){window.print();}</script></body></html>`;
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
   };
 
   const inp = 'w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 transition-all';
@@ -198,16 +241,26 @@ export default function VitalsPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <button
-                        onClick={e => { e.stopPropagation(); selectToken(token); }}
-                        className={`text-xs px-3 py-1 rounded-md font-medium transition-all ${
-                          token.patient?.lastVitalsAt
-                            ? 'bg-teal-50 text-teal-700 hover:bg-teal-100'
-                            : 'bg-amber-500 text-white hover:bg-amber-600'
-                        }`}
-                      >
-                        {token.patient?.lastVitalsAt ? 'Update' : 'Record'}
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={e => { e.stopPropagation(); selectToken(token); }}
+                          className={`text-xs px-3 py-1 rounded-md font-medium transition-all ${
+                            token.patient?.lastVitalsAt
+                              ? 'bg-teal-50 text-teal-700 hover:bg-teal-100'
+                              : 'bg-amber-500 text-white hover:bg-amber-600'
+                          }`}
+                        >
+                          {token.patient?.lastVitalsAt ? 'Update' : 'Record'}
+                        </button>
+                        {token.patient?.lastVitalsAt && (
+                          <button
+                            onClick={e => { e.stopPropagation(); handlePrintVitals({ ...token, patientId: token.patient?.patientId, recordedAt: token.patient?.lastVitalsAt }); }}
+                            className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"
+                          >
+                            <Printer size={11} /> Print
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

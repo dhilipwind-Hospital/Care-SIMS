@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ShoppingCart, Truck, CheckCircle, DollarSign, Plus, Search } from 'lucide-react';
+import { ShoppingCart, Truck, CheckCircle, DollarSign, Plus, Search, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
@@ -10,6 +10,49 @@ export default function PurchaseOrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+
+  const handlePrintPO = (o: any) => {
+    const items: any[] = o.items || [];
+    const subtotal = items.reduce((s: number, it: any) => s + ((it.rate || it.unitPrice || 0) * (it.quantity || 0)), 0);
+    const gst = o.gstAmount || o.taxAmount || 0;
+    const grandTotal = o.totalAmount || (subtotal + gst);
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Purchase Order</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111;font-size:13px;}h1,h2{margin:0;}table{width:100%;border-collapse:collapse;}td,th{padding:7px 10px;border:1px solid #ddd;}th{background:#f3f4f6;font-weight:600;text-align:left;}@media print{body{padding:20px;}}</style></head><body>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+      <div><h1 style="margin:0;font-size:22px;font-weight:900;color:#0F766E;">AYPHEN HMS</h1><h2 style="margin:4px 0 12px;font-size:16px;font-weight:700;">PURCHASE ORDER</h2></div>
+      <div style="text-align:right;font-size:11px;color:#555;">Printed: ${new Date().toLocaleString()}</div>
+    </div>
+    <hr style="border:none;border-top:2px solid #0F766E;margin:12px 0;"/>
+    <table style="margin-bottom:16px;">
+      <tr><td style="width:25%;background:#f9fafb;font-weight:600;">PO #</td><td>${o.poNumber || (o.id || '').slice(0,8).toUpperCase()}</td><td style="width:25%;background:#f9fafb;font-weight:600;">Date</td><td>${o.createdAt ? new Date(o.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Vendor / Supplier</td><td>${o.supplier?.name || o.vendorName || '—'}</td><td style="background:#f9fafb;font-weight:600;">Contact</td><td>${o.supplier?.contact || o.supplierContact || '—'}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Delivery Date</td><td>${o.expectedDate ? new Date(o.expectedDate).toLocaleDateString() : '—'}</td><td style="background:#f9fafb;font-weight:600;">Payment Terms</td><td>${o.paymentTerms || '—'}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Status</td><td colspan="3"><span style="font-weight:700;">${o.status || '—'}</span></td></tr>
+    </table>
+    <div style="font-weight:700;margin-bottom:8px;color:#0F766E;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Items</div>
+    <table style="margin-bottom:16px;">
+      <thead><tr><th style="width:30px;">#</th><th>Item Name</th><th>Generic Name</th><th>Quantity</th><th>Unit</th><th>Rate (₹)</th><th>Amount (₹)</th></tr></thead>
+      <tbody>
+        ${items.length ? items.map((it: any, i: number) => {
+          const rate = it.rate || it.unitPrice || 0;
+          const qty = it.quantity || 0;
+          return `<tr><td>${i + 1}</td><td>${it.itemName || it.brandName || it.name || '—'}</td><td>${it.genericName || '—'}</td><td>${qty}</td><td>${it.unit || it.unitOfMeasure || '—'}</td><td style="text-align:right;">₹${rate.toLocaleString('en-IN')}</td><td style="text-align:right;">₹${(rate * qty).toLocaleString('en-IN')}</td></tr>`;
+        }).join('') : `<tr><td colspan="7" style="text-align:center;color:#888;">No items</td></tr>`}
+        <tr><td colspan="5"></td><td style="background:#f9fafb;font-weight:600;">Subtotal</td><td style="text-align:right;">₹${subtotal.toLocaleString('en-IN')}</td></tr>
+        ${gst ? `<tr><td colspan="5"></td><td style="background:#f9fafb;font-weight:600;">GST / Tax</td><td style="text-align:right;">₹${Number(gst).toLocaleString('en-IN')}</td></tr>` : ''}
+        <tr><td colspan="5"></td><td style="background:#0F766E;color:#fff;font-weight:700;">Grand Total</td><td style="background:#0F766E;color:#fff;font-weight:900;text-align:right;">₹${Number(grandTotal).toLocaleString('en-IN')}</td></tr>
+      </tbody>
+    </table>
+    <div style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;border-top:1px solid #ddd;padding-top:20px;">
+      <div style="text-align:center;"><div style="border-top:1px solid #111;margin-top:40px;padding-top:6px;font-size:11px;color:#555;">Pharmacy Manager</div></div>
+      <div style="text-align:center;"><div style="border-top:1px solid #111;margin-top:40px;padding-top:6px;font-size:11px;color:#555;">Finance Officer</div></div>
+      <div style="text-align:center;"><div style="border-top:1px solid #111;margin-top:40px;padding-top:6px;font-size:11px;color:#555;">Authorized Signatory</div></div>
+    </div>
+    <script>window.onload=function(){window.print();}</script></body></html>`;
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+  };
 
   const fetch = async () => {
     setLoading(true);
@@ -77,6 +120,7 @@ export default function PurchaseOrdersPage() {
                         {o.status === 'ACKNOWLEDGED' && (
                           <button onClick={async () => { await api.post('/pharmacy/batches', { orderId: o.id }); fetch(); }} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100">Receive</button>
                         )}
+                        <button onClick={() => handlePrintPO(o)} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"><Printer size={11} />Print</button>
                       </div>
                     </td>
                   </tr>

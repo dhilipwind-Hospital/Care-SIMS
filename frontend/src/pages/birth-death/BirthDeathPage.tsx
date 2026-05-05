@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Baby, Skull, Plus, X, Loader2 } from 'lucide-react';
+import { Baby, Skull, Plus, X, Loader2, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import EmptyState from '../../components/ui/EmptyState';
@@ -25,6 +25,50 @@ export default function BirthDeathPage() {
   // Death form
   const [showDeathForm, setShowDeathForm] = useState(false);
   const [deathForm, setDeathForm] = useState({ patientId: '', dateOfDeath: '', timeOfDeath: '', causeOfDeath: '', mannerOfDeath: 'NATURAL', postMortemRequired: false, notes: '' });
+
+  const handlePrintCertificate = (r: any) => {
+    const isBirth = r.type === 'BIRTH' || tab === 'births';
+    const title = isBirth ? 'BIRTH CERTIFICATE' : 'DEATH CERTIFICATE';
+    const bannerBg = isBirth ? '#f0fdf4' : '#fef2f2';
+    const bannerBorder = isBirth ? '#86efac' : '#fca5a5';
+    const bannerColor = isBirth ? '#15803d' : '#dc2626';
+    const bannerText = isBirth
+      ? 'OFFICIAL BIRTH CERTIFICATE — Registration of Births and Deaths Act'
+      : 'OFFICIAL DEATH CERTIFICATE — Registration of Births and Deaths Act';
+    const dateLabel = isBirth ? 'Date of Birth' : 'Date of Death';
+    const dateValue = isBirth ? r.dateOfBirth : r.dateOfDeath;
+    const timeValue = isBirth ? r.timeOfBirth : r.timeOfDeath;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${title}</title></head><body style="font-family:Arial,sans-serif;padding:32px;color:#1a1a1a;max-width:800px;margin:0 auto;">
+<h1 style="margin:0;font-size:22px;font-weight:900;color:#0F766E;">AYPHEN HMS</h1>
+<h2 style="margin:4px 0 12px;font-size:16px;font-weight:700;">${title}</h2>
+<hr style="border:none;border-top:2px solid #0F766E;margin:12px 0;"/>
+<div style="background:${bannerBg};border:1px solid ${bannerBorder};border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px;font-weight:700;color:${bannerColor};text-align:center;letter-spacing:0.5px;">${bannerText}</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;margin-bottom:20px;font-size:13px;">
+  <div><span style="color:#555;font-weight:600;">Certificate #:</span> ${r.certificateNumber || (r.id||'').slice(0,8)}</div>
+  <div><span style="color:#555;font-weight:600;">${dateLabel}:</span> ${dateValue ? new Date(dateValue).toLocaleDateString() : '—'}</div>
+  <div><span style="color:#555;font-weight:600;">Time:</span> ${timeValue||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">${isBirth ? 'Baby' : 'Patient'} Name:</span> ${r.babyName||r.patientName||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">Father / Mother:</span> ${r.fatherName||'—'} / ${r.motherName||'—'}</div>
+  ${isBirth ? `<div><span style="color:#555;font-weight:600;">Weight:</span> ${r.weightGrams ? r.weightGrams+'g' : '—'}</div>` : ''}
+  <div><span style="color:#555;font-weight:600;">Place:</span> ${r.place||r.hospital||'Ayphen HMS Hospital'}</div>
+  ${!isBirth ? `<div><span style="color:#555;font-weight:600;">Cause of Death:</span> ${r.causeOfDeath||'—'}</div>` : ''}
+  <div><span style="color:#555;font-weight:600;">Doctor Name:</span> ${r.doctorName||r.certifyingDoctor||'—'}</div>
+</div>
+<div style="margin-bottom:16px;padding:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;font-size:13px;">
+  <strong>Registration Details:</strong><br/>
+  Registration Number: ${r.registrationNumber||'Pending'} &nbsp;|&nbsp; Registered On: ${r.registeredAt ? new Date(r.registeredAt).toLocaleDateString() : new Date().toLocaleDateString()}
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:40px;">
+  <div style="border-top:1px solid #333;padding-top:6px;font-size:12px;text-align:center;">Certifying Doctor</div>
+  <div style="border-top:1px solid #333;padding-top:6px;font-size:12px;text-align:center;">Registrar</div>
+  <div style="border-top:1px solid #333;padding-top:6px;font-size:12px;text-align:center;">Date: ${new Date().toLocaleDateString()}</div>
+</div>
+<script>window.onload=function(){window.print();}</script></body></html>`;
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -93,8 +137,8 @@ export default function BirthDeathPage() {
             <thead className="sticky top-0 z-10">
               <tr>
                 {tab === 'births'
-                  ? ['Date', 'Gender', 'Weight', 'Delivery', 'APGAR 1m', 'APGAR 5m', 'Birth Order', 'Cert Issued'].map(h => <th key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 py-3 text-left bg-gray-50">{h}</th>)
-                  : ['Date', 'Cause of Death', 'Manner', 'ICD Code', 'PM Required', 'PM Done', 'Cert Issued'].map(h => <th key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 py-3 text-left bg-gray-50">{h}</th>)
+                  ? ['Date', 'Gender', 'Weight', 'Delivery', 'APGAR 1m', 'APGAR 5m', 'Birth Order', 'Cert Issued', 'Actions'].map(h => <th key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 py-3 text-left bg-gray-50">{h}</th>)
+                  : ['Date', 'Cause of Death', 'Manner', 'ICD Code', 'PM Required', 'PM Done', 'Cert Issued', 'Actions'].map(h => <th key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 py-3 text-left bg-gray-50">{h}</th>)
                 }
               </tr>
             </thead>
@@ -112,6 +156,12 @@ export default function BirthDeathPage() {
                     <td className="px-4 py-3 text-sm">{r.apgarScore5min ?? '—'}</td>
                     <td className="px-4 py-3 text-sm">{r.birthOrder}</td>
                     <td className="px-4 py-3 text-sm">{r.birthCertIssued ? '✅' : '—'}</td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => handlePrintCertificate({ ...r, type: 'BIRTH' })}
+                        className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1">
+                        <Printer size={11} /> Print
+                      </button>
+                    </td>
                   </>) : (<>
                     <td className="px-4 py-3 text-sm">{formatDate(r.dateOfDeath)}</td>
                     <td className="px-4 py-3 text-sm max-w-[200px] truncate">{r.causeOfDeath}</td>
@@ -120,6 +170,12 @@ export default function BirthDeathPage() {
                     <td className="px-4 py-3 text-sm">{r.postMortemRequired ? 'Yes' : 'No'}</td>
                     <td className="px-4 py-3 text-sm">{r.postMortemDone ? '✅' : '—'}</td>
                     <td className="px-4 py-3 text-sm">{r.deathCertIssued ? '✅' : '—'}</td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => handlePrintCertificate({ ...r, type: 'DEATH' })}
+                        className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1">
+                        <Printer size={11} /> Print
+                      </button>
+                    </td>
                   </>)}
                 </tr>
               ))}

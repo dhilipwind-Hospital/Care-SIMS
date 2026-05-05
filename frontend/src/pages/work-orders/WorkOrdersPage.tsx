@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Wrench, Plus, X } from 'lucide-react';
+import { Wrench, Plus, X, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -47,6 +47,42 @@ export default function WorkOrdersPage() {
       fetchData();
     } catch { toast.error('Failed to save'); }
     finally { setSaving(false); }
+  };
+
+  const handlePrintWorkOrder = (w: any) => {
+    const priorityColor = ['HIGH','URGENT','CRITICAL'].includes(w.priority) ? '#dc2626' : w.priority === 'MEDIUM' ? '#d97706' : '#16a34a';
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Work Order</title></head><body style="font-family:Arial,sans-serif;padding:32px;color:#1a1a1a;max-width:800px;margin:0 auto;">
+<h1 style="margin:0;font-size:22px;font-weight:900;color:#0F766E;">AYPHEN HMS</h1>
+<h2 style="margin:4px 0 12px;font-size:16px;font-weight:700;">WORK ORDER</h2>
+<hr style="border:none;border-top:2px solid #0F766E;margin:12px 0;"/>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;margin-bottom:20px;font-size:13px;">
+  <div><span style="color:#555;font-weight:600;">WO #:</span> ${w.workOrderNumber || (w.id||'').slice(0,8)}</div>
+  <div><span style="color:#555;font-weight:600;">Date:</span> ${w.createdAt ? new Date(w.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}</div>
+  <div><span style="color:#555;font-weight:600;">Title / Description:</span> ${w.title||w.description||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">Category:</span> ${w.category||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">Priority:</span> <span style="color:${priorityColor};font-weight:700;">${w.priority||'—'}</span></div>
+  <div><span style="color:#555;font-weight:600;">Assigned To:</span> ${w.assignedTo||w.assignedToName||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">Department:</span> ${w.department||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">Location:</span> ${w.location||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">Due Date:</span> ${w.dueDate ? new Date(w.dueDate).toLocaleDateString() : '—'}</div>
+  <div><span style="color:#555;font-weight:600;">Status:</span> ${w.status||'—'}</div>
+</div>
+<div style="margin-bottom:16px;padding:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;font-size:13px;">
+  <strong>Work Description / Scope:</strong><br/>
+  <span style="color:#374151;">${w.description||w.scope||'No description provided.'}</span>
+</div>
+${w.materials ? `<div style="margin-bottom:16px;padding:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;font-size:13px;"><strong>Materials Required:</strong><br/><span style="color:#374151;">${w.materials}</span></div>` : ''}
+${w.status === 'COMPLETED' ? `<div style="margin-bottom:16px;padding:10px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;font-size:13px;"><strong>Completion Notes:</strong><br/><span style="color:#15803d;">${w.completionNotes||w.notes||'Work completed.'}</span></div>` : ''}
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:40px;">
+  <div style="border-top:1px solid #333;padding-top:6px;font-size:12px;text-align:center;">Requested By</div>
+  <div style="border-top:1px solid #333;padding-top:6px;font-size:12px;text-align:center;">Assigned To</div>
+  <div style="border-top:1px solid #333;padding-top:6px;font-size:12px;text-align:center;">Supervisor</div>
+</div>
+<script>window.onload=function(){window.print();}</script></body></html>`;
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
   };
 
   const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500';
@@ -100,7 +136,13 @@ export default function WorkOrdersPage() {
                       <td className="px-4 py-3 text-sm text-gray-600">{r.assignedTo || r.assignedToName || '—'}</td>
                       <td className="px-4 py-3"><StatusBadge status={r.status || '—'} /></td>
                       <td className="px-4 py-3">
-                        <button className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">View</button>
+                        <div className="flex items-center gap-1.5">
+                          <button className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">View</button>
+                          <button onClick={() => handlePrintWorkOrder(r)}
+                            className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1">
+                            <Printer size={11} /> Print
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))

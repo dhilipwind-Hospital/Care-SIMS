@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { AlertTriangle, Clock, UserPlus, Activity, X, Search, Loader2 } from 'lucide-react';
+import { AlertTriangle, Clock, UserPlus, Activity, X, Search, Loader2, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -86,6 +86,36 @@ export default function EmergencyPage() {
       setDispVisit(null);
       fetchData();
     } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); }
+  };
+
+  const handlePrintTriageReport = (r: any) => {
+    const triageColor = r.triageCategory === 'RED' ? '#DC2626' : r.triageCategory === 'YELLOW' ? '#D97706' : r.triageCategory === 'BLACK' ? '#111827' : '#16A34A';
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Emergency Triage Report</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111;font-size:13px;}@media print{body{padding:16px;}}</style></head><body>
+<div style="text-align:center;margin-bottom:16px;">
+  <h1 style="margin:0;font-size:22px;font-weight:900;color:#0F766E;">AYPHEN HMS</h1>
+  <h2 style="margin:4px 0 12px;font-size:16px;font-weight:700;">EMERGENCY TRIAGE REPORT</h2>
+  <hr style="border:none;border-top:2px solid #0F766E;margin:12px 0;"/>
+</div>
+<div style="background:#DC2626;color:#fff;padding:8px 16px;border-radius:6px;font-weight:700;font-size:12px;text-align:center;margin-bottom:20px;letter-spacing:0.5px;">EMERGENCY — CONFIDENTIAL MEDICAL RECORD</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;margin-bottom:20px;">
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Case #</span><div style="font-weight:700;margin-top:2px;">${(r.id || '').slice(0, 8)}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Date / Time</span><div style="font-weight:700;margin-top:2px;">${r.arrivalTime ? new Date(r.arrivalTime).toLocaleString('en-IN') : new Date().toLocaleString('en-IN')}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Patient</span><div style="font-weight:700;margin-top:2px;">${r.patient?.firstName || ''} ${r.patient?.lastName || ''}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Chief Complaint</span><div style="font-weight:700;margin-top:2px;">${r.chiefComplaint || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Triage Level / Priority</span><div style="font-weight:700;margin-top:2px;color:${triageColor};">${r.triageCategory || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Mechanism of Injury</span><div style="font-weight:700;margin-top:2px;">${r.mechanismOfInjury || r.arrivalMode?.replace(/_/g, ' ') || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Vitals on Arrival</span><div style="font-weight:700;margin-top:2px;">${r.vitals ? JSON.stringify(r.vitals) : r.bp ? `BP: ${r.bp}, HR: ${r.hr}` : '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Attending Doctor</span><div style="font-weight:700;margin-top:2px;">${r.doctor ? `Dr. ${r.doctor.firstName || ''} ${r.doctor.lastName || ''}` : '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Disposition</span><div style="font-weight:700;margin-top:2px;">${r.disposition || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Visit Number</span><div style="font-weight:700;margin-top:2px;">${r.visitNumber || '—'}</div></div>
+</div>
+${(r.allergies || r.medications) ? `<div style="margin-top:16px;padding:12px;background:#FFF5F5;border-left:4px solid #DC2626;border-radius:4px;"><div style="font-weight:700;font-size:12px;margin-bottom:6px;color:#DC2626;">ALLERGIES &amp; MEDICATIONS</div>${r.allergies ? `<div style="margin-bottom:4px;"><span style="color:#555;">Allergies:</span> ${r.allergies}</div>` : ''}${r.medications ? `<div><span style="color:#555;">Medications:</span> ${r.medications}</div>` : ''}</div>` : ''}
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:40px;"><div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">Emergency Doctor</div><div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">Triage Nurse</div><div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">Date: ${new Date().toLocaleDateString('en-IN')}</div></div>
+<script>window.onload=function(){window.print();}</script></body></html>`;
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
   };
 
   const handleAssign = async (id: string) => {
@@ -185,7 +215,8 @@ export default function EmergencyPage() {
                         {['WAITING', 'BEING_SEEN', 'UNDER_OBSERVATION'].includes(v.status) && (
                           <button onClick={() => { setDispVisit(v); setDisposition('DISCHARGED'); }} className="text-xs px-2 py-1 bg-gray-50 text-gray-600 rounded-md hover:bg-gray-100 font-medium">Dispose</button>
                         )}
-                        {v.isMlc && <span className="text-[10px] px-1.5 py-0.5 bg-red-100 text-red-700 rounded-full font-bold">MLC</span>}
+                          {v.isMlc && <span className="text-[10px] px-1.5 py-0.5 bg-red-100 text-red-700 rounded-full font-bold">MLC</span>}
+                        <button onClick={() => handlePrintTriageReport(v)} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"><Printer size={11} /> Print</button>
                       </div>
                     </td>
                   </tr>

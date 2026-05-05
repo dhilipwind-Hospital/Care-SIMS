@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { HeartPulse, Clock, Play, CheckCircle, Edit2, X } from 'lucide-react';
+import { HeartPulse, Clock, Play, CheckCircle, Edit2, X, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -57,6 +57,37 @@ export default function DialysisPage() {
     finally { setMachineEditSaving(false); }
   };
 
+  const handlePrintDialysisSession = (r: any) => {
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Dialysis Session Report</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111;font-size:13px;}@media print{body{padding:16px;}}</style></head><body>
+<div style="text-align:center;margin-bottom:16px;">
+  <h1 style="margin:0;font-size:22px;font-weight:900;color:#0F766E;">AYPHEN HMS</h1>
+  <h2 style="margin:4px 0 12px;font-size:16px;font-weight:700;">DIALYSIS SESSION REPORT</h2>
+  <hr style="border:none;border-top:2px solid #0F766E;margin:12px 0;"/>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;margin-bottom:20px;">
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Session #</span><div style="font-weight:700;margin-top:2px;">${(r.id || '').slice(0, 8)}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Date</span><div style="font-weight:700;margin-top:2px;">${r.scheduledDate ? new Date(r.scheduledDate).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN')}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Patient</span><div style="font-weight:700;margin-top:2px;">${r.patientId || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Machine #</span><div style="font-weight:700;margin-top:2px;">${r.machine?.machineNumber || r.machineId || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Session Type</span><div style="font-weight:700;margin-top:2px;">${(r.sessionType || r.dialysisType || '—').replace(/_/g, ' ')}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Duration</span><div style="font-weight:700;margin-top:2px;">${r.durationHours ? `${r.durationHours} hrs` : r.scheduledTime || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Pre-weight</span><div style="font-weight:700;margin-top:2px;">${r.preWeight ? `${r.preWeight} kg` : '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Post-weight</span><div style="font-weight:700;margin-top:2px;">${r.postWeight ? `${r.postWeight} kg` : '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">UF Volume</span><div style="font-weight:700;margin-top:2px;">${r.ufVolume ? `${r.ufVolume} ml` : '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Blood Flow Rate</span><div style="font-weight:700;margin-top:2px;">${r.bloodFlowRate ? `${r.bloodFlowRate} ml/min` : '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Access Type</span><div style="font-weight:700;margin-top:2px;">${r.accessType || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Status</span><div style="font-weight:700;margin-top:2px;">${r.status || '—'}</div></div>
+</div>
+${r.complications ? `<div style="margin-top:16px;padding:12px;background:#FFF5F5;border-left:4px solid #DC2626;border-radius:4px;"><div style="font-weight:700;font-size:12px;margin-bottom:4px;color:#DC2626;">COMPLICATIONS</div><div>${r.complications}</div></div>` : ''}
+${r.notes ? `<div style="margin-top:12px;padding:12px;background:#F0FDF4;border-left:4px solid #16A34A;border-radius:4px;"><div style="font-weight:700;font-size:12px;margin-bottom:4px;color:#16A34A;">NOTES</div><div>${r.notes}</div></div>` : ''}
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:40px;"><div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">Nephrologist</div><div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">Dialysis Nurse</div><div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">Date: ${new Date().toLocaleDateString('en-IN')}</div></div>
+<script>window.onload=function(){window.print();}</script></body></html>`;
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+  };
+
   return (
     <div className="p-6 space-y-6">
       <TopBar title="Dialysis" subtitle="Manage dialysis sessions and machines" />
@@ -103,6 +134,7 @@ export default function DialysisPage() {
               <div className="flex gap-1.5">
                 {s.status === 'SCHEDULED' && <button onClick={() => startSession(s.id)} className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">Start</button>}
                 {s.status === 'IN_PROGRESS' && <button onClick={() => endSession(s.id)} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium">End</button>}
+                <button onClick={() => handlePrintDialysisSession(s)} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"><Printer size={11} /> Print</button>
               </div>
             </td>
           </tr>

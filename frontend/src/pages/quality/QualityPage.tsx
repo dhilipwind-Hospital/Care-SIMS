@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Shield, AlertTriangle, Plus, X, Loader2, Target } from 'lucide-react';
+import { Shield, AlertTriangle, Plus, X, Loader2, Target, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -22,6 +22,35 @@ export default function QualityPage() {
   const [form, setForm] = useState({ indicatorCode: '', name: '', category: 'PATIENT_SAFETY', target: '', value: '', numerator: '', denominator: '' });
   const [incForm, setIncForm] = useState({ incidentType: 'NEAR_MISS', severity: 'MINOR', description: '', patientId: '' });
   const [submitting, setSubmitting] = useState(false);
+
+  const handlePrintAuditReport = (r: any) => {
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quality Audit Report</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111;font-size:13px;}h1,h2{margin:0;}table{width:100%;border-collapse:collapse;}td,th{padding:7px 10px;border:1px solid #ddd;}th{background:#f3f4f6;font-weight:600;text-align:left;}ul{margin:4px 0;padding-left:18px;}@media print{body{padding:20px;}}</style></head><body>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+      <div><h1 style="margin:0;font-size:22px;font-weight:900;color:#0F766E;">AYPHEN HMS</h1><h2 style="margin:4px 0 12px;font-size:16px;font-weight:700;">QUALITY AUDIT REPORT</h2></div>
+      <div style="text-align:right;font-size:11px;color:#555;">Printed: ${new Date().toLocaleString()}</div>
+    </div>
+    <hr style="border:none;border-top:2px solid #0F766E;margin:12px 0;"/>
+    <table style="margin-bottom:16px;">
+      <tr><td style="width:25%;background:#f9fafb;font-weight:600;">Audit #</td><td>${(r.id || '').slice(0,8).toUpperCase()}</td><td style="width:25%;background:#f9fafb;font-weight:600;">Date</td><td>${r.createdAt ? new Date(r.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Audit Type</td><td>${r.incidentType || r.auditType || '—'}</td><td style="background:#f9fafb;font-weight:600;">Department</td><td>${r.department || r.toDepartmentId || '—'}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Auditor</td><td>${r.auditor || r.reportedBy || '—'}</td><td style="background:#f9fafb;font-weight:600;">Score / Rating</td><td>${r.score || r.rating || '—'}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Standard</td><td>${r.standard || r.framework || '—'}</td><td style="background:#f9fafb;font-weight:600;">Status</td><td><span style="color:${r.status === 'RESOLVED' ? '#16A34A' : r.status === 'OPEN' ? '#DC2626' : '#D97706'};font-weight:700;">${r.status || '—'}</span></td></tr>
+    </table>
+    ${r.description ? `<div style="margin-bottom:14px;"><div style="font-weight:700;margin-bottom:6px;color:#0F766E;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Findings</div><div style="background:#fafafa;border:1px solid #e5e7eb;border-radius:4px;padding:10px;">${r.description}</div></div>` : ''}
+    ${(r.nonConformities && r.nonConformities.length) ? `<div style="margin-bottom:14px;"><div style="font-weight:700;margin-bottom:6px;color:#0F766E;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Non-Conformities</div><ul>${r.nonConformities.map((nc: string) => `<li>${nc}</li>`).join('')}</ul></div>` : ''}
+    ${(r.correctiveActions && r.correctiveActions.length) ? `<div style="margin-bottom:14px;"><div style="font-weight:700;margin-bottom:6px;color:#0F766E;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Corrective Actions</div><ul>${r.correctiveActions.map((ca: string) => `<li>${ca}</li>`).join('')}</ul></div>` : ''}
+    ${r.notes ? `<div style="margin-bottom:14px;"><div style="font-weight:700;margin-bottom:6px;color:#0F766E;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Notes</div><div style="background:#fafafa;border:1px solid #e5e7eb;border-radius:4px;padding:10px;">${r.notes}</div></div>` : ''}
+    <div style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;border-top:1px solid #ddd;padding-top:20px;">
+      <div style="text-align:center;"><div style="border-top:1px solid #111;margin-top:40px;padding-top:6px;font-size:11px;color:#555;">Lead Auditor</div></div>
+      <div style="text-align:center;"><div style="border-top:1px solid #111;margin-top:40px;padding-top:6px;font-size:11px;color:#555;">Department Head</div></div>
+      <div style="text-align:center;"><div style="border-top:1px solid #111;margin-top:40px;padding-top:6px;font-size:11px;color:#555;">Quality Manager</div></div>
+    </div>
+    <script>window.onload=function(){window.print();}</script></body></html>`;
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+  };
 
   const fetchData = async () => { setLoading(true); try { const [list, dash] = await Promise.all([tab === 'indicators' ? api.get('/quality/indicators') : api.get('/quality/incidents', { params: { page, limit: 20 } }), api.get('/quality/dashboard')]); if (tab === 'indicators') setIndicators(list.data.data || list.data || []); else { setIncidents(list.data.data || []); setTotal(list.data.meta?.total || 0); } setDashboard(dash.data.data || dash.data || {}); } catch { toast.error('Failed'); } finally { setLoading(false); } };
   useEffect(() => { fetchData(); }, [tab, page]);
@@ -72,7 +101,7 @@ export default function QualityPage() {
               <td className="px-4 py-3"><StatusBadge status={inc.severity} /></td>
               <td className="px-4 py-3 text-sm max-w-[300px] truncate">{inc.description}</td>
               <td className="px-4 py-3"><StatusBadge status={inc.status} /></td>
-              <td className="px-4 py-3">{inc.status === 'OPEN' && <button onClick={() => handleResolve(inc.id)} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium">Resolve</button>}</td>
+              <td className="px-4 py-3"><div className="flex gap-1.5">{inc.status === 'OPEN' && <button onClick={() => handleResolve(inc.id)} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium">Resolve</button>}<button onClick={() => handlePrintAuditReport(inc)} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"><Printer size={11} />Print</button></div></td>
             </tr>))}
         </tbody></table></div>
         <Pagination page={page} totalPages={Math.ceil(total / 20)} onPageChange={setPage} totalItems={total} pageSize={20} /></div>

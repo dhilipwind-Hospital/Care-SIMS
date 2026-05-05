@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { MessageSquare, Clock, AlertTriangle, CheckCircle, Star, Trash2 } from 'lucide-react';
+import { MessageSquare, Clock, AlertTriangle, CheckCircle, Star, Trash2, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
@@ -28,6 +28,38 @@ export default function GrievancePage() {
   const [feedbackId, setFeedbackId] = useState<string | null>(null);
   const [feedbackRating, setFeedbackRating] = useState(5);
   const [feedbackComments, setFeedbackComments] = useState('');
+
+  const handlePrintGrievance = (r: any) => {
+    const severityColor = (s: string) => s === 'CRITICAL' ? '#DC2626' : s === 'HIGH' ? '#EA580C' : s === 'MEDIUM' ? '#D97706' : '#16A34A';
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Grievance Acknowledgement</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111;font-size:13px;}h1,h2{margin:0;}table{width:100%;border-collapse:collapse;}td,th{padding:7px 10px;border:1px solid #ddd;}th{background:#f3f4f6;font-weight:600;text-align:left;}@media print{body{padding:20px;}}</style></head><body>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+      <div><h1 style="margin:0;font-size:22px;font-weight:900;color:#0F766E;">AYPHEN HMS</h1><h2 style="margin:4px 0 12px;font-size:16px;font-weight:700;">GRIEVANCE ACKNOWLEDGEMENT</h2></div>
+      <div style="text-align:right;font-size:11px;color:#555;">Printed: ${new Date().toLocaleString()}</div>
+    </div>
+    <hr style="border:none;border-top:2px solid #0F766E;margin:12px 0;"/>
+    <table style="margin-bottom:16px;">
+      <tr><td style="width:25%;background:#f9fafb;font-weight:600;">Grievance #</td><td>${r.grievanceNumber || r.ticketNumber || (r.id || '').slice(0,8).toUpperCase()}</td><td style="width:25%;background:#f9fafb;font-weight:600;">Date Filed</td><td>${r.createdAt ? new Date(r.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Patient / Complainant</td><td>${r.complainantName || r.patientId || '—'}</td><td style="background:#f9fafb;font-weight:600;">Contact</td><td>${r.complainantPhone || r.contact || '—'}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Severity</td><td><span style="color:${severityColor(r.severity)};font-weight:700;">${r.severity || '—'}</span></td><td style="background:#f9fafb;font-weight:600;">Category</td><td>${r.category || '—'}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Department</td><td>${r.department || r.toDepartmentId || '—'}</td><td style="background:#f9fafb;font-weight:600;">Assigned To</td><td>${r.assignedToName || r.assignedTo || '—'}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Due Date</td><td>${r.dueDate ? new Date(r.dueDate).toLocaleDateString() : '—'}</td><td style="background:#f9fafb;font-weight:600;">Status</td><td><span style="color:${r.status === 'RESOLVED' ? '#16A34A' : r.status === 'ESCALATED' ? '#DC2626' : '#D97706'};font-weight:700;">${r.status || '—'}</span></td></tr>
+    </table>
+    <div style="font-weight:700;margin-bottom:6px;color:#0F766E;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Subject</div>
+    <div style="background:#fafafa;border:1px solid #e5e7eb;border-radius:4px;padding:10px;margin-bottom:14px;">${r.subject || '—'}</div>
+    <div style="font-weight:700;margin-bottom:6px;color:#0F766E;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Complaint Description</div>
+    <div style="background:#fafafa;border:1px solid #e5e7eb;border-radius:4px;padding:10px;margin-bottom:14px;">${r.description || '—'}</div>
+    ${r.status === 'RESOLVED' ? `<div style="font-weight:700;margin-bottom:6px;color:#0F766E;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Action Taken / Resolution</div><div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;padding:10px;margin-bottom:14px;">${r.resolution || r.actionTaken || '—'}</div>` : ''}
+    <div style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;border-top:1px solid #ddd;padding-top:20px;">
+      <div style="text-align:center;"><div style="border-top:1px solid #111;margin-top:40px;padding-top:6px;font-size:11px;color:#555;">Patient Relations Officer</div></div>
+      <div style="text-align:center;"><div style="border-top:1px solid #111;margin-top:40px;padding-top:6px;font-size:11px;color:#555;">Department Head</div></div>
+      <div style="text-align:center;"><div style="border-top:1px solid #111;margin-top:40px;padding-top:6px;font-size:11px;color:#555;">Date</div></div>
+    </div>
+    <script>window.onload=function(){window.print();}</script></body></html>`;
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+  };
 
   const fetchData = async () => { setLoading(true); try { const { data } = await api.get('/grievances'); setGrievances(data.data || data || []); } catch (err) { toast.error('Failed to load grievances'); } finally { setLoading(false); } };
   useEffect(() => { fetchData(); }, []);
@@ -121,6 +153,7 @@ export default function GrievancePage() {
               {g.status === 'RESOLVED' && (
                 <button onClick={() => handleFeedback(g.id)} className="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 font-medium flex items-center gap-1"><Star size={11} />Feedback</button>
               )}
+              <button onClick={() => handlePrintGrievance(g)} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"><Printer size={11} />Print</button>
             </div>
           </td>
         </tr>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { UserCheck, Bed, LogOut, Activity, Plus, X, Search, ArrowRightLeft, Eye } from 'lucide-react';
+import { UserCheck, Bed, LogOut, Activity, Plus, X, Search, ArrowRightLeft, Eye, Printer } from 'lucide-react';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
@@ -208,6 +208,35 @@ export default function AdmissionsPage() {
     finally { setDetailLoading(false); }
   };
 
+  const handlePrintAdmissionForm = (r: any) => {
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Patient Admission Form</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111;font-size:13px;}@media print{body{padding:16px;}}</style></head><body>
+<div style="text-align:center;margin-bottom:16px;">
+  <h1 style="margin:0;font-size:22px;font-weight:900;color:#0F766E;">AYPHEN HMS</h1>
+  <h2 style="margin:4px 0 12px;font-size:16px;font-weight:700;">PATIENT ADMISSION FORM</h2>
+  <hr style="border:none;border-top:2px solid #0F766E;margin:12px 0;"/>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;margin-bottom:20px;">
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Admission #</span><div style="font-weight:700;margin-top:2px;">${r.admissionNumber || (r.id || '').slice(0, 8)}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Admission Date</span><div style="font-weight:700;margin-top:2px;">${r.admissionDate ? new Date(r.admissionDate).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN')}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Patient Name</span><div style="font-weight:700;margin-top:2px;">${r.patient?.firstName || ''} ${r.patient?.lastName || ''}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Patient ID</span><div style="font-weight:700;margin-top:2px;">${r.patient?.patientId || r.patientId || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Ward / Bed</span><div style="font-weight:700;margin-top:2px;">${r.ward?.name || '—'} / Bed ${r.bed?.bedNumber || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Admitting Doctor</span><div style="font-weight:700;margin-top:2px;">${r.doctor ? `Dr. ${r.doctor.firstName || ''} ${r.doctor.lastName || ''}` : '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Diagnosis on Admission</span><div style="font-weight:700;margin-top:2px;">${r.diagnosisOnAdmission || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Admission Type</span><div style="font-weight:700;margin-top:2px;">${r.admissionType || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Insurance / TPA</span><div style="font-weight:700;margin-top:2px;">${r.insurance || r.tpa || r.insuranceDetails || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Status</span><div style="font-weight:700;margin-top:2px;">${r.status || '—'}</div></div>
+</div>
+${(r.vitals || r.systolicBp) ? `<div style="margin-top:16px;padding:12px;background:#F0FDF4;border-left:4px solid #16A34A;border-radius:4px;"><div style="font-weight:700;font-size:12px;margin-bottom:6px;color:#16A34A;">VITALS ON ADMISSION</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px;"><div>BP: ${r.systolicBp || '—'}/${r.diastolicBp || '—'} mmHg</div><div>HR: ${r.heartRate || '—'} bpm</div><div>SpO2: ${r.spo2 || '—'}%</div><div>Temp: ${r.temperatureC || '—'} °C</div><div>Wt: ${r.weightKg || '—'} kg</div><div>RR: ${r.respiratoryRate || '—'} /min</div></div></div>` : ''}
+${(r.nextOfKin || r.emergencyContact || r.patient?.emergencyContact) ? `<div style="margin-top:12px;padding:12px;background:#F8F9FA;border-left:4px solid #6B7280;border-radius:4px;"><div style="font-weight:700;font-size:12px;margin-bottom:4px;">NEXT OF KIN / EMERGENCY CONTACT</div><div>${r.nextOfKin || r.emergencyContact || r.patient?.emergencyContact || '—'}</div></div>` : ''}
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:40px;"><div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">Admitting Doctor</div><div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">Ward Nurse</div><div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">Date: ${new Date().toLocaleDateString('en-IN')}</div></div>
+<script>window.onload=function(){window.print();}</script></body></html>`;
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+  };
+
   return (
     <div className="p-6 space-y-6">
       <TopBar title="Admissions" subtitle="Manage inpatient admissions" />
@@ -271,6 +300,7 @@ export default function AdmissionsPage() {
                         title="View details">
                         <Eye size={13} />
                       </button>
+                      <button onClick={() => handlePrintAdmissionForm(a)} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"><Printer size={11} /> Print</button>
                       {a.status === 'ACTIVE' && (
                         <>
                           <button onClick={() => openTransferModal(a)}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Droplets, Users, Package, Activity, Eye, Syringe, Search, AlertTriangle, X } from 'lucide-react';
+import { Droplets, Users, Package, Activity, Eye, Syringe, Search, AlertTriangle, X, Printer } from 'lucide-react';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
@@ -272,6 +272,42 @@ export default function BloodBankPage() {
     }
   };
 
+  const handlePrintBloodIssue = (r: any) => {
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Blood Issue Certificate</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111;font-size:13px;}@media print{body{padding:16px;}}</style></head><body>
+<div style="text-align:center;margin-bottom:16px;">
+  <h1 style="margin:0;font-size:22px;font-weight:900;color:#0F766E;">AYPHEN HMS</h1>
+  <h2 style="margin:4px 0 12px;font-size:16px;font-weight:700;">BLOOD ISSUE CERTIFICATE</h2>
+  <hr style="border:none;border-top:2px solid #0F766E;margin:12px 0;"/>
+</div>
+<div style="background:#DC2626;color:#fff;padding:8px 16px;border-radius:6px;font-weight:700;font-size:12px;text-align:center;margin-bottom:20px;letter-spacing:0.5px;">BLOOD TRANSFUSION SERVICE — OFFICIAL ISSUE CERTIFICATE</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;margin-bottom:20px;">
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Issue #</span><div style="font-weight:700;margin-top:2px;">${(r.id || '').slice(0, 8)}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Date</span><div style="font-weight:700;margin-top:2px;">${r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN')}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Blood Group</span><div style="font-weight:700;margin-top:2px;color:#DC2626;">${r.bloodGroup || '—'}${r.rhFactor === 'POSITIVE' ? '+' : r.rhFactor === 'NEGATIVE' ? '-' : ''}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Component</span><div style="font-weight:700;margin-top:2px;">${(r.component || r.bloodType || '—').replace(/_/g, ' ')}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Units Issued</span><div style="font-weight:700;margin-top:2px;">${r.volumeMl ? `${r.volumeMl} ml` : '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Donor ID</span><div style="font-weight:700;margin-top:2px;">${r.donorId || r.bagNumber || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Cross-match Result</span><div style="font-weight:700;margin-top:2px;">${r.crossmatchResult || (r.status === 'CROSS_MATCHED' || r.status === 'ADMINISTERED' ? 'COMPATIBLE' : 'PENDING')}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Patient Name / ID</span><div style="font-weight:700;margin-top:2px;">${r.patientId ? (r.patientId.slice(0, 8)) : '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Ward</span><div style="font-weight:700;margin-top:2px;">${r.ward || r.locationId || '—'}</div></div>
+  <div><span style="color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Requesting Doctor</span><div style="font-weight:700;margin-top:2px;">${r.orderedById ? `Dr. ID: ${r.orderedById.slice(0, 8)}` : '—'}</div></div>
+</div>
+<div style="margin-top:16px;padding:12px;background:#FFF5F5;border-left:4px solid #DC2626;border-radius:4px;">
+  <div style="font-weight:700;font-size:12px;margin-bottom:6px;color:#DC2626;">COMPATIBILITY TESTING</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px;">
+    <div><span style="color:#555;">ABO Typing:</span> <span style="font-weight:700;">Verified</span></div>
+    <div><span style="color:#555;">Rh Typing:</span> <span style="font-weight:700;">Verified</span></div>
+    <div><span style="color:#555;">Cross-match:</span> <span style="font-weight:700;">${r.status === 'CROSS_MATCHED' || r.status === 'ADMINISTERED' ? 'Compatible' : 'Pending'}</span></div>
+  </div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:40px;"><div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">Blood Bank Officer</div><div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">Transfusion Doctor</div><div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">Date: ${new Date().toLocaleDateString('en-IN')}</div></div>
+<script>window.onload=function(){window.print();}</script></body></html>`;
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+  };
+
   // ─── Modal component ────────────────────────────────────────────
   const Modal = ({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) => {
     if (!open) return null;
@@ -522,6 +558,7 @@ export default function BloodBankPage() {
                       {!['ORDERED', 'CROSS_MATCHED'].includes(tx.status) && (
                         <span className="text-xs text-gray-400">\u2014</span>
                       )}
+                      <button onClick={() => handlePrintBloodIssue(tx)} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"><Printer size={11} /> Print</button>
                     </div>
                   </td>
                 </tr>

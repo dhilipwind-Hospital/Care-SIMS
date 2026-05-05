@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { ShieldCheck, FileText, Clock, CheckCircle, Upload, Paperclip } from 'lucide-react';
+import { ShieldCheck, FileText, Clock, CheckCircle, Upload, Paperclip, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
@@ -54,6 +54,49 @@ export default function InsurancePage() {
       setUploadedDocs(prev => [...prev, { url: data.url, filename: data.filename }]);
     } catch (err: any) { toast.error(err.response?.data?.message || 'Upload failed'); }
     finally { setDocUploading(false); if (docInputRef.current) docInputRef.current.value = ''; }
+  };
+
+  const handlePrintClaim = (r: any) => {
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Insurance Claim Form</title></head><body style="font-family:Arial,sans-serif;padding:32px;color:#1a1a1a;max-width:800px;margin:0 auto;">
+<h1 style="margin:0;font-size:22px;font-weight:900;color:#0F766E;">AYPHEN HMS</h1>
+<h2 style="margin:4px 0 12px;font-size:16px;font-weight:700;">INSURANCE CLAIM FORM</h2>
+<hr style="border:none;border-top:2px solid #0F766E;margin:12px 0;"/>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;margin-bottom:20px;font-size:13px;">
+  <div><span style="color:#555;font-weight:600;">Claim #:</span> ${r.claimNumber || (r.id||'').slice(0,8)}</div>
+  <div><span style="color:#555;font-weight:600;">Date:</span> ${r.createdAt ? new Date(r.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}</div>
+  <div><span style="color:#555;font-weight:600;">Patient:</span> ${r.patientId||r.patient?.patientId||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">Policy Number:</span> ${r.policyNumber||r.policy?.policyNumber||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">TPA Name:</span> ${r.tpaName||r.policy?.tpaName||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">Insurer:</span> ${r.insurerName||r.policy?.providerName||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">Claim Amount (₹):</span> ${r.totalAmount ? '₹'+Number(r.totalAmount).toLocaleString() : '—'}</div>
+  ${r.approvedAmount ? `<div><span style="color:#555;font-weight:600;">Approved Amount (₹):</span> ₹${Number(r.approvedAmount).toLocaleString()}</div>` : '<div></div>'}
+  <div><span style="color:#555;font-weight:600;">Diagnosis:</span> ${r.diagnosisCode||r.diagnosis||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">Procedure:</span> ${r.procedure||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">Admission Date:</span> ${r.admissionDate ? new Date(r.admissionDate).toLocaleDateString() : '—'}</div>
+  <div><span style="color:#555;font-weight:600;">Discharge Date:</span> ${r.dischargeDate ? new Date(r.dischargeDate).toLocaleDateString() : '—'}</div>
+  <div><span style="color:#555;font-weight:600;">Status:</span> ${r.status||'—'}</div>
+</div>
+<div style="margin-bottom:16px;padding:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;font-size:13px;">
+  <strong>Supporting Documents Checklist:</strong>
+  <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+    <label>☐ &nbsp;Discharge Summary</label>
+    <label>☐ &nbsp;Prescription / Investigation Reports</label>
+    <label>☐ &nbsp;Hospital Bills (itemized)</label>
+    <label>☐ &nbsp;Insurance Card Copy</label>
+    <label>☐ &nbsp;Photo ID Proof</label>
+    <label>☐ &nbsp;Pre-Authorization Letter (if applicable)</label>
+  </div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:40px;">
+  <div style="border-top:1px solid #333;padding-top:6px;font-size:12px;text-align:center;">Patient / Guardian</div>
+  <div style="border-top:1px solid #333;padding-top:6px;font-size:12px;text-align:center;">Treating Doctor</div>
+  <div style="border-top:1px solid #333;padding-top:6px;font-size:12px;text-align:center;">Hospital Admin</div>
+</div>
+<script>window.onload=function(){window.print();}</script></body></html>`;
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
   };
 
   const submitClaim = async (id: string) => { try { await api.patch(`/insurance/claims/${id}/submit`); toast.success('Claim submitted'); fetchData(); } catch (err) { toast.error('Failed to submit claim'); } };
@@ -143,6 +186,10 @@ export default function InsurancePage() {
                   {c.status === 'SUBMITTED' && (
                     <button onClick={() => approveClaim(c.id)} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium">Approve</button>
                   )}
+                  <button onClick={() => handlePrintClaim(c)}
+                    className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1">
+                    <Printer size={11} /> Print
+                  </button>
                 </div>
               </td>
             </tr>

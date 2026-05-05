@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Calendar, Clock, Users, CheckCircle, Plus, X, Search, XCircle, Edit3, Loader2 } from 'lucide-react';
+import { Calendar, Clock, Users, CheckCircle, Plus, X, Search, XCircle, Edit3, Loader2, Printer } from 'lucide-react';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
@@ -298,6 +298,43 @@ export default function AppointmentsPage() {
     } finally { setEditSubmitting(false); }
   };
 
+  const handlePrintAppointmentSlip = (a: any) => {
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Appointment Slip</title></head><body style="font-family:Arial,sans-serif;padding:32px;color:#1a1a1a;max-width:800px;margin:0 auto;">
+<h1 style="margin:0;font-size:22px;font-weight:900;color:#0F766E;">AYPHEN HMS</h1>
+<h2 style="margin:4px 0 12px;font-size:16px;font-weight:700;">APPOINTMENT SLIP</h2>
+<hr style="border:none;border-top:2px solid #0F766E;margin:12px 0;"/>
+<div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px;font-weight:700;color:#0f766e;text-align:center;letter-spacing:0.5px;">PLEASE ARRIVE 15 MINUTES BEFORE YOUR APPOINTMENT TIME</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;margin-bottom:20px;font-size:13px;">
+  <div><span style="color:#555;font-weight:600;">Appointment #:</span> ${(a.id||a.appointmentNumber||'').toString().slice(0,8)}</div>
+  <div><span style="color:#555;font-weight:600;">Date:</span> ${a.appointmentDate ? new Date(a.appointmentDate).toLocaleDateString() : '—'}</div>
+  <div><span style="color:#555;font-weight:600;">Time:</span> ${a.appointmentTime||a.slotTime||a.slot||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">Patient Name:</span> ${a.patient ? (a.patient.firstName+' '+a.patient.lastName) : '—'}</div>
+  <div><span style="color:#555;font-weight:600;">Patient ID:</span> ${a.patient?.patientId||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">Doctor Name:</span> ${a.doctor ? ('Dr. '+a.doctor.firstName+' '+a.doctor.lastName) : '—'}</div>
+  <div><span style="color:#555;font-weight:600;">Department / Specialty:</span> ${a.department?.name||a.specialization||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">Room / Location:</span> ${a.room||a.location||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">Type:</span> ${a.appointmentType||'—'}</div>
+  <div><span style="color:#555;font-weight:600;">Status:</span> ${a.status||'—'}</div>
+</div>
+<div style="margin-bottom:16px;padding:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;font-size:13px;">
+  <strong>Please bring:</strong>
+  <ul style="margin:6px 0 0 0;padding-left:20px;line-height:1.8;">
+    <li>Photo ID (Aadhaar / Passport / Driving Licence)</li>
+    <li>Previous reports, prescriptions, and lab results</li>
+    <li>Insurance card (if applicable)</li>
+  </ul>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:40px;">
+  <div style="border-top:1px solid #333;padding-top:6px;font-size:12px;text-align:center;">Reception</div>
+  <div style="border-top:1px solid #333;padding-top:6px;font-size:12px;text-align:center;">Date: ${new Date().toLocaleDateString()}</div>
+</div>
+<script>window.onload=function(){window.print();}</script></body></html>`;
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+  };
+
   const scheduled = appts.filter(a => a.status === 'SCHEDULED').length;
   const completed  = appts.filter(a => a.status === 'COMPLETED').length;
   const cancelled  = appts.filter(a => a.status === 'CANCELLED').length;
@@ -407,6 +444,10 @@ export default function AppointmentsPage() {
                           <XCircle size={11} /> Cancel
                         </button>
                       )}
+                      <button onClick={() => handlePrintAppointmentSlip(a)}
+                        className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1">
+                        <Printer size={11} /> Print
+                      </button>
                     </div>
                   </td>
                 </tr>
