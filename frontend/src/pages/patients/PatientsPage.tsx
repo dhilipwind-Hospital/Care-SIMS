@@ -241,7 +241,7 @@ export default function PatientsPage() {
                 <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-xs font-bold">1</span>
                 Personal Information
               </h3>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div><label className={lbl}>First Name *</label><input placeholder="Enter first name" value={form.firstName} onChange={sf('firstName')} className={`${inp} ${formErrors.firstName ? 'border-red-400 ring-1 ring-red-300' : ''}`} />{formErrors.firstName && <p className="text-xs text-red-500 mt-1">{formErrors.firstName}</p>}</div>
                 <div><label className={lbl}>Middle Name</label><input placeholder="Enter middle name" value={form.middleName} onChange={sf('middleName')} className={inp} /></div>
                 <div><label className={lbl}>Last Name *</label><input placeholder="Enter last name" value={form.lastName} onChange={sf('lastName')} className={`${inp} ${formErrors.lastName ? 'border-red-400 ring-1 ring-red-300' : ''}`} />{formErrors.lastName && <p className="text-xs text-red-500 mt-1">{formErrors.lastName}</p>}</div>
@@ -274,7 +274,7 @@ export default function PatientsPage() {
                 <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-xs font-bold">2</span>
                 Address &amp; Identification
               </h3>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="col-span-2"><label className={lbl}>Address Line 1</label><input placeholder="House/Flat No., Street Name" value={form.addressLine1} onChange={sf('addressLine1')} className={inp} /></div>
                 <div className="col-span-2"><label className={lbl}>Address Line 2</label><input placeholder="Landmark, Area" value={form.addressLine2} onChange={sf('addressLine2')} className={inp} /></div>
                 <div><label className={lbl}>City *</label><input placeholder="Enter city" value={form.city} onChange={sf('city')} className={inp} /></div>
@@ -301,7 +301,7 @@ export default function PatientsPage() {
                 <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-xs font-bold">3</span>
                 Visit Details
               </h3>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><label className={lbl}>Visit Type</label>
                   <select value={form.visitType} onChange={sf('visitType')} className={inp}>
                     {['OPD - Walk-in','OPD - Appointment','Emergency','IPD'].map(t => <option key={t}>{t}</option>)}
@@ -326,7 +326,7 @@ export default function PatientsPage() {
           </div>
 
           {/* Right Column */}
-          <div className="w-96 flex-shrink-0 space-y-5">
+          <div className="hidden lg:block w-96 flex-shrink-0 space-y-5">
             {/* Medical Information */}
             <div className="hms-card p-5">
               <h3 className="text-sm font-semibold text-gray-700 mb-4">Medical Information</h3>
@@ -392,7 +392,7 @@ export default function PatientsPage() {
   }
 
   return (
-    <div className="p-6 space-y-5" style={{ background: '#F5F7FA', minHeight: '100%' }}>
+    <div className="p-3 sm:p-6 space-y-5" style={{ background: '#F5F7FA', minHeight: '100%' }}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -418,7 +418,7 @@ export default function PatientsPage() {
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input value={searchInput} onChange={e => { setSearchInput(e.target.value); setPage(1); }}
               placeholder="Search by name, phone, ID…"
-              className="pl-8 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 w-60" />
+              className="pl-8 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 w-full sm:w-60" />
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -519,7 +519,7 @@ export default function PatientsPage() {
       {editPatient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setEditPatient(null)}>
           <div className="absolute inset-0 bg-black/40" />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10 rounded-t-2xl">
               <div>
                 <h2 className="font-bold text-gray-900">Edit Patient</h2>
@@ -553,7 +553,7 @@ export default function PatientsPage() {
                 <span className="text-xs text-gray-400">{photoUploading ? 'Uploading...' : 'Click to upload photo'}</span>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={lbl}>First Name *</label>
                   <input value={editForm.firstName} onChange={esf('firstName')} className={`${inp} ${editErrors.firstName ? 'border-red-400 ring-1 ring-red-300' : ''}`} />

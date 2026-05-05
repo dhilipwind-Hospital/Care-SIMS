@@ -12,7 +12,7 @@ export default function KpiCard({ label, value, icon: Icon, color = '#0F766E', s
   return (
     <div
       className="bg-white border p-5 overflow-hidden"
-      style={{ height: 120, borderRadius: 'var(--radius-card)', borderColor: 'var(--hms-border)', boxShadow: 'var(--shadow-card)' }}
+      style={{ minHeight: 120, borderRadius: 'var(--radius-card)', borderColor: 'var(--hms-border)', boxShadow: 'var(--shadow-card)' }}
       role="region"
       aria-label={`${label}: ${value}`}
     >

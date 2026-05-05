@@ -370,7 +370,7 @@ export default function OTPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-6 space-y-6">
       <TopBar title="Operating Theatre" subtitle="OT scheduling and room management" />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -472,7 +472,7 @@ export default function OTPage() {
       )}
 
       {tab === 'rooms' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {rooms.slice((page - 1) * 20, page * 20).map(room => (
             <div key={room.id} className="hms-card p-5">
               <div className="flex items-center justify-between mb-3">
@@ -684,7 +684,7 @@ export default function OTPage() {
       {/* ========== SCHEDULE / EDIT SURGERY MODAL ========== */}
       {showBooking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white">
               <div>
                 <h2 className="font-bold text-gray-900">{editingId ? 'Edit OT Booking' : 'Schedule Surgery'}</h2>
@@ -730,7 +730,7 @@ export default function OTPage() {
               </div>
 
               {/* OT Room + Procedure */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">OT Room <span className="text-red-500">*</span></label>
                   <select value={bookingForm.otRoomId} onChange={e => setBookingForm(f => ({ ...f, otRoomId: e.target.value }))}
@@ -748,7 +748,7 @@ export default function OTPage() {
               </div>
 
               {/* Surgeon + Anesthetist */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Surgeon <span className="text-red-500">*</span></label>
                   <select value={bookingForm.primarySurgeonId} onChange={e => setBookingForm(f => ({ ...f, primarySurgeonId: e.target.value }))}
@@ -796,7 +796,7 @@ export default function OTPage() {
               </div>
 
               {/* Surgery Type + Anesthesia Type */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Surgery Type</label>
                   <select value={bookingForm.surgeryType} onChange={e => setBookingForm(f => ({ ...f, surgeryType: e.target.value }))}
@@ -815,7 +815,7 @@ export default function OTPage() {
               </div>
 
               {/* Admission ID + Notes */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Admission ID</label>
                   <input value={bookingForm.admissionId} onChange={e => setBookingForm(f => ({ ...f, admissionId: e.target.value }))}
@@ -848,7 +848,7 @@ export default function OTPage() {
       {/* ── ANAESTHESIA RECORD MODAL ── */}
       {anaesBooking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
               <div>
                 <h2 className="font-bold text-gray-900">Anaesthesia Record</h2>
@@ -972,7 +972,7 @@ export default function OTPage() {
       {/* ── PRE-OP ASSESSMENT MODAL ── */}
       {assessBooking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
               <div>
                 <h2 className="font-bold text-gray-900">Pre-Op Anaesthesia Assessment</h2>
@@ -1103,7 +1103,7 @@ export default function OTPage() {
       {/* ── COMPLETE SURGERY MODAL ── */}
       {completeBooking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
               <div>
                 <h2 className="font-bold text-gray-900">Complete Surgery</h2>
@@ -1174,7 +1174,7 @@ export default function OTPage() {
       {/* ── PRE-OP CHECKLIST MODAL ── */}
       {checklistBooking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
               <div>
                 <h2 className="font-bold text-gray-900">WHO Surgical Safety Checklist</h2>

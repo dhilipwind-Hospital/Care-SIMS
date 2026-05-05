@@ -195,7 +195,7 @@ export default function AppointmentsPage() {
   const cancelled  = appts.filter(a => a.status === 'CANCELLED').length;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-6 space-y-6">
       <TopBar title="Appointments" subtitle="Manage patient appointments"
         actions={
           <div className="flex items-center gap-2">
@@ -292,7 +292,7 @@ export default function AppointmentsPage() {
       {/* ── BOOK APPOINTMENT MODAL ── */}
       {showBook && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white">
               <div>
                 <h2 className="font-bold text-gray-900">Book Appointment</h2>
@@ -422,7 +422,7 @@ export default function AppointmentsPage() {
       {/* ── EDIT / RESCHEDULE APPOINTMENT MODAL ── */}
       {showEdit && editAppt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white">
               <div>
                 <h2 className="font-bold text-gray-900">Edit / Reschedule Appointment</h2>

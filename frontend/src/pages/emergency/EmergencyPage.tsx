@@ -98,7 +98,7 @@ export default function EmergencyPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-6 space-y-6">
       <TopBar title="Emergency Department" subtitle="Real-time ED patient tracking"
         actions={
           <button onClick={() => setShowRegister(true)} className="btn-primary flex items-center gap-2">
@@ -116,7 +116,7 @@ export default function EmergencyPage() {
       </div>
 
       {/* Triage summary cards */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {['RED', 'YELLOW', 'GREEN', 'BLACK'].map(cat => {
           const cfg = TRIAGE_COLORS[cat];
           const count = dashboard.byTriage?.[cat] || 0;
@@ -200,7 +200,7 @@ export default function EmergencyPage() {
       {/* Register Modal */}
       {showRegister && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <h2 className="font-bold text-gray-900">Register ED Patient</h2>
               <button onClick={() => setShowRegister(false)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
@@ -280,7 +280,7 @@ export default function EmergencyPage() {
       {/* Disposition Modal */}
       {dispVisit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 max-h-[90vh] overflow-y-auto p-6">
             <h2 className="font-bold text-gray-900 mb-1">Patient Disposition</h2>
             <p className="text-xs text-gray-400 mb-4">{dispVisit.visitNumber} — {dispVisit.patient?.firstName} {dispVisit.patient?.lastName}</p>
             <select className="hms-input w-full mb-4" value={disposition} onChange={e => setDisposition(e.target.value)}>

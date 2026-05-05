@@ -84,7 +84,7 @@ export default function MARPage() {
   ), [records, search]);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-6 space-y-6">
       <TopBar title="Medication Administration (MAR)" subtitle="Record and track medication administration" />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -101,7 +101,7 @@ export default function MARPage() {
           <button onClick={() => { setShowScheduleForm(!showScheduleForm); setScheduleError(''); }} className="px-4 py-2 rounded-lg text-white font-medium text-sm inline-flex items-center gap-1.5" style={{ background: 'var(--accent)' }}><Plus size={15} /> Schedule Medication</button>
         </div>
         <div className="flex items-center gap-3">
-          <input className="hms-input w-64" placeholder="Enter Admission ID" value={marAdmissionId} onChange={e => setMarAdmissionId(e.target.value)} onKeyDown={e => e.key === 'Enter' && fetchMAR_Grid()} />
+          <input className="hms-input w-full sm:w-64" placeholder="Enter Admission ID" value={marAdmissionId} onChange={e => setMarAdmissionId(e.target.value)} onKeyDown={e => e.key === 'Enter' && fetchMAR_Grid()} />
           <button onClick={fetchMAR_Grid} className="px-4 py-2 rounded-lg text-white font-medium text-sm" style={{ background: 'var(--accent)' }}>Load MAR</button>
           {showMarGrid && <button onClick={() => { setShowMarGrid(false); setMarData([]); }} className="text-sm text-gray-500 hover:text-gray-700">Clear</button>}
         </div>
@@ -151,7 +151,7 @@ export default function MARPage() {
             <button onClick={() => { setShowScheduleForm(false); setScheduleForm({ ...emptyScheduleForm }); setScheduleError(''); }} className="p-1 rounded hover:bg-gray-100 text-gray-400"><X size={18} /></button>
           </div>
           {scheduleError && <p className="text-sm text-red-600">{scheduleError}</p>}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             <input className="hms-input" placeholder="Admission ID *" value={scheduleForm.admissionId} onChange={e => setScheduleForm({ ...scheduleForm, admissionId: e.target.value })} />
             <input className="hms-input" placeholder="Drug Name *" value={scheduleForm.drugName} onChange={e => setScheduleForm({ ...scheduleForm, drugName: e.target.value })} />
             <input className="hms-input" placeholder="Dose *" value={scheduleForm.dose} onChange={e => setScheduleForm({ ...scheduleForm, dose: e.target.value })} />
@@ -178,7 +178,7 @@ export default function MARPage() {
           <h3 className="font-semibold text-gray-800">Medication Schedule</h3>
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search patient or drug…"
-            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 w-52" />
+            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 w-full sm:w-52" />
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">

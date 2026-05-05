@@ -16,7 +16,7 @@ export default function AdminDashboard() {
   }, []);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
       <TopBar title="Admin Dashboard" subtitle="Hospital overview and management" />
 
       {loading ? <SkeletonKpiRow count={6} /> : (
@@ -31,7 +31,7 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <QuickModule title="Users" link="/app/admin/users" desc="Manage staff accounts and roles" Icon={Users} />
         <QuickModule title="Roles & Permissions" link="/app/admin/roles" desc="Configure role-based access control" Icon={Shield} />
         <QuickModule title="Departments" link="/app/admin/departments" desc="Configure hospital departments" Icon={Hospital} />

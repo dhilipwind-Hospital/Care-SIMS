@@ -198,7 +198,7 @@ export default function BillingPage() {
   return (
     <div className="flex flex-col h-full" style={{ background: '#F5F7FA' }}>
       {/* Header */}
-      <div className="bg-white border-b border-gray-100 px-6 py-4">
+      <div className="bg-white border-b border-gray-100 px-3 sm:px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Billing &amp; Invoicing</h1>
@@ -221,7 +221,7 @@ export default function BillingPage() {
       </div>
 
       {/* KPI Row */}
-      <div className="grid grid-cols-4 gap-4 px-6 pt-5">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-3 sm:px-6 pt-5">
         <KpiCard label="Total Due" value={`₹${totalDue.toLocaleString()}`} icon={CreditCard} color="#0F766E" sub="Current invoice" />
         <KpiCard label="Paid Today" value={`₹${paidToday.toLocaleString()}`} icon={DollarSign} color="#10B981" sub="All payments" />
         <KpiCard label="Pending" value={pending} icon={Clock} color="#F59E0B" sub={`${pending > 0 ? pending + ' invoices' : 'All cleared'}`} />
@@ -229,7 +229,7 @@ export default function BillingPage() {
       </div>
 
       {/* Split content area */}
-      <div className="flex flex-1 gap-5 px-6 py-5 overflow-auto">
+      <div className="flex flex-1 gap-5 px-3 sm:px-6 py-5 overflow-auto">
 
         {/* Left: Invoice Table */}
         <div className="flex-1 hms-card flex flex-col">
@@ -237,7 +237,7 @@ export default function BillingPage() {
             <h3 className="font-semibold text-gray-800">Invoice Line Items</h3>
             <div className="flex gap-2">
               <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Search invoice or patient…"
-                className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 w-48" />
+                className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 w-full sm:w-48" />
               <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
                 className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white text-gray-600">
                 <option value="">All Status</option>
@@ -321,7 +321,7 @@ export default function BillingPage() {
         </div>
 
         {/* Right: Patient Details + Payment Panel */}
-        <div className="w-96 flex-shrink-0 space-y-4">
+        <div className="hidden lg:block w-96 flex-shrink-0 space-y-4">
           {/* Patient Details */}
           <div className="hms-card">
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -439,7 +439,7 @@ export default function BillingPage() {
     const detailBalance = Math.max(0, Number(selected.netTotal || 0) - Number(selected.paidAmount || 0));
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
             <div>
@@ -662,7 +662,7 @@ export default function BillingPage() {
   function NewInvoiceModal() {
     return !showNew ? null : (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white">
             <div>
               <h2 className="font-bold text-gray-900">New Invoice</h2>
