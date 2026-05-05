@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Scissors, Calendar, Clock, CheckCircle, Plus, X, Search, Pencil, ClipboardCheck, Loader2 } from 'lucide-react';
+import { Scissors, Calendar, Clock, CheckCircle, Plus, X, Search, Pencil, ClipboardCheck, Loader2, Printer } from 'lucide-react';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
@@ -369,6 +369,79 @@ export default function OTPage() {
     } finally { setCompleteSaving(false); }
   };
 
+  const handlePrintOpNote = (b: any) => {
+    const win = window.open('', '_blank');
+    if (!win) return;
+    const patientName = `${b.patient?.firstName || ''} ${b.patient?.lastName || ''}`.trim() || '—';
+    const surgeonName = b.primarySurgeon ? `Dr. ${b.primarySurgeon.firstName} ${b.primarySurgeon.lastName}` : '—';
+    const anaesthetistName = b.anesthetist ? `Dr. ${b.anesthetist.firstName}` : '—';
+    const scheduledDate = b.scheduledDate ? new Date(b.scheduledDate).toLocaleDateString() : '—';
+    const bloodLoss = b.estimatedBloodLoss ? `${b.estimatedBloodLoss} mL` : '—';
+    const bloodProducts = b.bloodUnitsUsed ? `${b.bloodUnitsUsed} units` : '—';
+    const drain = b.drainInserted ? `Yes — ${b.drainType || ''}` : 'No';
+
+    win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Operation Note — ${b.bookingNumber || ''}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; color: #111; }
+    h1 { color: #0F766E; font-size: 28px; margin: 0; }
+    h2 { font-size: 14px; color: #555; margin: 4px 0 0; letter-spacing: 2px; text-transform: uppercase; }
+    hr { border: none; border-top: 2px solid #0F766E; margin: 16px 0; }
+    .section-title { font-size: 12px; font-weight: bold; text-transform: uppercase; color: #0F766E; letter-spacing: 1px; margin: 20px 0 8px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; }
+    .field label { font-size: 11px; color: #777; display: block; margin-bottom: 2px; }
+    .field span { font-size: 13px; font-weight: 600; }
+    .prose { font-size: 13px; line-height: 1.6; white-space: pre-wrap; border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px 14px; min-height: 48px; background: #fafafa; }
+    .footer { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; margin-top: 60px; }
+    .sig-box { border-top: 1px solid #333; padding-top: 8px; font-size: 12px; color: #555; text-align: center; }
+    @media print { body { margin: 20px; } }
+  </style>
+</head>
+<body>
+  <h1>AYPHEN HMS</h1>
+  <h2>Operation Note</h2>
+  <hr />
+  <div class="section-title">Patient &amp; Procedure Details</div>
+  <div class="grid">
+    <div class="field"><label>Patient Name</label><span>${patientName}</span></div>
+    <div class="field"><label>Booking #</label><span>${b.bookingNumber || '—'}</span></div>
+    <div class="field"><label>Procedure</label><span>${b.procedureName || '—'}</span></div>
+    <div class="field"><label>OT Room</label><span>${b.otRoom?.name || '—'}</span></div>
+    <div class="field"><label>Surgeon</label><span>${surgeonName}</span></div>
+    <div class="field"><label>Anaesthetist</label><span>${anaesthetistName}</span></div>
+    <div class="field"><label>Surgery Type</label><span>${b.surgeryType || '—'}</span></div>
+    <div class="field"><label>Anaesthesia Type</label><span>${b.anesthesiaType || '—'}</span></div>
+    <div class="field"><label>Scheduled Date</label><span>${scheduledDate}</span></div>
+    <div class="field"><label>Duration</label><span>${b.expectedDurationMins ? b.expectedDurationMins + ' min' : '—'}</span></div>
+  </div>
+  <div class="section-title">Pre-Operative — Clinical History</div>
+  <div class="prose">${b.clinicalHistory || b.notes || '—'}</div>
+  <div class="section-title">Intra-Operative Findings</div>
+  <div class="prose">${b.intraOpNotes || '—'}</div>
+  <div class="section-title">Post-Operative Notes</div>
+  <div class="prose">${b.postOpNotes || '—'}</div>
+  <div class="section-title">Complications</div>
+  <div class="prose">${b.complications || 'None'}</div>
+  <div class="section-title">Haematological Summary</div>
+  <div class="grid">
+    <div class="field"><label>Estimated Blood Loss</label><span>${bloodLoss}</span></div>
+    <div class="field"><label>Blood Products Used</label><span>${bloodProducts}</span></div>
+    <div class="field"><label>Drain Inserted</label><span>${drain}</span></div>
+  </div>
+  <div class="footer">
+    <div class="sig-box">Surgeon Signature</div>
+    <div class="sig-box">Anaesthetist Signature</div>
+    <div class="sig-box">Date</div>
+  </div>
+</body>
+</html>`);
+    win.document.close();
+    win.print();
+  };
+
   return (
     <div className="p-3 sm:p-6 space-y-6">
       <TopBar title="Operating Theatre" subtitle="OT scheduling and room management" />
@@ -459,6 +532,15 @@ export default function OTPage() {
                             <button onClick={() => openComplete(b)}
                               className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium">Complete</button>
                           </>
+                        )}
+                        {b.status === 'COMPLETED' && (
+                          <button
+                            onClick={() => handlePrintOpNote(b)}
+                            className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"
+                            title="Print Operation Note"
+                          >
+                            <Printer size={12} /> Op Note
+                          </button>
                         )}
                       </div>
                     </td>

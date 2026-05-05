@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Calendar, Users, Plus, X, Loader2, Clock, CalendarOff } from 'lucide-react';
+import { Calendar, Users, Plus, X, Loader2, Clock, CalendarOff, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -95,6 +95,86 @@ export default function DutyRosterPage() {
   // Group roster by date for week view
   const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(weekStart); d.setDate(d.getDate() + i); return d.toISOString().slice(0, 10); });
 
+  const handlePrintRoster = () => {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    const weekEndStr = weekEnd.toISOString().slice(0, 10);
+
+    const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    // Group records by staffId (same logic as JSX)
+    const staffMap = new Map<string, any[]>();
+    records.forEach(r => {
+      if (!staffMap.has(r.staffId)) staffMap.set(r.staffId, []);
+      staffMap.get(r.staffId)!.push(r);
+    });
+
+    const rowsHtml = Array.from(staffMap.entries()).map(([staffId, shifts]) => {
+      const staffMember = staff.find(s => s.id === staffId);
+      const staffName = staffMember ? `${staffMember.firstName} ${staffMember.lastName}` : staffId.slice(0, 8);
+      const cells = days.map(d => {
+        const dayShift = shifts.find(s => s.shiftDate?.slice(0, 10) === d || new Date(s.shiftDate).toISOString().slice(0, 10) === d);
+        if (!dayShift) return `<td style="padding:8px;text-align:center;color:#9CA3AF;border:1px solid #E5E7EB;">—</td>`;
+        return `<td style="padding:8px;text-align:center;border:1px solid #E5E7EB;font-size:11px;">
+          <strong>${dayShift.shiftType}</strong><br/><span style="color:#6B7280;">${dayShift.startTime}–${dayShift.endTime}</span>
+        </td>`;
+      }).join('');
+      return `<tr>
+        <td style="padding:8px;font-weight:600;border:1px solid #E5E7EB;font-size:12px;">${staffName}</td>
+        ${cells}
+      </tr>`;
+    }).join('');
+
+    const html = `<!DOCTYPE html>
+<html>
+<head><title>Weekly Duty Roster</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 32px; color: #111; }
+  h1 { font-size: 28px; font-weight: 800; color: #0F766E; margin: 0; }
+  h2 { font-size: 16px; font-weight: 600; color: #374151; margin: 4px 0 0; }
+  p  { font-size: 13px; color: #6B7280; margin: 4px 0 16px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+  th { background: #F0FDFA; color: #0F766E; font-size: 11px; font-weight: 700;
+       text-transform: uppercase; letter-spacing: 0.05em; padding: 8px;
+       border: 1px solid #E5E7EB; text-align: center; }
+  th:first-child { text-align: left; }
+  .footer { display: flex; justify-content: space-between; margin-top: 48px; }
+  .footer div { text-align: center; flex: 1; }
+  .footer div span { display: block; border-top: 1px solid #374151; padding-top: 6px; font-size: 12px; color: #6B7280; margin-top: 32px; }
+  .total { font-size: 13px; color: #374151; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+  <h1>AYPHEN HMS</h1>
+  <h2>Weekly Duty Roster</h2>
+  <p>Week: ${weekStart} to ${weekEndStr}</p>
+  <table>
+    <thead>
+      <tr>
+        <th style="text-align:left;">Staff</th>
+        ${dayLabels.map(d => `<th>${d}</th>`).join('')}
+      </tr>
+    </thead>
+    <tbody>
+      ${rowsHtml || `<tr><td colspan="8" style="text-align:center;padding:16px;color:#9CA3AF;">No shifts scheduled for this week</td></tr>`}
+    </tbody>
+  </table>
+  <p class="total"><strong>Total Shifts This Week:</strong> ${records.length}</p>
+  <div class="footer">
+    <div><span>HOD Signature</span></div>
+    <div><span>HR Manager</span></div>
+    <div><span>Date</span></div>
+  </div>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.print();
+  };
+
   return (
     <div className="p-6 space-y-6">
       <TopBar title="Duty Roster & Leave Management" subtitle="Staff scheduling and leave tracking" />
@@ -120,6 +200,12 @@ export default function DutyRosterPage() {
               <span className="px-3 py-1.5 text-sm font-medium text-gray-700">{formatDate(weekStart)}</span>
               <button onClick={nextWeek} className="px-3 py-1.5 rounded-lg border text-sm text-gray-600 hover:bg-gray-50">Next →</button>
             </>
+          )}
+          {tab === 'roster' && (
+            <button onClick={handlePrintRoster}
+              className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 text-sm">
+              <Printer size={14} /> Print Roster
+            </button>
           )}
           <button onClick={() => tab === 'roster' ? setShowForm(true) : setShowLeaveForm(true)} className="btn-primary flex items-center gap-2">
             <Plus size={15} /> {tab === 'roster' ? 'Add Shift' : 'Apply Leave'}

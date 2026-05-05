@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   ScanLine, Clock, CheckCircle, Pencil,
-  Eye, FileText, ShieldCheck, AlertTriangle, X, Trash2,
+  Eye, FileText, ShieldCheck, AlertTriangle, X, Trash2, Printer,
 } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import Pagination from '../../components/ui/Pagination';
@@ -211,6 +211,102 @@ export default function RadiologyPage() {
     } finally {
       setViewLoading(false);
     }
+  };
+
+  /* ---- print radiology report ---- */
+  const handlePrintRadiology = (order: any) => {
+    const w = window.open('', '_blank');
+    if (!w) return;
+
+    const resultsHtml = order.results && order.results.length > 0
+      ? order.results.map((r: any, idx: number) => `
+          <div style="border:1px solid ${r.isCritical ? '#fca5a5' : '#e5e7eb'};background:${r.isCritical ? '#fef2f2' : '#f9fafb'};border-radius:6px;padding:16px;margin-bottom:16px;">
+            ${r.isCritical ? `<div style="color:#dc2626;font-weight:700;font-size:13px;margin-bottom:10px;padding:8px 12px;background:#fee2e2;border-radius:4px;border:1px solid #fca5a5;">&#9888; CRITICAL FINDING &mdash; Notify physician immediately</div>` : ''}
+            ${r.findings ? `<div style="margin-bottom:10px;"><div style="font-weight:600;color:#374151;font-size:12px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Findings</div><div style="color:#111827;white-space:pre-wrap;font-size:14px;">${r.findings}</div></div>` : ''}
+            ${r.impression ? `<div style="margin-bottom:10px;"><div style="font-weight:600;color:#374151;font-size:12px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Impression</div><div style="color:#111827;white-space:pre-wrap;font-size:14px;">${r.impression}</div></div>` : ''}
+            ${r.recommendation ? `<div style="margin-bottom:0;"><div style="font-weight:600;color:#374151;font-size:12px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Recommendation</div><div style="color:#111827;white-space:pre-wrap;font-size:14px;">${r.recommendation}</div></div>` : ''}
+          </div>
+        `).join('')
+      : '<p style="color:#6b7280;font-style:italic;">No results reported yet.</p>';
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Radiology Report – ${order.orderNumber || ''}</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #111827; padding: 24px; font-size: 14px; }
+    @media print { body { margin: 1cm; } }
+    table { width: 100%; border-collapse: collapse; }
+    td { padding: 6px 10px; vertical-align: top; }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div style="text-align:center;margin-bottom:8px;">
+    <div style="font-size:28px;font-weight:700;color:#0f766e;">AYPHEN HMS</div>
+    <div style="font-size:16px;color:#374151;margin-top:4px;">Radiology &amp; Imaging Report</div>
+  </div>
+  <hr style="border:none;border-top:2px solid #0f766e;margin:12px 0 20px;" />
+
+  <!-- Patient & Order Info -->
+  <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:6px;padding:16px;margin-bottom:20px;">
+    <div style="font-weight:700;font-size:13px;text-transform:uppercase;color:#0f766e;margin-bottom:12px;">Patient &amp; Order Information</div>
+    <table>
+      <tr>
+        <td style="font-weight:600;color:#6b7280;width:140px;">Order #</td>
+        <td>${order.orderNumber || '—'}</td>
+        <td style="font-weight:600;color:#6b7280;width:140px;">Modality</td>
+        <td>${order.modality || '—'}</td>
+      </tr>
+      <tr>
+        <td style="font-weight:600;color:#6b7280;">Body Part</td>
+        <td>${order.bodyPart || '—'}</td>
+        <td style="font-weight:600;color:#6b7280;">Priority</td>
+        <td>${order.priority || '—'}</td>
+      </tr>
+      <tr>
+        <td style="font-weight:600;color:#6b7280;">Patient ID</td>
+        <td>${order.patientId || '—'}</td>
+        <td style="font-weight:600;color:#6b7280;">Date</td>
+        <td>${order.createdAt ? new Date(order.createdAt).toLocaleString() : '—'}</td>
+      </tr>
+      ${order.clinicalHistory ? `<tr><td style="font-weight:600;color:#6b7280;">Clinical History</td><td colspan="3">${order.clinicalHistory}</td></tr>` : ''}
+    </table>
+  </div>
+
+  <!-- Results -->
+  <div style="margin-bottom:20px;">
+    <div style="font-weight:700;font-size:15px;color:#111827;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid #e5e7eb;">Results</div>
+    ${resultsHtml}
+  </div>
+
+  <!-- Signature Footer -->
+  <div style="margin-top:48px;border-top:1px solid #e5e7eb;padding-top:16px;">
+    <table>
+      <tr>
+        <td style="width:33%;text-align:center;">
+          <div style="border-bottom:1px solid #374151;margin-bottom:6px;height:40px;"></div>
+          <div style="font-size:12px;color:#6b7280;">Radiologist Signature</div>
+        </td>
+        <td style="width:33%;text-align:center;">
+          <div style="border-bottom:1px solid #374151;margin-bottom:6px;height:40px;"></div>
+          <div style="font-size:12px;color:#6b7280;">Date</div>
+        </td>
+        <td style="width:33%;text-align:center;">
+          <div style="border-bottom:1px solid #374151;margin-bottom:6px;height:40px;"></div>
+          <div style="font-size:12px;color:#6b7280;">Validated By</div>
+        </td>
+      </tr>
+    </table>
+  </div>
+</body>
+</html>`;
+
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    w.print();
   };
 
   /* ---- derived data ---- */
@@ -527,6 +623,16 @@ export default function RadiologyPage() {
             )}
           </div>
         ) : null}
+        {viewOrder && viewOrder.results && viewOrder.results.length > 0 && (
+          <div className="flex justify-end px-5 pb-4">
+            <button
+              onClick={() => handlePrintRadiology(viewOrder)}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+            >
+              <Printer size={14} /> Print Report
+            </button>
+          </div>
+        )}
       </Modal>
     </div>
   );
