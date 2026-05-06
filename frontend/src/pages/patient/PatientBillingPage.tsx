@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { CreditCard, RefreshCw, ChevronDown, ChevronUp, Calendar, DollarSign, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { CreditCard, RefreshCw, ChevronDown, ChevronUp, Calendar, DollarSign, CheckCircle, Clock, XCircle, Printer } from 'lucide-react';
 import api from '../../lib/api';
 import { getUser } from '../../lib/auth';
 
@@ -39,6 +39,44 @@ export default function PatientBillingPage() {
 
   const totalPaid = invoices.filter(i => i.status === 'PAID').reduce((s, i) => s + Number(i.netTotal || 0), 0);
   const totalPending = invoices.filter(i => ['FINALIZED', 'PARTIAL'].includes(i.status)).reduce((s, i) => s + (Number(i.netTotal || 0) - Number(i.paidAmount || 0)), 0);
+
+  const handlePrintInvoice = (inv: any) => {
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    const balance = Number(inv.netTotal || 0) - Number(inv.paidAmount || 0);
+    const rows = (inv.lineItems || []).map((item: any, i: number) => `
+      <tr>
+        <td style="padding:7px 10px;border-bottom:1px solid #f3f4f6;">${i + 1}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #f3f4f6;">${item.description || '—'}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #f3f4f6;text-align:center;">${item.quantity}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #f3f4f6;text-align:right;">₹${Number(item.unitPrice || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #f3f4f6;text-align:right;font-weight:600;">₹${Number(item.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+      </tr>`).join('');
+    win.document.write(`<!DOCTYPE html><html><head><title>Invoice ${inv.invoiceNumber}</title>
+<style>body{font-family:Arial,sans-serif;margin:0;padding:32px;color:#111;}h1{margin:0;font-size:22px;font-weight:900;color:#0F766E;}h2{margin:4px 0 12px;font-size:16px;font-weight:700;}hr{border:none;border-top:2px solid #0F766E;margin:12px 0;}.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin-bottom:16px;}.field label{font-size:10px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.5px;}.field span{display:block;font-size:13px;font-weight:600;margin-top:2px;}table{width:100%;border-collapse:collapse;}thead th{background:#f9fafb;padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;}.total-row td{padding:8px 10px;font-weight:700;font-size:14px;border-top:2px solid #0F766E;}@media print{body{padding:16px;}}</style>
+</head><body>
+<h1>AYPHEN HMS</h1><h2>INVOICE</h2><hr/>
+<div class="grid">
+  <div class="field"><label>Invoice #</label><span>${inv.invoiceNumber || '—'}</span></div>
+  <div class="field"><label>Date</label><span>${inv.createdAt ? new Date(inv.createdAt).toLocaleDateString('en-IN') : '—'}</span></div>
+  <div class="field"><label>Patient</label><span>${user ? `${user.firstName} ${user.lastName}` : '—'}</span></div>
+  <div class="field"><label>Hospital</label><span>${user?.tenantName || '—'}</span></div>
+  <div class="field"><label>Status</label><span>${inv.status || '—'}</span></div>
+  <div class="field"><label>Type</label><span>${inv.invoiceType || '—'}</span></div>
+</div>
+<table>
+  <thead><tr><th style="width:32px;">#</th><th>Description</th><th style="width:50px;text-align:center;">Qty</th><th style="width:100px;text-align:right;">Unit Price</th><th style="width:100px;text-align:right;">Amount</th></tr></thead>
+  <tbody>${rows || '<tr><td colspan="5" style="padding:12px;text-align:center;color:#9ca3af;">No line items</td></tr>'}</tbody>
+  <tfoot>
+    <tr class="total-row"><td colspan="4" style="text-align:right;padding:8px 10px;">Total</td><td style="text-align:right;padding:8px 10px;">₹${Number(inv.netTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td></tr>
+    ${Number(inv.paidAmount) > 0 ? `<tr><td colspan="4" style="text-align:right;padding:6px 10px;color:#16a34a;">Paid</td><td style="text-align:right;padding:6px 10px;color:#16a34a;">₹${Number(inv.paidAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td></tr>` : ''}
+    ${balance > 0 && inv.status !== 'CANCELLED' ? `<tr><td colspan="4" style="text-align:right;padding:6px 10px;color:#d97706;font-weight:700;">Balance Due</td><td style="text-align:right;padding:6px 10px;color:#d97706;font-weight:700;">₹${balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td></tr>` : ''}
+  </tfoot>
+</table>
+<p style="margin-top:32px;font-size:11px;color:#9ca3af;text-align:center;">Thank you for choosing ${user?.tenantName || 'our hospital'}. For queries contact the billing department.</p>
+<script>window.onload=function(){window.print();}</script></body></html>`);
+    win.document.close();
+  };
 
   return (
     <div className="p-6">
@@ -130,7 +168,10 @@ export default function PatientBillingPage() {
                         </div>
                       </div>
                     </div>
-                    {isOpen ? <ChevronUp size={16} className="text-gray-400 flex-shrink-0" /> : <ChevronDown size={16} className="text-gray-400 flex-shrink-0" />}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button onClick={e => { e.stopPropagation(); handlePrintInvoice(inv); }} className="flex items-center gap-1 text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 font-medium"><Printer size={11} /> Print</button>
+                      {isOpen ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                    </div>
                   </div>
                 </button>
 

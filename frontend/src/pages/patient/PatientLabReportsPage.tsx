@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { FlaskConical, RefreshCw, ChevronDown, ChevronUp, Calendar, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { FlaskConical, RefreshCw, ChevronDown, ChevronUp, Calendar, AlertTriangle, CheckCircle, Clock, Printer } from 'lucide-react';
 import api from '../../lib/api';
 import { getUser } from '../../lib/auth';
 
@@ -40,6 +40,47 @@ export default function PatientLabReportsPage() {
   useEffect(() => { fetchData(); }, []);
 
   const fmt = (d: string) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+  const handlePrintLabReport = (order: any) => {
+    const win = window.open('', '_blank', 'width=800,height=700');
+    if (!win) return;
+    const resultRows = (order.results || []).flatMap((result: any) =>
+      (result.items || []).map((item: any) => `
+        <tr style="background:${item.flag === 'CRITICAL' || item.flag === 'PANIC' ? '#fef2f2' : 'transparent'}">
+          <td style="padding:7px 10px;border-bottom:1px solid #f3f4f6;">${item.testName || '—'}</td>
+          <td style="padding:7px 10px;border-bottom:1px solid #f3f4f6;font-weight:600;color:${item.flag === 'HIGH' || item.flag === 'CRITICAL' || item.flag === 'PANIC' ? '#dc2626' : item.flag === 'LOW' ? '#d97706' : '#111'};">${item.resultValue ?? '—'}</td>
+          <td style="padding:7px 10px;border-bottom:1px solid #f3f4f6;">${item.resultUnit || '—'}</td>
+          <td style="padding:7px 10px;border-bottom:1px solid #f3f4f6;font-size:11px;color:#6b7280;">${item.refRangeText || (item.refRangeLow != null ? `${item.refRangeLow}–${item.refRangeHigh}` : '—')}</td>
+          <td style="padding:7px 10px;border-bottom:1px solid #f3f4f6;font-weight:700;color:${item.flag === 'HIGH' || item.flag === 'CRITICAL' || item.flag === 'PANIC' ? '#dc2626' : item.flag === 'LOW' ? '#d97706' : '#16a34a'};">${item.flag || 'NORMAL'}</td>
+        </tr>`)
+    ).join('');
+    const testsList = (order.items || []).map((t: any) => t.testName).join(', ');
+    win.document.write(`<!DOCTYPE html><html><head><title>Lab Report ${order.orderNumber}</title>
+<style>body{font-family:Arial,sans-serif;margin:0;padding:32px;color:#111;}h1{margin:0;font-size:22px;font-weight:900;color:#0F766E;}h2{margin:4px 0 12px;font-size:16px;font-weight:700;}hr{border:none;border-top:2px solid #0F766E;margin:12px 0;}.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin-bottom:16px;}.field label{font-size:10px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.5px;}.field span{display:block;font-size:13px;font-weight:600;margin-top:2px;}table{width:100%;border-collapse:collapse;}thead th{background:#f9fafb;padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;}.critical-banner{background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 14px;color:#dc2626;font-weight:700;font-size:13px;margin-bottom:14px;}@media print{body{padding:16px;}}</style>
+</head><body>
+<h1>AYPHEN HMS</h1><h2>LAB REPORT</h2><hr/>
+${order.results?.some((r: any) => r.isCritical) ? '<div class="critical-banner">⚠ CRITICAL VALUES PRESENT — Notify physician immediately</div>' : ''}
+<div class="grid">
+  <div class="field"><label>Order #</label><span>${order.orderNumber || '—'}</span></div>
+  <div class="field"><label>Date</label><span>${fmt(order.orderedAt)}</span></div>
+  <div class="field"><label>Patient</label><span>${user ? `${user.firstName} ${user.lastName}` : '—'}</span></div>
+  <div class="field"><label>Hospital</label><span>${user?.tenantName || '—'}</span></div>
+  <div class="field"><label>Status</label><span>${order.status?.replace(/_/g, ' ') || '—'}</span></div>
+  <div class="field"><label>Priority</label><span>${order.priority || 'ROUTINE'}</span></div>
+</div>
+<p style="font-size:12px;color:#6b7280;margin-bottom:12px;"><strong>Tests:</strong> ${testsList || '—'}</p>
+<table>
+  <thead><tr><th>Test</th><th>Result</th><th>Unit</th><th>Reference Range</th><th>Flag</th></tr></thead>
+  <tbody>${resultRows || '<tr><td colspan="5" style="padding:12px;text-align:center;color:#9ca3af;">Results pending</td></tr>'}</tbody>
+</table>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:40px;">
+  <div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">Lab Technician</div>
+  <div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">Pathologist</div>
+  <div style="border-top:2px solid #111;padding-top:8px;font-size:12px;">Date</div>
+</div>
+<script>window.onload=function(){window.print();}</script></body></html>`);
+    win.document.close();
+  };
 
   return (
     <div className="p-6">
@@ -98,7 +139,10 @@ export default function PatientLabReportsPage() {
                         </div>
                       </div>
                     </div>
-                    {isOpen ? <ChevronUp size={16} className="text-gray-400 flex-shrink-0" /> : <ChevronDown size={16} className="text-gray-400 flex-shrink-0" />}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {order.results?.length > 0 && <button onClick={e => { e.stopPropagation(); handlePrintLabReport(order); }} className="flex items-center gap-1 text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 font-medium"><Printer size={11} /> Print</button>}
+                      {isOpen ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                    </div>
                   </div>
                 </button>
 
