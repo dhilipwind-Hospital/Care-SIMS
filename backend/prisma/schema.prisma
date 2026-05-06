@@ -2728,20 +2728,48 @@ model InventoryItem {
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   transactions InventoryTransaction[]
+  batches      InventoryBatch[]
 
   @@unique([tenantId, locationId, itemCode])
   @@map("inventory_items")
+}
+
+model InventoryBatch {
+  id               String    @id @default(uuid())
+  tenantId         String    @map("tenant_id")
+  itemId           String    @map("item_id")
+  batchNumber      String    @map("batch_number")
+  manufacturerName String?   @map("manufacturer_name")
+  expiryDate       DateTime? @map("expiry_date") @db.Date
+  manufactureDate  DateTime? @map("manufacture_date") @db.Date
+  quantityReceived Int       @map("quantity_received")
+  quantityRemaining Int      @default(0) @map("quantity_remaining")
+  unitCost         Decimal?  @map("unit_cost") @db.Decimal(10, 2)
+  supplierName     String?   @map("supplier_name")
+  invoiceNumber    String?   @map("invoice_number")
+  receivedAt       DateTime  @default(now()) @map("received_at")
+  receivedById     String    @map("received_by")
+  isActive         Boolean   @default(true) @map("is_active")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  item InventoryItem @relation(fields: [itemId], references: [id])
+
+  @@index([tenantId, itemId])
+  @@index([tenantId, expiryDate])
+  @@map("inventory_batches")
 }
 
 model InventoryTransaction {
   id              String   @id @default(uuid())
   tenantId        String   @map("tenant_id")
   itemId          String   @map("item_id")
+  batchId         String?  @map("batch_id")
   transactionType String   @map("transaction_type")
   quantity        Int
   referenceType   String?  @map("reference_type")
   referenceId     String?  @map("reference_id")
   departmentId    String?  @map("department_id")
+  departmentName  String?  @map("department_name")
   remarks         String?
   performedById   String   @map("performed_by")
   createdAt       DateTime @default(now()) @map("created_at")
@@ -2749,6 +2777,7 @@ model InventoryTransaction {
   item InventoryItem @relation(fields: [itemId], references: [id])
 
   @@index([tenantId, itemId])
+  @@index([tenantId, departmentId])
   @@map("inventory_transactions")
 }
 

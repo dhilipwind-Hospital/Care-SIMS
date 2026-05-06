@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import {
   Users, DollarSign, Activity, TrendingUp, BedDouble,
   Clock, CalendarRange, FileText, Stethoscope, HeartPulse, Download, Printer, FlaskConical,
+  Pill, Package, CalendarCheck,
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -20,7 +21,7 @@ const CHART_COLORS = ['#0F766E', '#3B82F6', '#EC4899', '#8B5CF6', '#F59E0B', '#1
 
 /* ── types ─────────────────────────────────────────────── */
 
-type Tab = 'patients' | 'revenue' | 'opd' | 'ipd' | 'lab';
+type Tab = 'patients' | 'revenue' | 'opd' | 'ipd' | 'lab' | 'pharmacy' | 'appointments' | 'inventory';
 
 interface PatientData {
   total: number;
@@ -73,6 +74,9 @@ const TABS: { key: Tab; label: string; icon: typeof Users }[] = [
   { key: 'opd', label: 'OPD Performance', icon: Stethoscope },
   { key: 'ipd', label: 'IPD Analytics', icon: BedDouble },
   { key: 'lab', label: 'Lab Reports', icon: FlaskConical },
+  { key: 'pharmacy', label: 'Pharmacy', icon: Pill },
+  { key: 'appointments', label: 'Appointments', icon: CalendarCheck },
+  { key: 'inventory', label: 'Inventory', icon: Package },
 ];
 
 /* ── main component ────────────────────────────────────── */
@@ -135,6 +139,43 @@ export default function ReportsPage() {
           { metric: 'Pending', value: data.pending ?? 0 },
           { metric: 'Critical Results', value: data.critical ?? 0 },
         ], `lab-report-${applied.from}-to-${applied.to}.csv`);
+      } else if (activeTab === 'pharmacy') {
+        const { data } = await api.get('/reports/pharmacy', { params });
+        exportTableToCsv([
+          { header: 'Metric', key: 'metric' }, { header: 'Value', key: 'value' },
+        ], [
+          { metric: 'Total Prescriptions', value: data.total ?? 0 },
+          { metric: 'Dispensed', value: data.dispensed ?? 0 },
+          { metric: 'Pending', value: data.pending ?? 0 },
+          { metric: 'At Pharmacy', value: data.sentToPharmacy ?? 0 },
+          { metric: 'Cancelled', value: data.cancelled ?? 0 },
+          { metric: 'Pharmacy Revenue (INR)', value: data.revenue ?? 0 },
+        ], `pharmacy-report-${applied.from}-to-${applied.to}.csv`);
+      } else if (activeTab === 'appointments') {
+        const { data } = await api.get('/reports/appointments', { params });
+        exportTableToCsv([
+          { header: 'Metric', key: 'metric' }, { header: 'Value', key: 'value' },
+        ], [
+          { metric: 'Total Appointments', value: data.total ?? 0 },
+          { metric: 'Completed', value: data.completed ?? 0 },
+          { metric: 'Scheduled', value: data.scheduled ?? 0 },
+          { metric: 'Cancelled', value: data.cancelled ?? 0 },
+          { metric: 'No Show', value: data.noShow ?? 0 },
+          { metric: 'Completion Rate %', value: data.completionRate ?? 0 },
+          { metric: 'Cancellation Rate %', value: data.cancellationRate ?? 0 },
+        ], `appointments-report-${applied.from}-to-${applied.to}.csv`);
+      } else if (activeTab === 'inventory') {
+        const { data } = await api.get('/reports/inventory', { params });
+        exportTableToCsv([
+          { header: 'Metric', key: 'metric' }, { header: 'Value', key: 'value' },
+        ], [
+          { metric: 'Total Items', value: data.totalItems ?? 0 },
+          { metric: 'Low Stock Items', value: data.lowStock ?? 0 },
+          { metric: 'Stock Value (INR)', value: data.stockValue ?? 0 },
+          { metric: 'Stock In Transactions', value: data.stockInCount ?? 0 },
+          { metric: 'Stock Out Transactions', value: data.stockOutCount ?? 0 },
+          { metric: 'Expiry Alerts (30d)', value: data.expiryAlerts ?? 0 },
+        ], `inventory-report-${applied.from}-to-${applied.to}.csv`);
       }
       toast.success('Report exported');
     } catch { toast.error('Export failed'); }
@@ -217,6 +258,49 @@ export default function ReportsPage() {
               <tr><td>Completed</td><td style="text-align:right">${data.completed ?? 0}</td></tr>
               <tr><td>Pending</td><td style="text-align:right">${data.pending ?? 0}</td></tr>
               <tr><td>Critical Results</td><td style="text-align:right">${data.critical ?? 0}</td></tr>
+            </tbody>
+          </table>`;
+      } else if (activeTab === 'pharmacy') {
+        bodyContent = `
+          <h2>Pharmacy Report</h2>
+          <table>
+            <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+            <tbody>
+              <tr><td>Total Prescriptions</td><td style="text-align:right">${data.total ?? 0}</td></tr>
+              <tr><td>Dispensed</td><td style="text-align:right">${data.dispensed ?? 0}</td></tr>
+              <tr><td>Pending</td><td style="text-align:right">${data.pending ?? 0}</td></tr>
+              <tr><td>At Pharmacy</td><td style="text-align:right">${data.sentToPharmacy ?? 0}</td></tr>
+              <tr><td>Cancelled</td><td style="text-align:right">${data.cancelled ?? 0}</td></tr>
+              <tr><td>Pharmacy Revenue</td><td style="text-align:right">${currency(data.revenue ?? 0)}</td></tr>
+            </tbody>
+          </table>`;
+      } else if (activeTab === 'appointments') {
+        bodyContent = `
+          <h2>Appointments Report</h2>
+          <table>
+            <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+            <tbody>
+              <tr><td>Total Appointments</td><td style="text-align:right">${data.total ?? 0}</td></tr>
+              <tr><td>Completed</td><td style="text-align:right">${data.completed ?? 0}</td></tr>
+              <tr><td>Scheduled</td><td style="text-align:right">${data.scheduled ?? 0}</td></tr>
+              <tr><td>Cancelled</td><td style="text-align:right">${data.cancelled ?? 0}</td></tr>
+              <tr><td>No Show</td><td style="text-align:right">${data.noShow ?? 0}</td></tr>
+              <tr><td>Completion Rate</td><td style="text-align:right">${data.completionRate ?? 0}%</td></tr>
+              <tr><td>Cancellation Rate</td><td style="text-align:right">${data.cancellationRate ?? 0}%</td></tr>
+            </tbody>
+          </table>`;
+      } else if (activeTab === 'inventory') {
+        bodyContent = `
+          <h2>Inventory Report</h2>
+          <table>
+            <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+            <tbody>
+              <tr><td>Total Items</td><td style="text-align:right">${data.totalItems ?? 0}</td></tr>
+              <tr><td>Low Stock Items</td><td style="text-align:right">${data.lowStock ?? 0}</td></tr>
+              <tr><td>Stock Value</td><td style="text-align:right">${currency(data.stockValue ?? 0)}</td></tr>
+              <tr><td>Stock In Transactions</td><td style="text-align:right">${data.stockInCount ?? 0}</td></tr>
+              <tr><td>Stock Out Transactions</td><td style="text-align:right">${data.stockOutCount ?? 0}</td></tr>
+              <tr><td>Expiry Alerts (30d)</td><td style="text-align:right">${data.expiryAlerts ?? 0}</td></tr>
             </tbody>
           </table>`;
       }
@@ -335,6 +419,9 @@ export default function ReportsPage() {
       {activeTab === 'opd' && <OpdTab from={applied.from} to={applied.to} />}
       {activeTab === 'ipd' && <IpdTab from={applied.from} to={applied.to} />}
       {activeTab === 'lab' && <LabTab from={applied.from} to={applied.to} />}
+      {activeTab === 'pharmacy' && <PharmacyTab from={applied.from} to={applied.to} />}
+      {activeTab === 'appointments' && <AppointmentsTab from={applied.from} to={applied.to} />}
+      {activeTab === 'inventory' && <InventoryReportTab from={applied.from} to={applied.to} />}
     </div>
   );
 }
@@ -833,6 +920,175 @@ function LabTab({ from, to }: { from: string; to: string }) {
                 <RechartsTooltip />
                 <Bar dataKey="value" radius={[8, 8, 0, 0]}>
                   {[0, 1, 2].map(i => <Cell key={i} fill={['#10B981', '#F59E0B', '#EF4444'][i]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ── Pharmacy Tab ──────────────────────────────────────── */
+
+function PharmacyTab({ from, to }: { from: string; to: string }) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const fetch = useCallback(() => {
+    setLoading(true);
+    api.get('/reports/pharmacy', { params: { from, to } })
+      .then(r => setData(r.data))
+      .catch(() => { toast.error('Failed to load pharmacy report'); setData(null); })
+      .finally(() => setLoading(false));
+  }, [from, to]);
+  useEffect(() => { fetch(); }, [fetch]);
+
+  return (
+    <div className="space-y-6">
+      {loading ? <SkeletonKpiRow count={4} /> : !data ? (
+        <EmptyState title="No pharmacy data" description="Unable to load pharmacy statistics for the selected period." />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <KpiCard label="Total Prescriptions" value={data.total ?? 0} icon={Activity} color="#0F766E" />
+            <KpiCard label="Dispensed" value={data.dispensed ?? 0} icon={Activity} color="#10B981" />
+            <KpiCard label="Pending" value={data.pending ?? 0} icon={Clock} color="#F59E0B" />
+            <KpiCard label="At Pharmacy" value={data.sentToPharmacy ?? 0} icon={Activity} color="#3B82F6" />
+            <KpiCard label="Cancelled" value={data.cancelled ?? 0} icon={Activity} color="#EF4444" />
+            <KpiCard label="Pharmacy Revenue" value={new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(data.revenue ?? 0)} icon={DollarSign} color="#8B5CF6" />
+          </div>
+          <div className="hms-card p-5">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4">Prescriptions by Status</h3>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={[
+                { name: 'Dispensed', value: data.dispensed ?? 0 },
+                { name: 'Pending', value: data.pending ?? 0 },
+                { name: 'At Pharmacy', value: data.sentToPharmacy ?? 0 },
+                { name: 'Cancelled', value: data.cancelled ?? 0 },
+              ]}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <RechartsTooltip />
+                <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                  {[0, 1, 2, 3].map(i => <Cell key={i} fill={['#10B981', '#F59E0B', '#3B82F6', '#EF4444'][i]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ── Appointments Tab ──────────────────────────────────── */
+
+function AppointmentsTab({ from, to }: { from: string; to: string }) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const fetch = useCallback(() => {
+    setLoading(true);
+    api.get('/reports/appointments', { params: { from, to } })
+      .then(r => setData(r.data))
+      .catch(() => { toast.error('Failed to load appointments report'); setData(null); })
+      .finally(() => setLoading(false));
+  }, [from, to]);
+  useEffect(() => { fetch(); }, [fetch]);
+
+  return (
+    <div className="space-y-6">
+      {loading ? <SkeletonKpiRow count={4} /> : !data ? (
+        <EmptyState title="No appointment data" description="Unable to load appointment statistics for the selected period." />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <KpiCard label="Total" value={data.total ?? 0} icon={Activity} color="#0F766E" />
+            <KpiCard label="Completed" value={data.completed ?? 0} icon={Activity} color="#10B981" />
+            <KpiCard label="Cancelled" value={data.cancelled ?? 0} icon={Activity} color="#EF4444" />
+            <KpiCard label="No Show" value={data.noShow ?? 0} icon={Activity} color="#F59E0B" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="hms-card p-5">
+              <h3 className="text-sm font-semibold text-gray-700 mb-4">Appointment Breakdown</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={[
+                    { name: 'Completed', value: data.completed ?? 0 },
+                    { name: 'Scheduled', value: data.scheduled ?? 0 },
+                    { name: 'Cancelled', value: data.cancelled ?? 0 },
+                    { name: 'No Show', value: data.noShow ?? 0 },
+                  ]} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}>
+                    {[0,1,2,3].map(i => <Cell key={i} fill={['#10B981','#3B82F6','#EF4444','#F59E0B'][i]} />)}
+                  </Pie>
+                  <RechartsTooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="hms-card p-5 space-y-4">
+              <h3 className="text-sm font-semibold text-gray-700">Performance Metrics</h3>
+              <div className="space-y-3">
+                <div>
+                  <div className="flex justify-between text-sm mb-1"><span className="text-gray-600">Completion Rate</span><span className="font-semibold text-green-700">{data.completionRate ?? 0}%</span></div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-green-500 rounded-full" style={{ width: `${data.completionRate ?? 0}%` }} /></div>
+                </div>
+                <div>
+                  <div className="flex justify-between text-sm mb-1"><span className="text-gray-600">Cancellation Rate</span><span className="font-semibold text-red-600">{data.cancellationRate ?? 0}%</span></div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-red-400 rounded-full" style={{ width: `${data.cancellationRate ?? 0}%` }} /></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ── Inventory Report Tab ──────────────────────────────── */
+
+function InventoryReportTab({ from, to }: { from: string; to: string }) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const fetch = useCallback(() => {
+    setLoading(true);
+    api.get('/reports/inventory', { params: { from, to } })
+      .then(r => setData(r.data))
+      .catch(() => { toast.error('Failed to load inventory report'); setData(null); })
+      .finally(() => setLoading(false));
+  }, [from, to]);
+  useEffect(() => { fetch(); }, [fetch]);
+
+  return (
+    <div className="space-y-6">
+      {loading ? <SkeletonKpiRow count={4} /> : !data ? (
+        <EmptyState title="No inventory data" description="Unable to load inventory statistics for the selected period." />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <KpiCard label="Total Items" value={data.totalItems ?? 0} icon={Activity} color="#0F766E" />
+            <KpiCard label="Low Stock Items" value={data.lowStock ?? 0} icon={TrendingUp} color="#EF4444" />
+            <KpiCard label="Stock Value" value={new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(data.stockValue ?? 0)} icon={DollarSign} color="#10B981" />
+            <KpiCard label="Stock In (period)" value={data.stockInCount ?? 0} icon={Activity} color="#3B82F6" />
+            <KpiCard label="Stock Out (period)" value={data.stockOutCount ?? 0} icon={Activity} color="#8B5CF6" />
+            <KpiCard label="Expiry Alerts (30d)" value={data.expiryAlerts ?? 0} icon={Clock} color="#F59E0B" />
+          </div>
+          <div className="hms-card p-5">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4">Stock Movement (Period)</h3>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={[
+                { name: 'Stock In', value: data.stockInCount ?? 0 },
+                { name: 'Stock Out', value: data.stockOutCount ?? 0 },
+                { name: 'Low Stock', value: data.lowStock ?? 0 },
+                { name: 'Expiry Alerts', value: data.expiryAlerts ?? 0 },
+              ]}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <RechartsTooltip />
+                <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                  {[0,1,2,3].map(i => <Cell key={i} fill={['#10B981','#8B5CF6','#EF4444','#F59E0B'][i]} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>

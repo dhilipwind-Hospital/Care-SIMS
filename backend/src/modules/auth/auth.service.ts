@@ -263,6 +263,19 @@ export class AuthService {
     return { message: 'MFA activated successfully' };
   }
 
+  async updateMe(userId: string, tenantId: string, userType: string, dto: { firstName?: string; lastName?: string; phone?: string }) {
+    const data: any = {};
+    if (dto.firstName !== undefined) data.firstName = dto.firstName;
+    if (dto.lastName !== undefined) data.lastName = dto.lastName;
+    if (dto.phone !== undefined) data.phone = dto.phone;
+    if (userType === 'PLATFORM') {
+      const u = await this.prisma.platformUser.update({ where: { id: userId }, data });
+      return { firstName: u.firstName, lastName: u.lastName };
+    }
+    const u = await this.prisma.tenantUser.update({ where: { id: userId }, data });
+    return { firstName: u.firstName, lastName: u.lastName, phone: (u as any).phone };
+  }
+
   async changePassword(userId: string, tenantId: string, currentPassword: string, newPassword: string) {
     const user = await this.prisma.tenantUser.findFirst({ where: { id: userId, tenantId } });
     if (!user) throw new UnauthorizedException();

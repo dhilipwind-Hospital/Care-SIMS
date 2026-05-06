@@ -22,26 +22,62 @@ export class InventoryController {
   constructor(private svc: InventoryService) {}
 
   @Get('items')
-  items(@CurrentUser('tenantId') tid: string, @Query('category') cat?: string, @Query('lowStock') low?: string) { return this.svc.listItems(tid, cat, low === 'true'); }
+  items(@CurrentUser('tenantId') tid: string, @Query('category') cat?: string, @Query('lowStock') low?: string) {
+    return this.svc.listItems(tid, cat, low === 'true');
+  }
 
   @Post('items')
-  addItem(@CurrentUser('tenantId') tid: string, @Body() body: CreateInventoryItemDto) { return this.svc.addItem(tid, body); }
+  addItem(@CurrentUser('tenantId') tid: string, @Body() body: CreateInventoryItemDto) {
+    return this.svc.addItem(tid, body);
+  }
 
   @Get('items/:id')
-  getItem(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getItem(tid, id); }
+  getItem(@CurrentUser('tenantId') tid: string, @Param('id') id: string) {
+    return this.svc.getItem(tid, id);
+  }
 
   @Patch('items/:id')
-  updateItem(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: UpdateInventoryItemDto) { return this.svc.updateItem(tid, id, body); }
+  updateItem(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: UpdateInventoryItemDto) {
+    return this.svc.updateItem(tid, id, body);
+  }
 
   @Post('stock-in')
-  stockIn(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @Body() body: StockInDto) { return this.svc.stockIn(tid, uid, body); }
+  stockIn(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @Body() body: StockInDto) {
+    return this.svc.stockIn(tid, uid, body);
+  }
 
   @Post('stock-out')
-  stockOut(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @Body() body: StockOutDto) { return this.svc.stockOut(tid, uid, body); }
+  stockOut(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @Body() body: StockOutDto) {
+    return this.svc.stockOut(tid, uid, body);
+  }
 
   @Get('transactions')
-  transactions(@CurrentUser('tenantId') tid: string, @Query('itemId') itemId?: string) { return this.svc.listTransactions(tid, itemId); }
+  transactions(@CurrentUser('tenantId') tid: string, @Query('itemId') itemId?: string) {
+    return this.svc.listTransactions(tid, itemId);
+  }
 
   @Get('low-stock')
-  lowStock(@CurrentUser('tenantId') tid: string) { return this.svc.lowStockItems(tid); }
+  lowStock(@CurrentUser('tenantId') tid: string) {
+    return this.svc.lowStockItems(tid);
+  }
+
+  @Get('batches')
+  batches(@CurrentUser('tenantId') tid: string, @Query('itemId') itemId?: string) {
+    return this.svc.listBatches(tid, itemId);
+  }
+
+  @Get('expiry-alert')
+  expiryAlert(@CurrentUser('tenantId') tid: string, @Query('days') days?: string) {
+    return this.svc.nearExpiryItems(tid, days ? parseInt(days, 10) : 30);
+  }
+
+  @Get('departments')
+  departments(@CurrentUser('tenantId') tid: string, @Query('department') dept?: string) {
+    return this.svc.departmentStockHistory(tid, dept);
+  }
+
+  @Post('adjust')
+  adjust(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @Body() body: any) {
+    return this.svc.stockAdjust(tid, uid, body);
+  }
 }

@@ -21,4 +21,8 @@ export class ReportsController {
   @Get('revenue') revenue(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getRevenueReport(tid, q); }
   @Get('opd') opd(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getOPDReport(tid, q); }
   @Get('ipd') ipd(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getIPDReport(tid, q); }
+  @Get('lab') lab(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getLabReport(tid, q); }
+  @Get('pharmacy') pharmacy(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getPharmacyReport(tid, q); }
+  @Get('appointments') appointments(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getAppointmentReport(tid, q); }
+  @Get('inventory') inventory(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getInventoryReport(tid, q); }
 }

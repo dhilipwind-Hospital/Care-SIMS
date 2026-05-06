@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Put, Delete, Body, Req, UseGuards, Query, HttpCode } from '@nestjs/common';
+import { Controller, Post, Get, Put, Patch, Delete, Body, Req, UseGuards, Query, HttpCode } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
@@ -87,6 +87,13 @@ export class AuthController {
   @ApiBearerAuth('access-token')
   getMe(@CurrentUser() user: any) {
     return this.authService.getMe(user.sub, user.tenantId, user.type);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @Patch('me')
+  updateMe(@CurrentUser() user: any, @Body() body: { firstName?: string; lastName?: string; phone?: string }) {
+    return this.authService.updateMe(user.sub, user.tenantId, user.type, body);
   }
 
   @UseGuards(JwtAuthGuard)
