@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { CreditCard, DollarSign, Clock, FileText, Plus, X, Search, Trash2, Printer, Eye, ChevronDown, ChevronUp } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -33,6 +34,8 @@ export default function BillingPage() {
   const [patients, setPatients] = useState<any[]>([]);
   const [patientLoading, setPatientLoading] = useState(false);
 
+  const [revenueStats, setRevenueStats] = useState<any>(null);
+
   // Detail panel
   const [selected, setSelected] = useState<any>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -58,6 +61,15 @@ export default function BillingPage() {
   };
 
   useEffect(() => { fetchInvoices(); }, [search, statusFilter, page]);
+
+  useEffect(() => {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    const today = now.toISOString().slice(0, 10);
+    api.get('/reports/revenue', { params: { from: startOfMonth, to: today } })
+      .then(({ data }) => setRevenueStats(data))
+      .catch(() => { /* supplementary — ignore errors */ });
+  }, []);
 
   // Escape key to close modals
   useEscapeClose(showNew, () => setShowNew(false));
@@ -358,6 +370,75 @@ export default function BillingPage() {
         <KpiCard label="Pending" value={pending} icon={Clock} color="#F59E0B" sub={`${pending > 0 ? pending + ' invoices' : 'All cleared'}`} />
         <KpiCard label="Invoices Today" value={invoices.length} icon={FileText} color="#3B82F6" sub={invoices.length > 0 ? `${invoices.length} invoice${invoices.length > 1 ? 's' : ''}` : 'None yet'} />
       </div>
+
+      {/* Revenue Overview Chart */}
+      {revenueStats && revenueStats.totalBilled > 0 && (
+        <div className="px-3 sm:px-6 pt-4">
+          <div className="hms-card p-5">
+            <h3 className="font-semibold text-gray-800 mb-4">Revenue Overview — This Month</h3>
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart
+                layout="vertical"
+                data={[
+                  { name: 'Billed', value: revenueStats.totalBilled, color: '#0F766E' },
+                  { name: 'Collected', value: revenueStats.totalCollected, color: '#10B981' },
+                  { name: 'Outstanding', value: revenueStats.outstanding, color: '#EF4444' },
+                ]}
+                margin={{ top: 0, right: 24, left: 16, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                <XAxis
+                  type="number"
+                  tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
+                  tick={{ fontSize: 11, fill: '#9ca3af' }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  tick={{ fontSize: 12, fill: '#374151', fontWeight: 500 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={76}
+                />
+                <Tooltip
+                  formatter={(v) => [`₹${Number(v).toLocaleString('en-IN')}`, '']}
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
+                  cursor={{ fill: 'rgba(15,118,110,0.06)' }}
+                />
+                <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={28}>
+                  {[
+                    { name: 'Billed', value: revenueStats.totalBilled, color: '#0F766E' },
+                    { name: 'Collected', value: revenueStats.totalCollected, color: '#10B981' },
+                    { name: 'Outstanding', value: revenueStats.outstanding, color: '#EF4444' },
+                  ].map((entry) => (
+                    <Cell key={entry.name} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            {/* Collection rate progress bar */}
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                <span>Collection Rate</span>
+                <span className="font-semibold text-gray-700">
+                  {((revenueStats.totalCollected / revenueStats.totalBilled) * 100).toFixed(1)}%
+                </span>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-2">
+                <div
+                  className="h-2 rounded-full transition-all"
+                  style={{
+                    width: `${Math.min(100, (revenueStats.totalCollected / revenueStats.totalBilled) * 100)}%`,
+                    background: 'linear-gradient(90deg, #0F766E, #10B981)',
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Split content area */}
       <div className="flex flex-1 gap-5 px-3 sm:px-6 py-5 overflow-auto">

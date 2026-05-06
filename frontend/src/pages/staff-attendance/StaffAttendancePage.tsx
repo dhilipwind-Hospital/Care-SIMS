@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Clock, UserCheck, UserX, CalendarOff, Pencil, Plus, X, Search, BarChart3, User, Trash2 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -279,23 +280,36 @@ export default function StaffAttendancePage() {
           {summary && summary.total > 0 && (
             <div className="hms-card p-6">
               <h3 className="font-semibold text-gray-800 mb-4">Attendance Breakdown — {summaryMonth}</h3>
-              <div className="space-y-3">
-                {[
-                  { label: 'Present', value: summary.present, color: '#10B981' },
-                  { label: 'Absent', value: summary.absent, color: '#EF4444' },
-                  { label: 'On Leave', value: summary.leave, color: '#F59E0B' },
-                ].map(item => (
-                  <div key={item.label} className="flex items-center gap-3">
-                    <span className="text-sm text-gray-600 w-24">{item.label}</span>
-                    <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
-                      <div className="h-full rounded-full transition-all" style={{ width: `${summary.total ? (item.value / summary.total) * 100 : 0}%`, backgroundColor: item.color }} />
-                    </div>
-                    <span className="text-sm font-semibold text-gray-700 w-16 text-right">
-                      {item.value} ({summary.total ? Math.round((item.value / summary.total) * 100) : 0}%)
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart
+                  data={[
+                    { name: 'Present', value: summary.present, fill: '#10B981' },
+                    { name: 'Absent', value: summary.absent, fill: '#EF4444' },
+                    { name: 'On Leave', value: summary.leave ?? summary.onLeave ?? 0, fill: '#F59E0B' },
+                  ]}
+                  margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip
+                    formatter={(value: any) => [
+                      `${value} (${summary.total ? ((value / summary.total) * 100).toFixed(1) : 0}%)`,
+                      'Count',
+                    ]}
+                  />
+                  <Legend />
+                  <Bar dataKey="value" name="Count" radius={[4, 4, 0, 0]}>
+                    {[
+                      { name: 'Present', value: summary.present, fill: '#10B981' },
+                      { name: 'Absent', value: summary.absent, fill: '#EF4444' },
+                      { name: 'On Leave', value: summary.leave ?? summary.onLeave ?? 0, fill: '#F59E0B' },
+                    ].map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           )}
         </>
@@ -315,6 +329,41 @@ export default function StaffAttendancePage() {
               <KpiCard label="Present" value={myRecords.filter(r => r.status === 'PRESENT').length} icon={UserCheck} color="#10B981" />
               <KpiCard label="Absent" value={myRecords.filter(r => r.status === 'ABSENT').length} icon={UserX} color="#EF4444" />
               <KpiCard label="On Leave" value={myRecords.filter(r => r.status === 'ON_LEAVE').length} icon={CalendarOff} color="#F59E0B" />
+            </div>
+          )}
+          {myRecords.length > 0 && (
+            <div className="hms-card p-6">
+              <h3 className="font-semibold text-gray-800 mb-4">My Attendance — {myMonth}</h3>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart
+                  data={[
+                    { name: 'Present', value: myRecords.filter(r => r.status === 'PRESENT').length, fill: '#10B981' },
+                    { name: 'Absent', value: myRecords.filter(r => r.status === 'ABSENT').length, fill: '#EF4444' },
+                    { name: 'On Leave', value: myRecords.filter(r => r.status === 'ON_LEAVE').length, fill: '#F59E0B' },
+                  ]}
+                  margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip
+                    formatter={(value: any) => [
+                      `${value} (${myRecords.length ? ((value / myRecords.length) * 100).toFixed(1) : 0}%)`,
+                      'Count',
+                    ]}
+                  />
+                  <Legend />
+                  <Bar dataKey="value" name="Days" radius={[4, 4, 0, 0]}>
+                    {[
+                      { name: 'Present', fill: '#10B981' },
+                      { name: 'Absent', fill: '#EF4444' },
+                      { name: 'On Leave', fill: '#F59E0B' },
+                    ].map((entry, index) => (
+                      <Cell key={`my-cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           )}
           <div className="hms-card overflow-hidden">

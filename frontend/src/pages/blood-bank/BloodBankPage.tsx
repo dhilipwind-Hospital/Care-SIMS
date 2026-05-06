@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Droplets, Users, Package, Activity, Eye, Syringe, Search, AlertTriangle, X, Printer } from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
@@ -9,6 +10,14 @@ import EmptyState from '../../components/ui/EmptyState';
 import { SkeletonTableRow, SkeletonKpiRow } from '../../components/ui/Skeleton';
 import Pagination from '../../components/ui/Pagination';
 import api from '../../lib/api';
+
+// ─── Blood group color map ───────────────────────────────────────────
+const BLOOD_GROUP_COLORS: Record<string, string> = {
+  'A+': '#EF4444', 'A-': '#FCA5A5',
+  'B+': '#3B82F6', 'B-': '#93C5FD',
+  'O+': '#10B981', 'O-': '#6EE7B7',
+  'AB+': '#8B5CF6', 'AB-': '#C4B5FD',
+};
 
 // ─── Helpers ────────────────────────────────────────────────────────
 const today = () => new Date().toISOString().slice(0, 10);
@@ -341,6 +350,84 @@ export default function BloodBankPage() {
           <KpiCard label="Donations" value={donors.reduce((s: number, d: any) => s + (d.totalDonations || 0), 0)} icon={Activity} color="#F59E0B" />
         </div>
       )}
+
+      {/* Blood Group Distribution Chart */}
+      {(() => {
+        const chartData = Object.entries(summary.byGroup || {})
+          .filter(([, v]) => Number(v) > 0)
+          .map(([name, value]) => ({ name, value: Number(value) }));
+        const totalUnits = chartData.reduce((s, d) => s + d.value, 0);
+        if (chartData.length === 0) return null;
+        return (
+          <div className="hms-card p-5">
+            <h3 className="font-semibold text-gray-900 mb-4">Blood Group Distribution</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              {/* Pie chart */}
+              <div style={{ height: 240 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={chartData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={90}
+                      innerRadius={45}
+                      paddingAngle={2}
+                    >
+                      {chartData.map((entry) => (
+                        <Cell
+                          key={entry.name}
+                          fill={BLOOD_GROUP_COLORS[entry.name] ?? '#9CA3AF'}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value: any) => [`${value} units`, 'Units']} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              {/* Summary table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2 pr-4 font-medium text-gray-600">Blood Group</th>
+                      <th className="text-right py-2 pr-4 font-medium text-gray-600">Units</th>
+                      <th className="text-right py-2 font-medium text-gray-600">%</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chartData.map((row) => (
+                      <tr key={row.name} className="border-b last:border-0">
+                        <td className="py-2 pr-4">
+                          <span className="inline-flex items-center gap-2">
+                            <span
+                              className="inline-block w-3 h-3 rounded-full"
+                              style={{ background: BLOOD_GROUP_COLORS[row.name] ?? '#9CA3AF' }}
+                            />
+                            <span className="font-medium text-gray-800">{row.name}</span>
+                          </span>
+                        </td>
+                        <td className="py-2 pr-4 text-right font-semibold text-gray-900">{row.value}</td>
+                        <td className="py-2 text-right text-gray-500">
+                          {totalUnits > 0 ? ((row.value / totalUnits) * 100).toFixed(1) : '0.0'}%
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="border-t font-semibold">
+                      <td className="py-2 pr-4 text-gray-700">Total</td>
+                      <td className="py-2 pr-4 text-right text-gray-900">{totalUnits}</td>
+                      <td className="py-2 text-right text-gray-900">100%</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Tabs */}
       <div className="flex gap-2">
