@@ -187,7 +187,7 @@ export default function LinenPage() {
                 <div className="flex items-start justify-between mb-3">
                   <h4 className="font-semibold text-gray-900">{(it.itemType || '').replace(/_/g, ' ')}</h4>
                   <div className="flex items-center gap-1">
-                    {isLow && <AlertTriangle size={14} className="text-amber-500" title="Low stock" />}
+                    {isLow && <span title="Low stock"><AlertTriangle size={14} className="text-amber-500" /></span>}
                     <button onClick={() => handlePrintLinenReport(it)} className="p-1 rounded hover:bg-purple-50 text-purple-400 hover:text-purple-600" title="Print linen record">
                       <Printer size={14} />
                     </button>

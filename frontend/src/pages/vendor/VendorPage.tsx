@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import {
-  Building2, Plus, X, Loader2, Printer, Pencil, Eye, Star,
+  Building2, Plus, X, Loader2, Printer, Pencil, Eye,
   Phone, Mail, MapPin, CreditCard, FileText, ToggleLeft, ToggleRight, Search,
 } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
