@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Video, Clock, Play, CheckCircle, Trash2, Search, X, Plus } from 'lucide-react';
+import { Video, Clock, Play, CheckCircle, Trash2, Search, X, Plus, ExternalLink } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -8,7 +8,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import api from '../../lib/api';
 import { SkeletonTableRow, SkeletonKpiRow } from '../../components/ui/Skeleton';
 
-const BLANK = { patientId: '', doctorId: '', platform: 'IN_APP', scheduledAt: '', reason: '' };
+const BLANK = { patientId: '', doctorId: '', platform: 'IN_APP', scheduledAt: '', reason: '', roomUrl: '' };
 
 function SearchableSelect({ placeholder, endpoint, displayFn, onSelect, value, idField = 'id' }: {
   placeholder: string;
@@ -182,9 +182,13 @@ export default function TelemedicinePage() {
               <label className="block text-xs font-medium text-gray-600 mb-1">Scheduled At *</label>
               <input type="datetime-local" value={form.scheduledAt} onChange={e => setForm(f => ({ ...f, scheduledAt: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
             </div>
-            <div className="md:col-span-2">
+            <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Reason</label>
               <input value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} placeholder="Chief complaint / reason for teleconsult" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Meeting URL (optional)</label>
+              <input value={form.roomUrl} onChange={e => setForm(f => ({ ...f, roomUrl: e.target.value }))} placeholder="https://meet.google.com/... or Zoom link" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
             </div>
           </div>
           <div className="flex gap-3">
@@ -235,6 +239,12 @@ export default function TelemedicinePage() {
                       <button onClick={() => endSession(s.id)} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium flex items-center gap-1">
                         <CheckCircle size={11} /> End
                       </button>
+                    )}
+                    {(s.roomUrl || s.meetingUrl) && (s.status === 'SCHEDULED' || s.status === 'IN_PROGRESS') && (
+                      <a href={s.roomUrl || s.meetingUrl} target="_blank" rel="noopener noreferrer"
+                        className="text-xs px-2 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium flex items-center gap-1">
+                        <ExternalLink size={11} /> Join
+                      </a>
                     )}
                     <button onClick={() => handleDelete(s.id)} className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
                   </div>
