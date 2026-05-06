@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { WasteManagementService } from './waste-management.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -14,4 +14,6 @@ export class WasteManagementController {
   @Post() record(@CurrentUser('tenantId') tid: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.record(tid, body, uid); }
   @Get() getAll(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getAll(tid, q); }
   @Get('dashboard') dashboard(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.dashboard(tid, q); }
+  @Patch(':id/manifest-status') updateManifestStatus(@Param('id') id: string, @CurrentUser('tenantId') tid: string, @Body() body: any) { return this.svc.updateManifestStatus(tid, id, body); }
+  @Patch(':id') update(@Param('id') id: string, @CurrentUser('tenantId') tid: string, @Body() body: any) { return this.svc.update(tid, id, body); }
 }

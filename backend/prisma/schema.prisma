@@ -1365,8 +1365,10 @@ model WasteCollection {
   collectedById   String?  @map("collected_by")
   collectedAt     DateTime @default(now()) @map("collected_at")
   handedToVendor  Boolean  @default(false) @map("handed_to_vendor")
+  handedAt        DateTime? @map("handed_at")
   vendorName      String?  @map("vendor_name")
   manifestNumber  String?  @map("manifest_number")
+  manifestStatus  String   @default("PENDING") @map("manifest_status") // PENDING, SUBMITTED, ACKNOWLEDGED, COMPLETED
   disposalMethod  String?  @map("disposal_method") // INCINERATION, AUTOCLAVE, CHEMICAL, DEEP_BURIAL, RECYCLING
   notes           String?
   createdAt       DateTime @default(now()) @map("created_at")

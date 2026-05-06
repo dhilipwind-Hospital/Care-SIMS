@@ -6,7 +6,30 @@ export class WasteManagementService {
   constructor(private prisma: PrismaService) {}
 
   async record(tenantId: string, dto: any, userId: string) {
-    return this.prisma.wasteCollection.create({ data: { tenantId, locationId: dto.locationId, wasteCategory: dto.wasteCategory, weightKg: dto.weightKg, collectedById: userId, handedToVendor: dto.handedToVendor || false, vendorName: dto.vendorName, manifestNumber: dto.manifestNumber, disposalMethod: dto.disposalMethod, notes: dto.notes } });
+    return this.prisma.wasteCollection.create({
+      data: {
+        tenantId, locationId: dto.locationId, wasteCategory: dto.wasteCategory,
+        weightKg: dto.weightKg, collectedById: userId,
+        handedToVendor: dto.handedToVendor || false,
+        handedAt: dto.handedToVendor ? new Date() : null,
+        vendorName: dto.vendorName, manifestNumber: dto.manifestNumber,
+        manifestStatus: 'PENDING', disposalMethod: dto.disposalMethod, notes: dto.notes,
+      },
+    });
+  }
+
+  async update(tenantId: string, id: string, dto: any) {
+    const data: any = {};
+    const allowed = ['vendorName', 'manifestNumber', 'disposalMethod', 'notes', 'handedToVendor', 'handedAt'];
+    allowed.forEach(k => { if (dto[k] !== undefined) data[k] = dto[k]; });
+    if (dto.handedToVendor && !dto.handedAt) data.handedAt = new Date();
+    return this.prisma.wasteCollection.update({ where: { id }, data });
+  }
+
+  async updateManifestStatus(tenantId: string, id: string, dto: any) {
+    const valid = ['PENDING', 'SUBMITTED', 'ACKNOWLEDGED', 'COMPLETED'];
+    if (!valid.includes(dto.manifestStatus)) throw new Error('Invalid status');
+    return this.prisma.wasteCollection.update({ where: { id }, data: { manifestStatus: dto.manifestStatus } });
   }
 
   async getAll(tenantId: string, query: any) {
