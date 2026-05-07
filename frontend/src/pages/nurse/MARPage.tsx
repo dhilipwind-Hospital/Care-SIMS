@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
-import { Pill, Clock, CheckCircle, AlertCircle, Calendar, Plus, X, Printer } from 'lucide-react';
+import { Pill, Clock, CheckCircle, AlertCircle, Calendar, Plus, X, Printer, AlertTriangle, ShieldCheck } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -9,6 +9,18 @@ import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import api from '../../lib/api';
 
 const emptyScheduleForm = { admissionId: '', prescriptionItemId: '', drugName: '', dose: '', route: 'ORAL', frequency: 'OD', startDate: '', endDate: '', notes: '' };
+
+const FIVE_RIGHTS = [
+  'Right Patient — confirmed with ID/wristband',
+  'Right Drug — verified drug name and form',
+  'Right Dose — dose matches prescription',
+  'Right Route — route is correct and appropriate',
+  'Right Time — within ±30 min of scheduled time',
+];
+
+function isOverdue(r: any) {
+  return r.scheduledTime && r.status === 'SCHEDULED' && new Date(r.scheduledTime) < new Date();
+}
 
 export default function MARPage() {
   const [records, setRecords] = useState<any[]>([]);
@@ -26,12 +38,23 @@ export default function MARPage() {
   const [scheduleForm, setScheduleForm] = useState({ ...emptyScheduleForm });
   const [scheduleError, setScheduleError] = useState('');
 
+  // 5-Rights checklist popup
+  const [fiveRightsTarget, setFiveRightsTarget] = useState<any>(null);
+  const [rightsChecked, setRightsChecked] = useState<boolean[]>(Array(5).fill(false));
+
+  // Withhold modal
+  const [withholdTarget, setWithholdTarget] = useState<any>(null);
+  const [withholdReason, setWithholdReason] = useState('');
+
+  const [actionId, setActionId] = useState<string | null>(null);
+
   const fetchMAR = async () => {
     setLoading(true);
     try {
       const { data } = await api.get('/medication-admin/pending', { params: { limit: 50 } });
       setRecords(data.data || []);
-    } catch (err) { toast.error('Failed to load medication records'); } finally { setLoading(false); }
+    } catch { toast.error('Failed to load medication records'); }
+    finally { setLoading(false); }
   };
 
   useEffect(() => { fetchMAR(); }, []);
@@ -39,16 +62,36 @@ export default function MARPage() {
   const scheduled = useMemo(() => records.filter(r => r.status === 'SCHEDULED').length, [records]);
   const administered = useMemo(() => records.filter(r => r.status === 'ADMINISTERED').length, [records]);
   const withheld = useMemo(() => records.filter(r => r.status === 'WITHHELD').length, [records]);
+  const overdueCount = useMemo(() => records.filter(isOverdue).length, [records]);
 
-  const [actionId, setActionId] = useState<string | null>(null);
+  const openFiveRights = (r: any) => { setFiveRightsTarget(r); setRightsChecked(Array(5).fill(false)); };
 
-  const administer = async (id: string) => {
-    setActionId(id);
+  const confirmAdminister = async () => {
+    if (!fiveRightsTarget) return;
+    setActionId(fiveRightsTarget.id);
+    setFiveRightsTarget(null);
     try {
-      await api.patch(`/medication-admin/${id}/administer`, { administeredAt: new Date().toISOString(), fiveRightsVerified: true });
-      toast.success('Medication administered successfully');
+      await api.patch(`/medication-admin/${fiveRightsTarget.id}/administer`, {
+        administeredAt: new Date().toISOString(),
+        fiveRightsVerified: true,
+      });
+      toast.success('Medication administered');
       fetchMAR();
-    } catch (err) { toast.error('Failed to record medication administration'); }
+    } catch { toast.error('Failed to record administration'); }
+    finally { setActionId(null); }
+  };
+
+  const confirmWithhold = async () => {
+    if (!withholdTarget || !withholdReason.trim()) { toast.error('Please enter a reason'); return; }
+    setActionId(withholdTarget.id);
+    const target = withholdTarget;
+    setWithholdTarget(null);
+    setWithholdReason('');
+    try {
+      await api.patch(`/medication-admin/${target.id}/withhold`, { withheldReason: withholdReason.trim() });
+      toast.success('Medication withheld');
+      fetchMAR();
+    } catch { toast.error('Failed to record withhold'); }
     finally { setActionId(null); }
   };
 
@@ -59,7 +102,7 @@ export default function MARPage() {
     try {
       const { data } = await api.get(`/medication-admin/mar/${marAdmissionId.trim()}`);
       setMarData(data.data || data || []);
-    } catch (err) { console.error('Failed to load MAR grid:', err); toast.error('Failed to load MAR grid'); setMarData([]); }
+    } catch { toast.error('Failed to load MAR grid'); setMarData([]); }
     finally { setMarLoading(false); }
   };
 
@@ -75,7 +118,7 @@ export default function MARPage() {
       setShowScheduleForm(false);
       setScheduleForm({ ...emptyScheduleForm });
       fetchMAR();
-    } catch (err) { console.error('Failed to schedule medication:', err); toast.error('Failed to schedule medication'); }
+    } catch { toast.error('Failed to schedule medication'); }
   };
 
   const filtered = useMemo(() => records.filter(r =>
@@ -93,7 +136,7 @@ export default function MARPage() {
         <td style="border:1px solid #d1d5db;padding:8px;">${m.frequency || ''}</td>
         <td style="border:1px solid #d1d5db;padding:8px;">${m.scheduledTime ? new Date(m.scheduledTime).toLocaleString() : '—'}</td>
         <td style="border:1px solid #d1d5db;padding:8px;">${m.administeredTime ? new Date(m.administeredTime).toLocaleString() : '—'}</td>
-        <td style="border:1px solid #d1d5db;padding:8px;color:${statusColor};font-weight:600;">${m.status || ''}</td>
+        <td style="border:1px solid #d1d5db;padding:8px;color:${statusColor};font-weight:600;">${m.status || ''}${m.withheldReason ? ` — ${m.withheldReason}` : ''}</td>
       </tr>`;
     }).join('');
 
@@ -113,7 +156,7 @@ export default function MARPage() {
             <th style="border:1px solid #d1d5db;padding:8px;text-align:left;">Frequency</th>
             <th style="border:1px solid #d1d5db;padding:8px;text-align:left;">Scheduled</th>
             <th style="border:1px solid #d1d5db;padding:8px;text-align:left;">Administered</th>
-            <th style="border:1px solid #d1d5db;padding:8px;text-align:left;">Status</th>
+            <th style="border:1px solid #d1d5db;padding:8px;text-align:left;">Status / Reason</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -143,13 +186,20 @@ export default function MARPage() {
         <KpiCard label="Withheld" value={withheld} icon={AlertCircle} color="#EF4444" />
       </div>
 
+      {overdueCount > 0 && (
+        <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 font-medium">
+          <AlertTriangle size={16} className="shrink-0" />
+          {overdueCount} overdue dose{overdueCount > 1 ? 's' : ''} — scheduled time has passed without administration
+        </div>
+      )}
+
       {/* View MAR Grid */}
       <div className="hms-card p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-gray-800 flex items-center gap-2"><Calendar size={18} className="text-teal-600" /> View MAR Grid</h3>
           <button onClick={() => { setShowScheduleForm(!showScheduleForm); setScheduleError(''); }} className="px-4 py-2 rounded-lg text-white font-medium text-sm inline-flex items-center gap-1.5" style={{ background: 'var(--accent)' }}><Plus size={15} /> Schedule Medication</button>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <input className="hms-input w-full sm:w-64" placeholder="Enter Admission ID" value={marAdmissionId} onChange={e => setMarAdmissionId(e.target.value)} onKeyDown={e => e.key === 'Enter' && fetchMAR_Grid()} />
           <button onClick={fetchMAR_Grid} className="px-4 py-2 rounded-lg text-white font-medium text-sm" style={{ background: 'var(--accent)' }}>Load MAR</button>
           {showMarGrid && <button onClick={() => { setShowMarGrid(false); setMarData([]); }} className="text-sm text-gray-500 hover:text-gray-700">Clear</button>}
@@ -180,14 +230,17 @@ export default function MARPage() {
                 </thead>
                 <tbody>
                   {marData.map((m: any, idx: number) => (
-                    <tr key={m.id || idx} className="border-b hover:bg-gray-50">
+                    <tr key={m.id || idx} className={`border-b hover:bg-gray-50 ${m.status === 'WITHHELD' ? 'bg-red-50/40' : ''}`}>
                       <td className="p-3 font-semibold text-teal-700">{m.drugName}</td>
                       <td className="p-3">{m.dosage || m.dose}</td>
                       <td className="p-3">{m.route}</td>
                       <td className="p-3">{m.frequency}</td>
                       <td className="p-3 text-xs">{m.scheduledTime ? new Date(m.scheduledTime).toLocaleString() : '—'}</td>
                       <td className="p-3 text-xs">{m.administeredTime ? new Date(m.administeredTime).toLocaleString() : '—'}</td>
-                      <td className="p-3"><StatusBadge status={m.status} /></td>
+                      <td className="p-3">
+                        <StatusBadge status={m.status} />
+                        {m.withheldReason && <div className="text-xs text-red-600 mt-0.5">{m.withheldReason}</div>}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -238,39 +291,146 @@ export default function MARPage() {
           <table className="w-full">
             <thead>
               <tr>
-                {['Patient','Drug','Dose','Route','Frequency','Scheduled','Administered','Status','Actions'].map(h => (
+                {['Patient','Drug','Dose','Route','Freq','Scheduled','Status','Actions'].map(h => (
                   <th key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 py-3 text-left bg-gray-50">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <>{Array.from({ length: 5 }).map((_, i) => <SkeletonTableRow key={i} cols={9} />)}</>
+                <>{Array.from({ length: 5 }).map((_, i) => <SkeletonTableRow key={i} cols={8} />)}</>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={9} className="p-0"><EmptyState icon={<Pill size={36} />} title="No medication records" description="Pending medication administrations will appear here" /></td></tr>
-              ) : filtered.map(r => (
-                <tr key={r.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm font-medium">{r.patient?.firstName} {r.patient?.lastName}</td>
-                  <td className="px-4 py-3 text-sm font-semibold text-teal-700">{r.drugName}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{r.dosage}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{r.route}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{r.frequency}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{r.scheduledTime ? new Date(r.scheduledTime).toLocaleTimeString() : '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{r.administeredTime ? new Date(r.administeredTime).toLocaleTimeString() : '—'}</td>
-                  <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
-                  <td className="px-4 py-3">
-                    {r.status === 'SCHEDULED' && (
-                      <button onClick={() => administer(r.id)} disabled={actionId === r.id}
-                        className="text-xs px-2 py-1 bg-teal-600 text-white rounded-md hover:bg-teal-700 font-medium disabled:opacity-50">
-                        {actionId === r.id ? 'Giving...' : 'Give'}</button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                <tr><td colSpan={8} className="p-0"><EmptyState icon={<Pill size={36} />} title="No medication records" description="Pending medication administrations will appear here" /></td></tr>
+              ) : filtered.map(r => {
+                const overdue = isOverdue(r);
+                return (
+                  <tr key={r.id} className={`hover:bg-gray-50 border-t border-gray-50 ${overdue ? 'bg-red-50/50' : ''}`}>
+                    <td className="px-4 py-3 text-sm font-medium">{r.patient?.firstName} {r.patient?.lastName}</td>
+                    <td className="px-4 py-3 text-sm font-semibold text-teal-700">{r.drugName}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{r.dosage || r.dose}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{r.route}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{r.frequency}</td>
+                    <td className="px-4 py-3 text-sm whitespace-nowrap">
+                      {overdue && <span className="text-red-500 mr-1">⚠</span>}
+                      <span className={overdue ? 'text-red-600 font-semibold' : 'text-gray-600'}>
+                        {r.scheduledTime ? new Date(r.scheduledTime).toLocaleTimeString() : '—'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
+                    <td className="px-4 py-3">
+                      {r.status === 'SCHEDULED' && (
+                        <div className="flex gap-1.5">
+                          <button onClick={() => openFiveRights(r)} disabled={actionId === r.id}
+                            className="text-xs px-2 py-1 bg-teal-600 text-white rounded-md hover:bg-teal-700 font-medium disabled:opacity-50 flex items-center gap-1">
+                            <ShieldCheck size={11} /> Give
+                          </button>
+                          <button onClick={() => { setWithholdTarget(r); setWithholdReason(''); }} disabled={actionId === r.id}
+                            className="text-xs px-2 py-1 bg-red-50 text-red-700 rounded-md hover:bg-red-100 font-medium disabled:opacity-50">
+                            Withhold
+                          </button>
+                        </div>
+                      )}
+                      {r.status === 'WITHHELD' && r.withheldReason && (
+                        <span className="text-xs text-red-500 italic">{r.withheldReason}</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* 5-Rights Checklist Modal */}
+      {fiveRightsTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={18} className="text-teal-600" />
+                <h3 className="font-bold text-gray-900">5-Rights Verification</h3>
+              </div>
+              <button onClick={() => setFiveRightsTarget(null)} className="p-1 rounded hover:bg-gray-100"><X size={18} className="text-gray-500" /></button>
+            </div>
+            <div className="px-6 py-4 space-y-3">
+              <div className="bg-teal-50 rounded-lg p-3 text-sm">
+                <div className="font-semibold text-teal-800">{fiveRightsTarget.drugName} — {fiveRightsTarget.dosage || fiveRightsTarget.dose}</div>
+                <div className="text-teal-600 mt-0.5">{fiveRightsTarget.route} · {fiveRightsTarget.frequency}</div>
+                <div className="text-teal-600 mt-0.5">
+                  {fiveRightsTarget.patient?.firstName} {fiveRightsTarget.patient?.lastName}
+                  {fiveRightsTarget.scheduledTime && ` · Due: ${new Date(fiveRightsTarget.scheduledTime).toLocaleTimeString()}`}
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">Confirm each right before administering:</p>
+              {FIVE_RIGHTS.map((right, i) => (
+                <label key={i} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${rightsChecked[i] ? 'border-teal-300 bg-teal-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                  <input type="checkbox" checked={rightsChecked[i]}
+                    onChange={e => { const next = [...rightsChecked]; next[i] = e.target.checked; setRightsChecked(next); }}
+                    className="mt-0.5 accent-teal-600" />
+                  <span className="text-sm text-gray-800">{right}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
+              <button onClick={() => setFiveRightsTarget(null)} className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={confirmAdminister} disabled={!rightsChecked.every(Boolean)}
+                className="px-5 py-2 rounded-lg text-white text-sm font-semibold disabled:opacity-40"
+                style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
+                Confirm & Administer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Withhold Reason Modal */}
+      {withholdTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2"><AlertCircle size={16} className="text-red-500" /> Withhold Medication</h3>
+              <button onClick={() => setWithholdTarget(null)} className="p-1 rounded hover:bg-gray-100"><X size={18} className="text-gray-500" /></button>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <div className="bg-red-50 rounded-lg p-3 text-sm">
+                <div className="font-semibold text-red-800">{withholdTarget.drugName} — {withholdTarget.dosage || withholdTarget.dose}</div>
+                <div className="text-red-600">{withholdTarget.patient?.firstName} {withholdTarget.patient?.lastName}</div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Reason for withholding *</label>
+                <select
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 mb-2"
+                  value={withholdReason}
+                  onChange={e => setWithholdReason(e.target.value)}
+                >
+                  <option value="">Select reason…</option>
+                  <option value="Patient refused">Patient refused</option>
+                  <option value="Patient NBM / fasting">Patient NBM / fasting</option>
+                  <option value="Patient unavailable">Patient unavailable</option>
+                  <option value="Contraindication identified">Contraindication identified</option>
+                  <option value="Drug not available">Drug not available</option>
+                  <option value="Doctor order to hold">Doctor order to hold</option>
+                  <option value="Adverse reaction risk">Adverse reaction risk</option>
+                </select>
+                <input
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                  placeholder="Or type custom reason…"
+                  value={withholdReason.includes('…') || !['Patient refused','Patient NBM / fasting','Patient unavailable','Contraindication identified','Drug not available','Doctor order to hold','Adverse reaction risk'].includes(withholdReason) ? withholdReason : ''}
+                  onChange={e => setWithholdReason(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
+              <button onClick={() => setWithholdTarget(null)} className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={confirmWithhold} disabled={!withholdReason.trim()}
+                className="px-5 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold disabled:opacity-40 hover:bg-red-700">
+                Record Withhold
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
