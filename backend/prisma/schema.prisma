@@ -1612,16 +1612,22 @@ model PalliativeCareRecord {
   id              String   @id @default(uuid())
   tenantId        String   @map("tenant_id")
   patientId       String   @map("patient_id")
+  patientName     String?  @map("patient_name")
   admissionId     String?  @map("admission_id")
-  recordType      String   @map("record_type") // ASSESSMENT, SYMPTOM_CHECK, FAMILY_MEETING, GOALS_OF_CARE, FOLLOW_UP
+  recordType      String   @map("record_type") @default("ASSESSMENT") // ASSESSMENT, SYMPTOM_CHECK, FAMILY_MEETING, GOALS_OF_CARE, FOLLOW_UP
+  diagnosis       String?
   painScore       Int?     @map("pain_score")
   painType        String?  @map("pain_type")
+  supportType     String?  @map("support_type") @default("MEDICAL") // MEDICAL, PSYCHOLOGICAL, SPIRITUAL, SOCIAL, COMBINED
+  primaryNurse    String?  @map("primary_nurse")
+  carePlan        String?  @map("care_plan")
   symptoms        Json?    // [{symptom, severity (0-10)}]
   goalsOfCare     String?  @map("goals_of_care") // FULL_CODE, DNR, DNI, COMFORT_ONLY
   advanceDirective String? @map("advance_directive")
   familyMeetingNotes String? @map("family_meeting_notes")
   medications     Json?    // comfort meds
-  assessedById    String   @map("assessed_by")
+  status          String   @default("ACTIVE") // ACTIVE, DISCHARGED, DECEASED, ON_HOLD
+  assessedById    String?  @map("assessed_by")
   assessedAt      DateTime @default(now()) @map("assessed_at")
   nextFollowUp    DateTime? @map("next_follow_up") @db.Date
   notes           String?
@@ -1633,10 +1639,13 @@ model PalliativeCareRecord {
 model HomeVisit {
   id              String    @id @default(uuid())
   tenantId        String    @map("tenant_id")
-  patientId       String    @map("patient_id")
+  patientId       String?   @map("patient_id")
+  patientName     String?   @map("patient_name")
   visitDate       DateTime  @map("visit_date")
-  visitType       String    @map("visit_type") // POST_DISCHARGE, CHRONIC_CARE, WOUND_CARE, PHYSIOTHERAPY, PALLIATIVE
-  staffId         String    @map("staff_id")
+  visitType       String    @map("visit_type") @default("ROUTINE") // ROUTINE, WOUND_CARE, MEDICATION, PHYSIOTHERAPY, PALLIATIVE, POST_DISCHARGE
+  staffId         String?   @map("staff_id")
+  nurseId         String?   @map("nurse_id")
+  nurseName       String?   @map("nurse_name")
   address         String?
   startTime       DateTime? @map("start_time")
   endTime         DateTime? @map("end_time")
@@ -1648,7 +1657,7 @@ model HomeVisit {
   notes           String?
   createdAt       DateTime  @default(now()) @map("created_at")
 
-  @@index([tenantId, patientId])
+  @@index([tenantId])
   @@map("home_visits")
 }
 
