@@ -3035,6 +3035,43 @@ model MortuaryRecord {
   @@map("mortuary_records")
 }
 
+model LabQCRun {
+  id            String   @id @default(uuid())
+  tenantId      String   @map("tenant_id")
+  qcLot         String   @map("qc_lot")
+  testName      String   @map("test_name")
+  analyzer      String?
+  controlLevel  String   @default("LEVEL_1") @map("control_level")
+  expectedValue String   @map("expected_value")
+  obtainedValue String   @map("obtained_value")
+  status        String   @default("PENDING") // PASS, FAIL, WARNING, PENDING
+  notes         String?
+  performedById String?  @map("performed_by_id")
+  runDate       DateTime @default(now()) @map("run_date")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId, runDate])
+  @@map("lab_qc_runs")
+}
+
+model LabCalibration {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  instrument      String
+  testName        String    @map("test_name")
+  lastCalibration DateTime? @map("last_calibration")
+  nextDue         DateTime? @map("next_due")
+  status          String    @default("CURRENT") // CURRENT, DUE, OVERDUE
+  performedById   String?   @map("performed_by_id")
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([tenantId, status])
+  @@map("lab_calibrations")
+}
+
 model PatientAccount {
   id           String    @id @default(uuid())
   email        String    @unique

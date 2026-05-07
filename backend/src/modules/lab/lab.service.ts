@@ -127,4 +127,41 @@ export class LabService {
     if (!result) throw new NotFoundException('Result not found');
     return { ...result, printedAt: new Date() };
   }
+
+  async getQCRuns(tenantId: string) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return this.prisma.labQCRun.findMany({ where: { tenantId, runDate: { gte: today } }, orderBy: { runDate: 'desc' } });
+  }
+
+  async submitQCRun(tenantId: string, dto: any, performedById: string) {
+    const expected = parseFloat(dto.expectedValue);
+    const obtained = parseFloat(dto.obtainedValue);
+    let status = 'PASS';
+    if (!isNaN(expected) && !isNaN(obtained)) {
+      const deviation = Math.abs((obtained - expected) / expected) * 100;
+      if (deviation > 10) status = 'FAIL';
+      else if (deviation > 5) status = 'WARNING';
+    }
+    return this.prisma.labQCRun.create({
+      data: { tenantId, qcLot: dto.qcLot, testName: dto.testName, analyzer: dto.analyzer, controlLevel: dto.controlLevel || 'LEVEL_1', expectedValue: dto.expectedValue, obtainedValue: dto.obtainedValue, notes: dto.notes, performedById, status },
+    });
+  }
+
+  async getCalibrations(tenantId: string) {
+    const now = new Date();
+    const records = await this.prisma.labCalibration.findMany({ where: { tenantId }, orderBy: { nextDue: 'asc' } });
+    return records.map(c => {
+      if (!c.nextDue) return c;
+      const daysUntil = (c.nextDue.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+      const status = daysUntil < 0 ? 'OVERDUE' : daysUntil <= 7 ? 'DUE' : 'CURRENT';
+      return { ...c, status };
+    });
+  }
+
+  async addCalibration(tenantId: string, dto: any, performedById: string) {
+    return this.prisma.labCalibration.create({
+      data: { tenantId, instrument: dto.instrument, testName: dto.testName, lastCalibration: dto.lastCalibration ? new Date(dto.lastCalibration) : new Date(), nextDue: dto.nextDue ? new Date(dto.nextDue) : null, notes: dto.notes, performedById, status: 'CURRENT' },
+    });
+  }
 }

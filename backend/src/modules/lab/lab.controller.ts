@@ -43,4 +43,10 @@ export class LabController {
   @Post('results/:id/validate') validateResultAlias(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @CurrentUser('sub') uid: string) { return this.svc.validateResult(tid, id, uid); }
   @Post('results/:id/print') printResult(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.printResult(tid, id); }
   @Get('results') getResults(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getResults(tid, q); }
+
+  // QC & Calibration
+  @Get('qc/runs') getQCRuns(@CurrentUser('tenantId') tid: string) { return this.svc.getQCRuns(tid); }
+  @Post('qc/runs') submitQCRun(@CurrentUser('tenantId') tid: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.submitQCRun(tid, body, uid); }
+  @Get('qc/calibrations') getCalibrations(@CurrentUser('tenantId') tid: string) { return this.svc.getCalibrations(tid); }
+  @Post('qc/calibrations') addCalibration(@CurrentUser('tenantId') tid: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.addCalibration(tid, body, uid); }
 }
