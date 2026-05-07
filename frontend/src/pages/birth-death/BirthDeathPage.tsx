@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Baby, Skull, Plus, X, Loader2, Printer } from 'lucide-react';
+import { Baby, Skull, Plus, X, Loader2, Printer, Pencil } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import EmptyState from '../../components/ui/EmptyState';
@@ -25,6 +25,10 @@ export default function BirthDeathPage() {
   // Death form
   const [showDeathForm, setShowDeathForm] = useState(false);
   const [deathForm, setDeathForm] = useState({ patientId: '', dateOfDeath: '', timeOfDeath: '', causeOfDeath: '', mannerOfDeath: 'NATURAL', postMortemRequired: false, notes: '' });
+
+  // Edit state
+  const [editRecord, setEditRecord] = useState<any>(null);
+  const [editForm, setEditForm] = useState<any>({});
 
   const handlePrintCertificate = (r: any) => {
     const isBirth = r.type === 'BIRTH' || tab === 'births';
@@ -100,6 +104,32 @@ export default function BirthDeathPage() {
     finally { setSubmitting(false); }
   };
 
+  const openEdit = (r: any) => {
+    setEditRecord(r);
+    if (tab === 'births') {
+      setEditForm({ weightGrams: r.weightGrams ?? '', apgarScore1min: r.apgarScore1min ?? '', apgarScore5min: r.apgarScore5min ?? '', deliveryType: r.deliveryType || 'NORMAL', birthCertIssued: r.birthCertIssued || false, notes: r.notes || '' });
+    } else {
+      setEditForm({ causeOfDeath: r.causeOfDeath || '', icdCode: r.icdCode || '', mannerOfDeath: r.mannerOfDeath || 'NATURAL', postMortemDone: r.postMortemDone || false, deathCertIssued: r.deathCertIssued || false, notes: r.notes || '' });
+    }
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editRecord) return;
+    setSubmitting(true);
+    try {
+      const endpoint = tab === 'births' ? `/vital-records/births/${editRecord.id}` : `/vital-records/deaths/${editRecord.id}`;
+      const payload: any = { ...editForm };
+      if (tab === 'births') {
+        if (payload.weightGrams) payload.weightGrams = Number(payload.weightGrams);
+        if (payload.apgarScore1min) payload.apgarScore1min = Number(payload.apgarScore1min);
+        if (payload.apgarScore5min) payload.apgarScore5min = Number(payload.apgarScore5min);
+      }
+      await api.patch(endpoint, payload);
+      toast.success('Record updated'); setEditRecord(null); fetchData();
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); }
+    finally { setSubmitting(false); }
+  };
+
   const handleDeathSubmit = async () => {
     if (!deathForm.patientId || !deathForm.dateOfDeath || !deathForm.causeOfDeath) { toast.error('Fill required fields'); return; }
     setSubmitting(true);
@@ -157,10 +187,10 @@ export default function BirthDeathPage() {
                     <td className="px-4 py-3 text-sm">{r.birthOrder}</td>
                     <td className="px-4 py-3 text-sm">{r.birthCertIssued ? '✅' : '—'}</td>
                     <td className="px-4 py-3">
-                      <button onClick={() => handlePrintCertificate({ ...r, type: 'BIRTH' })}
-                        className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1">
-                        <Printer size={11} /> Print
-                      </button>
+                      <div className="flex gap-1">
+                        <button onClick={() => openEdit(r)} className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium flex items-center gap-1"><Pencil size={11} /> Edit</button>
+                        <button onClick={() => handlePrintCertificate({ ...r, type: 'BIRTH' })} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"><Printer size={11} /> Print</button>
+                      </div>
                     </td>
                   </>) : (<>
                     <td className="px-4 py-3 text-sm">{formatDate(r.dateOfDeath)}</td>
@@ -171,10 +201,10 @@ export default function BirthDeathPage() {
                     <td className="px-4 py-3 text-sm">{r.postMortemDone ? '✅' : '—'}</td>
                     <td className="px-4 py-3 text-sm">{r.deathCertIssued ? '✅' : '—'}</td>
                     <td className="px-4 py-3">
-                      <button onClick={() => handlePrintCertificate({ ...r, type: 'DEATH' })}
-                        className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1">
-                        <Printer size={11} /> Print
-                      </button>
+                      <div className="flex gap-1">
+                        <button onClick={() => openEdit(r)} className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium flex items-center gap-1"><Pencil size={11} /> Edit</button>
+                        <button onClick={() => handlePrintCertificate({ ...r, type: 'DEATH' })} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"><Printer size={11} /> Print</button>
+                      </div>
                     </td>
                   </>)}
                 </tr>
@@ -215,6 +245,46 @@ export default function BirthDeathPage() {
               <button onClick={() => setShowForm(false)} className="btn-secondary px-4 py-2">Cancel</button>
               <button onClick={handleBirthSubmit} disabled={submitting} className="btn-primary flex items-center gap-2 px-4 py-2">
                 {submitting && <Loader2 size={14} className="animate-spin" />} Register Birth
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Record Modal */}
+      {editRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="font-bold text-gray-900">Edit {tab === 'births' ? 'Birth' : 'Death'} Record</h2>
+              <button onClick={() => setEditRecord(null)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              {tab === 'births' ? (<>
+                <div className="grid grid-cols-3 gap-4">
+                  <div><label className="block text-xs font-semibold text-gray-600 mb-1">Weight (g)</label><input type="number" className="hms-input w-full" value={editForm.weightGrams} onChange={e => setEditForm({ ...editForm, weightGrams: e.target.value })} /></div>
+                  <div><label className="block text-xs font-semibold text-gray-600 mb-1">APGAR 1 min</label><input type="number" min="0" max="10" className="hms-input w-full" value={editForm.apgarScore1min} onChange={e => setEditForm({ ...editForm, apgarScore1min: e.target.value })} /></div>
+                  <div><label className="block text-xs font-semibold text-gray-600 mb-1">APGAR 5 min</label><input type="number" min="0" max="10" className="hms-input w-full" value={editForm.apgarScore5min} onChange={e => setEditForm({ ...editForm, apgarScore5min: e.target.value })} /></div>
+                </div>
+                <div><label className="block text-xs font-semibold text-gray-600 mb-1">Delivery Type</label><select className="hms-input w-full" value={editForm.deliveryType} onChange={e => setEditForm({ ...editForm, deliveryType: e.target.value })}>{['NORMAL', 'LSCS', 'FORCEPS', 'VACUUM', 'BREECH'].map(t => <option key={t}>{t}</option>)}</select></div>
+                <div className="flex items-center gap-2"><input type="checkbox" checked={editForm.birthCertIssued} onChange={e => setEditForm({ ...editForm, birthCertIssued: e.target.checked })} className="w-4 h-4 rounded" /><label className="text-sm">Birth Certificate Issued</label></div>
+              </>) : (<>
+                <div><label className="block text-xs font-semibold text-gray-600 mb-1">Cause of Death</label><textarea className="hms-input w-full" rows={2} value={editForm.causeOfDeath} onChange={e => setEditForm({ ...editForm, causeOfDeath: e.target.value })} /></div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div><label className="block text-xs font-semibold text-gray-600 mb-1">ICD Code</label><input className="hms-input w-full" placeholder="e.g. I21" value={editForm.icdCode} onChange={e => setEditForm({ ...editForm, icdCode: e.target.value })} /></div>
+                  <div><label className="block text-xs font-semibold text-gray-600 mb-1">Manner of Death</label><select className="hms-input w-full" value={editForm.mannerOfDeath} onChange={e => setEditForm({ ...editForm, mannerOfDeath: e.target.value })}>{['NATURAL', 'ACCIDENT', 'SUICIDE', 'HOMICIDE', 'UNDETERMINED'].map(m => <option key={m}>{m}</option>)}</select></div>
+                </div>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={editForm.postMortemDone} onChange={e => setEditForm({ ...editForm, postMortemDone: e.target.checked })} className="w-4 h-4 rounded" /><span className="text-sm">Post-mortem Done</span></label>
+                  <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={editForm.deathCertIssued} onChange={e => setEditForm({ ...editForm, deathCertIssued: e.target.checked })} className="w-4 h-4 rounded" /><span className="text-sm">Death Certificate Issued</span></label>
+                </div>
+              </>)}
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1">Notes</label><textarea className="hms-input w-full" rows={2} value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} /></div>
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
+              <button onClick={() => setEditRecord(null)} className="btn-secondary px-4 py-2">Cancel</button>
+              <button onClick={handleEditSubmit} disabled={submitting} className="btn-primary flex items-center gap-2 px-4 py-2">
+                {submitting && <Loader2 size={14} className="animate-spin" />} Save Changes
               </button>
             </div>
           </div>

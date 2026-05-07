@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Calendar, Users, Plus, X, Loader2, Clock, CalendarOff, Printer } from 'lucide-react';
+import { Calendar, Users, Plus, X, Loader2, Clock, CalendarOff, Printer, ArrowLeftRight } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -37,6 +37,10 @@ export default function DutyRosterPage() {
   // Leave form
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [leaveForm, setLeaveForm] = useState({ leaveType: 'CASUAL', startDate: '', endDate: '', reason: '' });
+
+  // Shift swap
+  const [swapTarget, setSwapTarget] = useState<any>(null);
+  const [swapStaffId, setSwapStaffId] = useState('');
 
   // Staff list for dropdowns
   const [staff, setStaff] = useState<any[]>([]);
@@ -87,6 +91,19 @@ export default function DutyRosterPage() {
       else await api.patch(`/duty-roster/leave/${id}/reject`, { reason: 'Rejected by admin' });
       toast.success(`Leave ${action}d`); fetchData();
     } catch { toast.error('Failed'); }
+  };
+
+  const handleRequestSwap = async () => {
+    if (!swapTarget || !swapStaffId) { toast.error('Select a staff member to swap with'); return; }
+    try {
+      await api.post(`/duty-roster/${swapTarget.id}/swap`, { swapWithStaffId: swapStaffId });
+      toast.success('Swap request sent'); setSwapTarget(null); setSwapStaffId('');
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); }
+  };
+
+  const handleApproveSwap = async (id: string) => {
+    try { await api.patch(`/duty-roster/${id}/approve-swap`); toast.success('Swap approved'); fetchData(); }
+    catch { toast.error('Failed'); }
   };
 
   const prevWeek = () => { const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d.toISOString().slice(0, 10)); };
@@ -247,10 +264,13 @@ export default function DutyRosterPage() {
                         return (
                           <td key={d} className="px-2 py-2 text-center">
                             {dayShift ? (
-                              <div className={`inline-flex flex-col items-center px-2 py-1 rounded-lg border text-[10px] font-bold ${SHIFT_COLORS[dayShift.shiftType] || SHIFT_COLORS.GENERAL}`}>
-                                <span>{dayShift.shiftType}</span>
-                                <span className="font-normal opacity-75">{dayShift.startTime}–{dayShift.endTime}</span>
-                                {dayShift.status !== 'SCHEDULED' && <StatusBadge status={dayShift.status} />}
+                              <div className="inline-flex flex-col items-center gap-0.5">
+                                <div className={`inline-flex flex-col items-center px-2 py-1 rounded-lg border text-[10px] font-bold ${SHIFT_COLORS[dayShift.shiftType] || SHIFT_COLORS.GENERAL}`}>
+                                  <span>{dayShift.shiftType}</span>
+                                  <span className="font-normal opacity-75">{dayShift.startTime}–{dayShift.endTime}</span>
+                                  {dayShift.status !== 'SCHEDULED' && <StatusBadge status={dayShift.status} />}
+                                </div>
+                                <button onClick={() => { setSwapTarget(dayShift); setSwapStaffId(''); }} className="text-[9px] text-gray-400 hover:text-teal-600 flex items-center gap-0.5"><ArrowLeftRight size={9} /> Swap</button>
                               </div>
                             ) : <span className="text-gray-300">—</span>}
                           </td>
@@ -287,12 +307,15 @@ export default function DutyRosterPage() {
                       <td className="px-4 py-3 text-sm text-gray-600 max-w-[180px] truncate">{l.reason}</td>
                       <td className="px-4 py-3"><StatusBadge status={l.status} /></td>
                       <td className="px-4 py-3">
-                        {l.status === 'PENDING' && (
-                          <div className="flex gap-1">
+                        <div className="flex gap-1 flex-wrap">
+                          {l.status === 'PENDING' && (<>
                             <button onClick={() => handleLeaveAction(l.id, 'approve')} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium">Approve</button>
                             <button onClick={() => handleLeaveAction(l.id, 'reject')} className="text-xs px-2 py-1 bg-red-50 text-red-700 rounded-md hover:bg-red-100 font-medium">Reject</button>
-                          </div>
-                        )}
+                          </>)}
+                          {l.swapStatus === 'PENDING' && (
+                            <button onClick={() => handleApproveSwap(l.id)} className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium flex items-center gap-1"><ArrowLeftRight size={10} /> Approve Swap</button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -334,6 +357,35 @@ export default function DutyRosterPage() {
               <button onClick={() => setShowForm(false)} className="btn-secondary px-4 py-2">Cancel</button>
               <button onClick={handleCreateShift} disabled={submitting} className="btn-primary flex items-center gap-2 px-4 py-2">
                 {submitting && <Loader2 size={14} className="animate-spin" />} Add Shift
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Swap Shift Modal */}
+      {swapTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-gray-900">Request Shift Swap</h2>
+              <button onClick={() => setSwapTarget(null)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">
+              Swap <span className="font-semibold text-gray-800">{swapTarget.shiftType}</span> shift on{' '}
+              <span className="font-semibold text-gray-800">{formatDate(swapTarget.shiftDate)}</span> with:
+            </p>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Swap With *</label>
+              <select className="hms-input w-full" value={swapStaffId} onChange={e => setSwapStaffId(e.target.value)}>
+                <option value="">Select staff member</option>
+                {staff.filter(s => s.id !== swapTarget.staffId).map(s => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
+              </select>
+            </div>
+            <div className="flex justify-end gap-3 mt-5">
+              <button onClick={() => setSwapTarget(null)} className="btn-secondary px-4 py-2">Cancel</button>
+              <button onClick={handleRequestSwap} className="btn-primary flex items-center gap-2 px-4 py-2">
+                <ArrowLeftRight size={14} /> Request Swap
               </button>
             </div>
           </div>

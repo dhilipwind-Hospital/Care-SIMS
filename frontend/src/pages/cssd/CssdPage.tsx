@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Shield, Package, Plus, X, Loader2, CheckCircle, AlertTriangle, ArrowRight, Printer } from 'lucide-react';
+import { Shield, Package, Plus, X, Loader2, CheckCircle, AlertTriangle, ArrowRight, Printer, LogOut, LogIn } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -31,6 +31,11 @@ export default function CssdPage() {
   // Create set form
   const [showSetForm, setShowSetForm] = useState(false);
   const [setForm2, setSetForm2] = useState({ setName: '', department: '', items: '' });
+
+  // Issue / Return
+  const [issueTarget, setIssueTarget] = useState<any>(null);
+  const [issueDept, setIssueDept] = useState('');
+  const [returnTarget, setReturnTarget] = useState<any>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -80,6 +85,22 @@ export default function CssdPage() {
       toast.success('Instrument set created'); setShowSetForm(false); fetchData();
     } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); }
     finally { setSubmitting(false); }
+  };
+
+  const handleIssueSet = async () => {
+    if (!issueTarget) return;
+    try {
+      await api.patch(`/cssd/batches/${issueTarget.id}/issue`, { departmentId: issueDept || undefined });
+      toast.success('Set issued to department'); setIssueTarget(null); setIssueDept(''); fetchData();
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); }
+  };
+
+  const handleReturnSet = async () => {
+    if (!returnTarget) return;
+    try {
+      await api.patch(`/cssd/batches/${returnTarget.id}/return`);
+      toast.success('Set returned to CSSD'); setReturnTarget(null); fetchData();
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); }
   };
 
   const handlePrintSterilizationLog = (r: any) => {
@@ -187,10 +208,18 @@ ${r.notes ? `<div style="margin-top:12px;padding:12px;background:#F8F9FA;border-
                 <StatusBadge status={s.condition} />
               </div>
               <div className="text-sm text-gray-500 mb-2">{s.department || 'General'}</div>
-              <div className="text-xs text-gray-400 space-y-1">
+              <div className="text-xs text-gray-400 space-y-1 mb-3">
                 <div>Total sterilizations: <span className="font-medium text-gray-700">{s.totalSterilizations}</span></div>
                 {s.lastSterilizedAt && <div>Last sterilized: <span className="font-medium text-gray-700">{formatDateTime(s.lastSterilizedAt)}</span></div>}
                 {s.items?.length > 0 && <div>Items: {(s.items as any[]).map((i: any) => i.name).join(', ')}</div>}
+              </div>
+              <div className="flex gap-2 pt-2 border-t border-gray-100">
+                {s.condition !== 'ISSUED' && (
+                  <button onClick={() => { setIssueTarget(s); setIssueDept(''); }} className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 font-medium flex items-center gap-1"><LogOut size={10} /> Issue</button>
+                )}
+                {s.condition === 'ISSUED' && (
+                  <button onClick={() => setReturnTarget(s)} className="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 font-medium flex items-center gap-1"><LogIn size={10} /> Return</button>
+                )}
               </div>
             </div>
           ))}
@@ -251,6 +280,45 @@ ${r.notes ? `<div style="margin-top:12px;padding:12px;background:#F8F9FA;border-
             <div className="flex justify-end gap-3 mt-4">
               <button onClick={() => setCompleteBatch(null)} className="btn-secondary px-4 py-2">Cancel</button>
               <button onClick={handleCompleteBatch} className="btn-primary px-4 py-2">Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Issue Set Modal */}
+      {issueTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-gray-900">Issue Instrument Set</h2>
+              <button onClick={() => setIssueTarget(null)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">Issuing <span className="font-semibold text-gray-800">{issueTarget.setName}</span> to department</p>
+            <div><label className="block text-xs font-semibold text-gray-600 mb-1">Department</label>
+              <input className="hms-input w-full" placeholder="e.g. Surgery, ICU" value={issueDept} onChange={e => setIssueDept(e.target.value)} />
+            </div>
+            <div className="flex justify-end gap-3 mt-5">
+              <button onClick={() => setIssueTarget(null)} className="btn-secondary px-4 py-2">Cancel</button>
+              <button onClick={handleIssueSet} className="btn-primary flex items-center gap-2 px-4 py-2"><LogOut size={14} /> Issue</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Return Set Modal */}
+      {returnTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-gray-900">Return Instrument Set</h2>
+              <button onClick={() => setReturnTarget(null)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+            </div>
+            <p className="text-sm text-gray-500 mb-6">
+              Confirm return of <span className="font-semibold text-gray-800">{returnTarget.setName}</span> to CSSD for re-sterilization.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setReturnTarget(null)} className="btn-secondary px-4 py-2">Cancel</button>
+              <button onClick={handleReturnSet} className="btn-primary flex items-center gap-2 px-4 py-2"><LogIn size={14} /> Confirm Return</button>
             </div>
           </div>
         </div>
