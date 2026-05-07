@@ -43,7 +43,7 @@ export class GrievanceService {
     return this.prisma.$transaction(async (tx) => {
       const record = await tx.grievance.findFirst({ where: { id, tenantId } });
       if (!record) throw new NotFoundException('Grievance not found');
-      return tx.grievance.update({ where: { id }, data: { assignedToId: dto.assignedToId, assignedToName: dto.assignedToName, status: 'ASSIGNED' } });
+      return tx.grievance.update({ where: { id, tenantId }, data: { assignedToId: dto.assignedToId, assignedToName: dto.assignedToName, status: 'ASSIGNED' } });
     });
   }
 
@@ -51,7 +51,7 @@ export class GrievanceService {
     return this.prisma.$transaction(async (tx) => {
       const record = await tx.grievance.findFirst({ where: { id, tenantId } });
       if (!record) throw new NotFoundException('Grievance not found');
-      return tx.grievance.update({ where: { id }, data: { resolution: dto.resolution, resolvedAt: new Date(), resolvedById: userId, status: 'RESOLVED' } });
+      return tx.grievance.update({ where: { id, tenantId }, data: { resolution: dto.resolution, resolvedAt: new Date(), resolvedById: userId, status: 'RESOLVED' } });
     });
   }
 
@@ -59,7 +59,7 @@ export class GrievanceService {
     return this.prisma.$transaction(async (tx) => {
       const record = await tx.grievance.findFirst({ where: { id, tenantId } });
       if (!record) throw new NotFoundException('Grievance not found');
-      return tx.grievance.update({ where: { id }, data: { escalatedTo: dto.escalatedTo, escalatedAt: new Date(), status: 'ESCALATED' } });
+      return tx.grievance.update({ where: { id, tenantId }, data: { escalatedTo: dto.escalatedTo, escalatedAt: new Date(), status: 'ESCALATED' } });
     });
   }
 
@@ -67,7 +67,7 @@ export class GrievanceService {
     return this.prisma.$transaction(async (tx) => {
       const record = await tx.grievance.findFirst({ where: { id, tenantId } });
       if (!record) throw new NotFoundException('Grievance not found');
-      return tx.grievance.update({ where: { id }, data: { satisfactionScore: dto.satisfactionScore, status: 'CLOSED' } });
+      return tx.grievance.update({ where: { id, tenantId }, data: { satisfactionScore: dto.satisfactionScore, status: 'CLOSED' } });
     });
   }
 
@@ -76,7 +76,7 @@ export class GrievanceService {
       const grievance = await tx.grievance.findFirst({ where: { id, tenantId } });
       if (!grievance) throw new NotFoundException('Grievance not found');
       if (grievance.status !== 'OPEN') throw new BadRequestException('Only OPEN grievances can be deleted');
-      await tx.grievance.update({ where: { id }, data: { status: 'CANCELLED' } });
+      await tx.grievance.update({ where: { id, tenantId }, data: { status: 'CANCELLED' } });
       return { message: 'Grievance deleted successfully' };
     });
   }

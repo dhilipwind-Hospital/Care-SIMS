@@ -46,7 +46,7 @@ export class DietService {
       if (dto.npoStatus !== undefined) data.npoStatus = dto.npoStatus;
       if (dto.npoReason !== undefined) data.npoReason = dto.npoReason;
       if (dto.status !== undefined) data.status = dto.status;
-      return tx.dietOrder.update({ where: { id }, data });
+      return tx.dietOrder.update({ where: { id, tenantId }, data });
     });
   }
 
@@ -63,7 +63,7 @@ export class DietService {
     return this.prisma.$transaction(async (tx) => {
       const o = await tx.dietOrder.findFirst({ where: { id, tenantId } });
       if (!o) throw new NotFoundException('Diet order not found');
-      return tx.dietOrder.update({ where: { id }, data: { status: 'CANCELLED', endDate: new Date() } });
+      return tx.dietOrder.update({ where: { id, tenantId }, data: { status: 'CANCELLED', endDate: new Date() } });
     });
   }
 
@@ -80,7 +80,7 @@ export class DietService {
     return this.prisma.$transaction(async (tx) => {
       const meal = await tx.dietMeal.findFirst({ where: { id, tenantId } });
       if (!meal) throw new NotFoundException('Meal not found');
-      return tx.dietMeal.update({ where: { id }, data: { servedAt: new Date(), servedById: userId, status: 'SERVED' } });
+      return tx.dietMeal.update({ where: { id, tenantId }, data: { servedAt: new Date(), servedById: userId, status: 'SERVED' } });
     });
   }
 
@@ -88,7 +88,7 @@ export class DietService {
     return this.prisma.$transaction(async (tx) => {
       const meal = await tx.dietMeal.findFirst({ where: { id, tenantId } });
       if (!meal) throw new NotFoundException('Meal not found');
-      return tx.dietMeal.update({ where: { id }, data: { consumedPercent: dto.consumedPercent, refusalReason: dto.refusalReason, status: dto.consumedPercent > 0 ? 'CONSUMED' : 'REFUSED' } });
+      return tx.dietMeal.update({ where: { id, tenantId }, data: { consumedPercent: dto.consumedPercent, refusalReason: dto.refusalReason, status: dto.consumedPercent > 0 ? 'CONSUMED' : 'REFUSED' } });
     });
   }
 

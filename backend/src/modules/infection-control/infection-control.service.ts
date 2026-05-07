@@ -47,7 +47,7 @@ export class InfectionControlService {
       if (dto.actionsTaken !== undefined) data.actionsTaken = dto.actionsTaken;
       if (dto.notes !== undefined) data.notes = dto.notes;
       if (dto.status !== undefined) data.status = dto.status;
-      return tx.infectionControlRecord.update({ where: { id }, data });
+      return tx.infectionControlRecord.update({ where: { id, tenantId }, data });
     });
   }
 
@@ -55,7 +55,7 @@ export class InfectionControlService {
     return this.prisma.$transaction(async (tx) => {
       const r = await tx.infectionControlRecord.findFirst({ where: { id, tenantId } });
       if (!r) throw new NotFoundException('Record not found');
-      return tx.infectionControlRecord.update({ where: { id }, data: { status: 'RESOLVED', resolvedAt: new Date(), outcome: dto.outcome, notes: dto.notes } });
+      return tx.infectionControlRecord.update({ where: { id, tenantId }, data: { status: 'RESOLVED', resolvedAt: new Date(), outcome: dto.outcome, notes: dto.notes } });
     });
   }
 
@@ -63,7 +63,7 @@ export class InfectionControlService {
     return this.prisma.$transaction(async (tx) => {
       const record = await tx.infectionControlRecord.findFirst({ where: { id, tenantId } });
       if (!record) throw new NotFoundException('Record not found');
-      await tx.infectionControlRecord.update({ where: { id }, data: { status: 'CANCELLED' } });
+      await tx.infectionControlRecord.update({ where: { id, tenantId }, data: { status: 'CANCELLED' } });
       return { message: 'Infection control record deleted successfully' };
     });
   }

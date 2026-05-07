@@ -34,7 +34,7 @@ export class IcuService {
     return this.prisma.$transaction(async (tx) => {
       const bed = await tx.icuBed.findFirst({ where: { id, tenantId } });
       if (!bed) throw new NotFoundException('ICU bed not found');
-      return tx.icuBed.update({ where: { id }, data: { status } });
+      return tx.icuBed.update({ where: { id, tenantId }, data: { status } });
     });
   }
 
@@ -44,7 +44,7 @@ export class IcuService {
       if (!bed) throw new NotFoundException('ICU bed not found');
       if (bed.status === 'OCCUPIED') throw new BadRequestException('Bed is already occupied');
       return tx.icuBed.update({
-        where: { id: bedId },
+        where: { id: bedId, tenantId },
         data: { status: 'OCCUPIED', currentPatientId: dto.patientId, admittedAt: new Date() },
       });
     });
@@ -69,7 +69,7 @@ export class IcuService {
       }
 
       return tx.icuBed.update({
-        where: { id: bedId },
+        where: { id: bedId, tenantId },
         data: { status: 'AVAILABLE', currentPatientId: null, admittedAt: null },
       });
     });

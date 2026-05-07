@@ -51,7 +51,7 @@ export class MortuaryService {
       if (dto.nextOfKinName !== undefined) data.nextOfKinName = dto.nextOfKinName;
       if (dto.nextOfKinPhone !== undefined) data.nextOfKinPhone = dto.nextOfKinPhone;
       if (dto.nextOfKinRelation !== undefined) data.nextOfKinRelation = dto.nextOfKinRelation;
-      return tx.mortuaryRecord.update({ where: { id }, data });
+      return tx.mortuaryRecord.update({ where: { id, tenantId }, data });
     });
   }
 
@@ -60,7 +60,7 @@ export class MortuaryService {
       const r = await tx.mortuaryRecord.findFirst({ where: { id, tenantId } });
       if (!r) throw new NotFoundException('Record not found');
       return tx.mortuaryRecord.update({
-        where: { id },
+        where: { id, tenantId },
         data: { status: 'RELEASED', releasedAt: new Date(), releasedTo: dto.releasedTo, releasedToRelation: dto.releasedToRelation, releasedToId: dto.releasedToId },
       });
     });

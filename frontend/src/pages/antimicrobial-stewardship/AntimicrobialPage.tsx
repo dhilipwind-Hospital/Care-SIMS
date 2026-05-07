@@ -19,6 +19,7 @@ export default function AntimicrobialPage() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
+  const [selected, setSelected] = useState<any>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -101,7 +102,7 @@ export default function AntimicrobialPage() {
                       <td className="px-4 py-3 text-sm text-gray-600">{r.prescribedBy || r.doctorName || '—'}</td>
                       <td className="px-4 py-3"><StatusBadge status={r.status || '—'} /></td>
                       <td className="px-4 py-3">
-                        <button className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">View</button>
+                        <button onClick={() => setSelected(r)} className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">View</button>
                       </td>
                     </tr>
                   ))
@@ -111,6 +112,47 @@ export default function AntimicrobialPage() {
         </div>
         <Pagination page={page} totalPages={Math.ceil(total / 20)} onPageChange={setPage} totalItems={total} pageSize={20} />
       </div>
+
+      {selected && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-5 border-b">
+              <h3 className="font-semibold text-gray-800">Antimicrobial Record</h3>
+              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                {[
+                  ['Drug Name', selected.drugName],
+                  ['Patient', selected.patientName || selected.patientId],
+                  ['Route', selected.route],
+                  ['Duration', selected.durationDays ? `${selected.durationDays} days` : '—'],
+                  ['Prescribed By', selected.prescribedBy || selected.doctorName],
+                  ['Status', selected.status],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">{label}</p>
+                    <p className="text-gray-800 mt-0.5">{value || '—'}</p>
+                  </div>
+                ))}
+                <div className="col-span-2">
+                  <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Indication</p>
+                  <p className="text-gray-800 mt-0.5">{selected.indication || '—'}</p>
+                </div>
+                {selected.notes && (
+                  <div className="col-span-2">
+                    <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Notes</p>
+                    <p className="text-gray-800 mt-0.5">{selected.notes}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex justify-end p-5 border-t">
+              <button onClick={() => setSelected(null)} className="px-4 py-2 text-sm text-gray-600 border rounded-lg hover:bg-gray-50">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">

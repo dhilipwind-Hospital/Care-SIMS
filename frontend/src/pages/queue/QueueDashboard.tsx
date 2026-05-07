@@ -16,6 +16,7 @@ export default function QueueDashboard() {
   const [tokens, setTokens] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
 
   const fetchQueue = async () => {
     setLoading(true);
@@ -38,9 +39,10 @@ export default function QueueDashboard() {
   const completed = useMemo(() => tokens.filter(t => t.status === 'COMPLETED').length, [tokens]);
 
   const filtered = useMemo(() => tokens.filter(t =>
-    !search || t.patient?.firstName?.toLowerCase().includes(search.toLowerCase()) ||
-    t.tokenNumber?.toLowerCase().includes(search.toLowerCase())
-  ), [tokens, search]);
+    (!search || t.patient?.firstName?.toLowerCase().includes(search.toLowerCase()) ||
+    t.tokenNumber?.toLowerCase().includes(search.toLowerCase())) &&
+    (!statusFilter || t.status === statusFilter)
+  ), [tokens, search, statusFilter]);
 
   const [actionId, setActionId] = useState<string | null>(null);
 
@@ -104,7 +106,8 @@ export default function QueueDashboard() {
             <input value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Search patient…"
               className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 w-44" />
-            <select className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 text-gray-600 bg-white">
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 text-gray-600 bg-white">
               <option value="">All Statuses</option>
               <option value="WAITING">Waiting</option>
               <option value="CALLED">Called</option>

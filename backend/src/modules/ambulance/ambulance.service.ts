@@ -41,7 +41,7 @@ export class AmbulanceService {
       if (dto.isActive !== undefined) data.isActive = dto.isActive;
       if (dto.insuranceExpiry !== undefined) data.insuranceExpiry = dto.insuranceExpiry ? new Date(dto.insuranceExpiry) : null;
       if (dto.fitnessExpiry !== undefined) data.fitnessExpiry = dto.fitnessExpiry ? new Date(dto.fitnessExpiry) : null;
-      return tx.ambulance.update({ where: { id }, data });
+      return tx.ambulance.update({ where: { id, tenantId }, data });
     });
   }
 
@@ -84,7 +84,7 @@ export class AmbulanceService {
     return this.prisma.$transaction(async (tx) => {
       const t = await tx.ambulanceTrip.findFirst({ where: { id, tenantId }, include: { ambulance: true } });
       if (!t) throw new NotFoundException('Trip not found');
-      return tx.ambulanceTrip.update({ where: { id }, data: { arrivalTime: new Date(), status: 'ARRIVED' } });
+      return tx.ambulanceTrip.update({ where: { id, tenantId }, data: { arrivalTime: new Date(), status: 'ARRIVED' } });
     });
   }
 
@@ -92,7 +92,7 @@ export class AmbulanceService {
     return this.prisma.$transaction(async (tx) => {
       const t = await tx.ambulanceTrip.findFirst({ where: { id, tenantId }, include: { ambulance: true } });
       if (!t) throw new NotFoundException('Trip not found');
-      return tx.ambulanceTrip.update({ where: { id }, data: { departureTime: new Date(), status: 'EN_ROUTE' } });
+      return tx.ambulanceTrip.update({ where: { id, tenantId }, data: { departureTime: new Date(), status: 'EN_ROUTE' } });
     });
   }
 
@@ -102,7 +102,7 @@ export class AmbulanceService {
       if (!trip) throw new NotFoundException('Trip not found');
       await tx.ambulance.update({ where: { id: trip.ambulanceId }, data: { status: 'AVAILABLE' } });
       return tx.ambulanceTrip.update({
-        where: { id },
+        where: { id, tenantId },
         data: { completedTime: new Date(), status: 'COMPLETED', odometerEnd: dto.odometerEnd, distanceKm: dto.distanceKm, condition: dto.condition, vitalsEnRoute: dto.vitalsEnRoute, treatmentGiven: dto.treatmentGiven, notes: dto.notes },
       });
     });

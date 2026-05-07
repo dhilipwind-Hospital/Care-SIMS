@@ -31,7 +31,7 @@ export class DialysisService {
       if (dto.isActive !== undefined) data.isActive = dto.isActive;
       if (dto.lastServiceDate !== undefined) data.lastServiceDate = dto.lastServiceDate ? new Date(dto.lastServiceDate) : null;
       if (dto.nextServiceDate !== undefined) data.nextServiceDate = dto.nextServiceDate ? new Date(dto.nextServiceDate) : null;
-      return tx.dialysisMachine.update({ where: { id }, data });
+      return tx.dialysisMachine.update({ where: { id, tenantId }, data });
     });
   }
 
@@ -72,8 +72,8 @@ export class DialysisService {
     return this.prisma.$transaction(async (tx) => {
       const session = await tx.dialysisSession.findFirst({ where: { id, tenantId } });
       if (!session) throw new NotFoundException('Session not found');
-      await tx.dialysisMachine.update({ where: { id: session.machineId }, data: { status: 'IN_USE' } });
-      return tx.dialysisSession.update({ where: { id }, data: { status: 'IN_PROGRESS', nurseId, startedAt: new Date() } });
+      await tx.dialysisMachine.update({ where: { id: session.machineId, tenantId }, data: { status: 'IN_USE' } });
+      return tx.dialysisSession.update({ where: { id, tenantId }, data: { status: 'IN_PROGRESS', nurseId, startedAt: new Date() } });
     });
   }
 
@@ -81,9 +81,9 @@ export class DialysisService {
     return this.prisma.$transaction(async (tx) => {
       const session = await tx.dialysisSession.findFirst({ where: { id, tenantId }, include: { machine: true } });
       if (!session) throw new NotFoundException('Session not found');
-      await tx.dialysisMachine.update({ where: { id: session.machineId }, data: { status: 'AVAILABLE' } });
+      await tx.dialysisMachine.update({ where: { id: session.machineId, tenantId }, data: { status: 'AVAILABLE' } });
       return tx.dialysisSession.update({
-        where: { id },
+        where: { id, tenantId },
         data: { status: 'COMPLETED', endedAt: new Date(), postWeightKg: dto.postWeightKg, postBp: dto.postBp, ufAchievedMl: dto.ufAchievedMl, complications: dto.complications || [], notes: dto.notes },
       });
     });

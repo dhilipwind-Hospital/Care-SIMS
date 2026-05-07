@@ -27,17 +27,17 @@ export class RadiologyService {
     const order = await this.prisma.radiologyOrder.findFirst({ where: { id, tenantId } });
     if (!order) throw new NotFoundException('Order not found');
     if (order.status !== 'ORDERED') throw new BadRequestException('Can only edit orders in ORDERED status');
-    return this.prisma.radiologyOrder.update({ where: { id }, data: { modality: dto.modality, examType: dto.examType, bodyPart: dto.bodyPart, laterality: dto.laterality, priority: dto.priority, clinicalHistory: dto.clinicalHistory, contrast: dto.contrast, scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : order.scheduledAt } });
+    return this.prisma.radiologyOrder.update({ where: { id, tenantId }, data: { modality: dto.modality, examType: dto.examType, bodyPart: dto.bodyPart, laterality: dto.laterality, priority: dto.priority, clinicalHistory: dto.clinicalHistory, contrast: dto.contrast, scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : order.scheduledAt } });
   }
 
   async addResult(tenantId: string, userId: string, dto: any) {
     const order = await this.prisma.radiologyOrder.findFirst({ where: { id: dto.orderId, tenantId } }); if (!order) throw new NotFoundException('Radiology order not found');
-    await this.prisma.radiologyOrder.update({ where: { id: dto.orderId }, data: { status: 'REPORTED' } });
+    await this.prisma.radiologyOrder.update({ where: { id: dto.orderId, tenantId }, data: { status: 'REPORTED' } });
     return this.prisma.radiologyResult.create({ data: { tenantId, orderId: dto.orderId, locationId: dto.locationId, findings: dto.findings, impression: dto.impression, recommendation: dto.recommendation, isCritical: dto.isCritical||false, imageUrls: dto.imageUrls||[], reportedById: userId, reportedAt: new Date(), status: 'REPORTED' } });
   }
   async validateResult(tenantId: string, id: string, userId: string) {
     const result = await this.prisma.radiologyResult.findFirst({ where: { id, tenantId } }); if (!result) throw new NotFoundException('Radiology result not found');
-    return this.prisma.radiologyResult.update({ where: { id }, data: { validatedById: userId, validatedAt: new Date(), status: 'VALIDATED' } });
+    return this.prisma.radiologyResult.update({ where: { id, tenantId }, data: { validatedById: userId, validatedAt: new Date(), status: 'VALIDATED' } });
   }
 
   async remove(tenantId: string, id: string) {

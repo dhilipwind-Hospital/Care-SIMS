@@ -28,7 +28,7 @@ export class InsuranceService {
       if (dto.startDate !== undefined) data.startDate = new Date(dto.startDate);
       if (dto.endDate !== undefined) data.endDate = new Date(dto.endDate);
       if (dto.status !== undefined) data.status = dto.status;
-      return tx.insurancePolicy.update({ where: { id }, data });
+      return tx.insurancePolicy.update({ where: { id, tenantId }, data });
     });
   }
   async listClaims(tenantId: string, status?: string) {
@@ -57,21 +57,21 @@ export class InsuranceService {
       if (dto.preAuthAmount !== undefined) data.preAuthAmount = dto.preAuthAmount;
       if (dto.status !== undefined) data.status = dto.status;
       if (dto.rejectionReason !== undefined) data.rejectionReason = dto.rejectionReason;
-      return tx.insuranceClaim.update({ where: { id }, data });
+      return tx.insuranceClaim.update({ where: { id, tenantId }, data });
     });
   }
   async submitClaim(tenantId: string, id: string) {
     return this.prisma.$transaction(async (tx) => {
       const c = await tx.insuranceClaim.findFirst({ where: { id, tenantId } });
       if (!c) throw new NotFoundException('Claim not found');
-      return tx.insuranceClaim.update({ where: { id }, data: { status: 'SUBMITTED', submittedAt: new Date() } });
+      return tx.insuranceClaim.update({ where: { id, tenantId }, data: { status: 'SUBMITTED', submittedAt: new Date() } });
     });
   }
   async approveClaim(tenantId: string, id: string, dto: any) {
     return this.prisma.$transaction(async (tx) => {
       const c = await tx.insuranceClaim.findFirst({ where: { id, tenantId } });
       if (!c) throw new NotFoundException('Claim not found');
-      return tx.insuranceClaim.update({ where: { id }, data: { status: 'APPROVED', approvedAmount: dto.approvedAmount, approvedAt: new Date() } });
+      return tx.insuranceClaim.update({ where: { id, tenantId }, data: { status: 'APPROVED', approvedAmount: dto.approvedAmount, approvedAt: new Date() } });
     });
   }
 }

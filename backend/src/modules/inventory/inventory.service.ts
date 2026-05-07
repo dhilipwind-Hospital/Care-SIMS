@@ -51,7 +51,7 @@ export class InventoryService {
     if (dto.storageLocation !== undefined) data.storageLocation = dto.storageLocation;
     if (dto.isConsumable !== undefined) data.isConsumable = dto.isConsumable;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
-    return this.prisma.inventoryItem.update({ where: { id }, data });
+    return this.prisma.inventoryItem.update({ where: { id, tenantId }, data });
   }
 
   async stockIn(tenantId: string, userId: string, dto: any) {
@@ -59,7 +59,7 @@ export class InventoryService {
     if (!item) throw new NotFoundException('Item not found');
     return this.prisma.$transaction(async (tx) => {
       await tx.inventoryItem.update({
-        where: { id: dto.itemId },
+        where: { id: dto.itemId, tenantId },
         data: { currentStock: { increment: dto.quantity }, lastRestockedAt: new Date() },
       });
       const tx_record = await tx.inventoryTransaction.create({
@@ -90,7 +90,7 @@ export class InventoryService {
     if (!item) throw new NotFoundException('Item not found');
     if (item.currentStock < dto.quantity) throw new BadRequestException('Insufficient stock');
     return this.prisma.$transaction(async (tx) => {
-      await tx.inventoryItem.update({ where: { id: dto.itemId }, data: { currentStock: { decrement: dto.quantity } } });
+      await tx.inventoryItem.update({ where: { id: dto.itemId, tenantId }, data: { currentStock: { decrement: dto.quantity } } });
       // FEFO: decrement oldest-expiry batches first
       if (dto.batchId) {
         const batch = await tx.inventoryBatch.findFirst({ where: { id: dto.batchId, tenantId, isActive: true } });

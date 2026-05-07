@@ -64,14 +64,14 @@ export class BloodBankService {
     return this.prisma.$transaction(async (tx) => {
       const record = await tx.bloodTransfusion.findFirst({ where: { id, tenantId } });
       if (!record) throw new NotFoundException('Blood transfusion not found');
-      return tx.bloodTransfusion.update({ where: { id }, data: { crossMatchVerified: true, crossMatchById: userId, status: 'CROSS_MATCHED' } });
+      return tx.bloodTransfusion.update({ where: { id, tenantId }, data: { crossMatchVerified: true, crossMatchById: userId, status: 'CROSS_MATCHED' } });
     });
   }
   async administer(tenantId: string, id: string, userId: string, dto: any) {
     return this.prisma.$transaction(async (tx) => {
       const record = await tx.bloodTransfusion.findFirst({ where: { id, tenantId } });
       if (!record) throw new NotFoundException('Blood transfusion not found');
-      return tx.bloodTransfusion.update({ where: { id }, data: { administeredById: userId, startTime: new Date(), status: 'ADMINISTERING', reaction: dto.reaction, reactionDetails: dto.reactionDetails } });
+      return tx.bloodTransfusion.update({ where: { id, tenantId }, data: { administeredById: userId, startTime: new Date(), status: 'ADMINISTERING', reaction: dto.reaction, reactionDetails: dto.reactionDetails } });
     });
   }
 }

@@ -7,6 +7,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import Pagination from '../../components/ui/Pagination';
 import ExportButton from '../../components/ui/ExportButton';
+import BarcodeScanner from '../../components/ui/BarcodeScanner';
 import api from '../../lib/api';
 import { formatTime, formatDate } from '../../lib/format';
 
@@ -35,6 +36,25 @@ export default function PharmacyPage() {
   const [rxTotal,       setRxTotal]       = useState(0);
   const [drugPage,      setDrugPage]      = useState(1);
   const [drugTotal,     setDrugTotal]     = useState(0);
+  const [showScanner,   setShowScanner]   = useState(false);
+
+  const handleBarcodeScan = (code: string) => {
+    setShowScanner(false);
+    const match = drugs.find(d =>
+      d.barcode === code ||
+      d.barcodeNumber === code ||
+      d.sku === code ||
+      d.brandName?.toLowerCase() === code.toLowerCase() ||
+      d.genericName?.toLowerCase() === code.toLowerCase()
+    );
+    if (match) {
+      setTab('inventory');
+      setSelectedDrug(match);
+      toast.success(`Found: ${match.brandName || match.genericName}`);
+    } else {
+      toast.error(`No drug found for barcode: ${code}`);
+    }
+  };
 
   const handlePrintDispense = (r: any) => {
     const meds: any[] = r.medications || [];
@@ -160,7 +180,7 @@ export default function PharmacyPage() {
         actions={
           <div className="flex gap-2">
             <ExportButton endpoint="/pharmacy/drugs/export" filename={`pharmacy-${new Date().toISOString().slice(0, 10)}.csv`} />
-            <button className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 font-medium">
+            <button onClick={() => setShowScanner(true)} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 font-medium">
               <Barcode size={14} /> Scan Barcode
             </button>
             <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium"
@@ -461,6 +481,10 @@ export default function PharmacyPage() {
           <Pagination page={drugPage} totalPages={Math.ceil(drugTotal / 20)} onPageChange={setDrugPage} totalItems={drugTotal} pageSize={20} />
         </div>
       )}
+      {showScanner && (
+        <BarcodeScanner onDetected={handleBarcodeScan} onClose={() => setShowScanner(false)} />
+      )}
+
       {/* Drug detail panel */}
       {selectedDrug && (
         <div className="fixed inset-0 z-50 flex" onClick={() => setSelectedDrug(null)}>

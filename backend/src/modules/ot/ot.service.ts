@@ -106,7 +106,7 @@ export class OTService {
       if (!eq) throw new NotFoundException('Equipment not found');
       const nextDue = new Date();
       nextDue.setHours(nextDue.getHours() + 24);
-      return tx.oTEquipment.update({ where: { id }, data: { sterilizationStatus: 'STERILIZED', lastSterilizedAt: new Date(), sterilizedById: userId, nextSterilizationDue: nextDue } });
+      return tx.oTEquipment.update({ where: { id, tenantId }, data: { sterilizationStatus: 'STERILIZED', lastSterilizedAt: new Date(), sterilizedById: userId, nextSterilizationDue: nextDue } });
     });
   }
 
@@ -114,7 +114,7 @@ export class OTService {
     return this.prisma.$transaction(async (tx) => {
       const eq = await tx.oTEquipment.findFirst({ where: { id, tenantId } });
       if (!eq) throw new NotFoundException('Equipment not found');
-      return tx.oTEquipment.update({ where: { id }, data: { condition } });
+      return tx.oTEquipment.update({ where: { id, tenantId }, data: { condition } });
     });
   }
 
@@ -178,7 +178,7 @@ export class OTService {
     if (dto.notes !== undefined) data.notes = dto.notes;
     if (dto.status !== undefined) data.status = dto.status;
     if (dto.preOpChecklist !== undefined) data.preOpChecklist = dto.preOpChecklist;
-    return this.prisma.oTBooking.update({ where: { id }, data });
+    return this.prisma.oTBooking.update({ where: { id, tenantId }, data });
   }
 
   async getTimeline(tenantId: string, query: any) {
@@ -349,7 +349,7 @@ export class OTService {
   async startProcedure(tenantId: string, id: string) {
     const booking = await this.prisma.oTBooking.findFirst({ where: { id, tenantId } });
     if (!booking) throw new NotFoundException('OT Booking not found');
-    const updated = await this.prisma.oTBooking.update({ where: { id }, data: { status: 'IN_PROGRESS', actualStart: new Date() } });
+    const updated = await this.prisma.oTBooking.update({ where: { id, tenantId }, data: { status: 'IN_PROGRESS', actualStart: new Date() } });
     this.ws.emitToTenant(tenantId, 'ot:status:changed', { action: 'started', booking: updated });
     return updated;
   }
@@ -365,7 +365,7 @@ export class OTService {
     if (dto.complications !== undefined) data.complications = dto.complications;
     if (dto.drainInserted !== undefined) data.drainInserted = dto.drainInserted;
     if (dto.drainType !== undefined) data.drainType = dto.drainType;
-    const updated = await this.prisma.oTBooking.update({ where: { id }, data });
+    const updated = await this.prisma.oTBooking.update({ where: { id, tenantId }, data });
     this.ws.emitToTenant(tenantId, 'ot:status:changed', { action: 'completed', booking: updated });
     return updated;
   }

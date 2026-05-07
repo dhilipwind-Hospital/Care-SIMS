@@ -35,7 +35,7 @@ export class ConsentService {
       const record = await tx.consentForm.findFirst({ where: { id, tenantId } });
       if (!record) throw new NotFoundException('Consent form not found');
       if (record.status !== 'ACTIVE' && record.status !== 'PENDING') throw new BadRequestException('Only ACTIVE or PENDING consents can be edited');
-      return tx.consentForm.update({ where: { id }, data: { consentType: dto.consentType, procedureName: dto.procedureName, description: dto.description, risks: dto.risks, alternatives: dto.alternatives, consentGivenBy: dto.consentGivenBy, relationship: dto.relationship, witnessName: dto.witnessName } });
+      return tx.consentForm.update({ where: { id, tenantId }, data: { consentType: dto.consentType, procedureName: dto.procedureName, description: dto.description, risks: dto.risks, alternatives: dto.alternatives, consentGivenBy: dto.consentGivenBy, relationship: dto.relationship, witnessName: dto.witnessName } });
     });
   }
 
@@ -43,7 +43,7 @@ export class ConsentService {
     return this.prisma.$transaction(async (tx) => {
       const record = await tx.consentForm.findFirst({ where: { id, tenantId } });
       if (!record) throw new NotFoundException('Consent form not found');
-      return tx.consentForm.update({ where: { id }, data: { status: 'REVOKED', revokedAt: new Date(), revokedReason: dto.reason } });
+      return tx.consentForm.update({ where: { id, tenantId }, data: { status: 'REVOKED', revokedAt: new Date(), revokedReason: dto.reason } });
     });
   }
 
@@ -52,7 +52,7 @@ export class ConsentService {
       const consent = await tx.consentForm.findFirst({ where: { id, tenantId } });
       if (!consent) throw new NotFoundException('Consent form not found');
       if (consent.status !== 'PENDING') throw new BadRequestException('Only PENDING consents can be deleted');
-      await tx.consentForm.update({ where: { id }, data: { status: 'CANCELLED' } });
+      await tx.consentForm.update({ where: { id, tenantId }, data: { status: 'CANCELLED' } });
       return { message: 'Consent form deleted successfully' };
     });
   }

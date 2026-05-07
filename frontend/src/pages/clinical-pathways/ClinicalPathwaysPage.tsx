@@ -21,6 +21,7 @@ export default function ClinicalPathwaysPage() {
   const [total, setTotal] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [selected, setSelected] = useState<any>(null);
   const [form, setForm] = useState<any>({
     name: '', diagnosis: '', icdCode: '', department: '', durationDays: '',
   });
@@ -115,7 +116,7 @@ export default function ClinicalPathwaysPage() {
                         <td className="px-4 py-3 text-sm text-gray-600">{p.durationDays} days</td>
                         <td className="px-4 py-3"><StatusBadge status={p.isActive ? 'ACTIVE' : 'INACTIVE'} /></td>
                         <td className="px-4 py-3">
-                          <button className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">View</button>
+                          <button onClick={() => setSelected({ ...p, _type: 'protocol' })} className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">View</button>
                         </td>
                       </tr>
                     ))
@@ -147,7 +148,7 @@ export default function ClinicalPathwaysPage() {
                           {Array.isArray(pw.deviations) ? pw.deviations.length : 0}
                         </td>
                         <td className="px-4 py-3">
-                          <button className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">View</button>
+                          <button onClick={() => setSelected({ ...pw, _type: 'pathway' })} className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">View</button>
                         </td>
                       </tr>
                     ))
@@ -158,6 +159,67 @@ export default function ClinicalPathwaysPage() {
         </div>
         <Pagination page={page} totalPages={Math.ceil(total / 20)} onPageChange={setPage} totalItems={total} pageSize={20} />
       </div>
+
+      {selected && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-5 border-b">
+              <h3 className="font-semibold text-gray-800">
+                {selected._type === 'protocol' ? 'Care Protocol' : 'Patient Pathway'}
+              </h3>
+              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+            <div className="p-5 space-y-4 text-sm">
+              {selected._type === 'protocol' ? (
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    ['Protocol Name', selected.name],
+                    ['Diagnosis', selected.diagnosis],
+                    ['ICD Code', selected.icdCode],
+                    ['Department', selected.department],
+                    ['Duration', selected.durationDays ? `${selected.durationDays} days` : '—'],
+                    ['Status', selected.isActive ? 'Active' : 'Inactive'],
+                  ].map(([label, value]) => (
+                    <div key={label}>
+                      <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">{label}</p>
+                      <p className="text-gray-800 mt-0.5">{value || '—'}</p>
+                    </div>
+                  ))}
+                  {selected.steps?.length > 0 && (
+                    <div className="col-span-2">
+                      <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-2">Steps</p>
+                      <ol className="list-decimal list-inside space-y-1 text-gray-700">
+                        {selected.steps.map((s: any, i: number) => (
+                          <li key={i}>{typeof s === 'string' ? s : s.description || JSON.stringify(s)}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    ['Protocol', selected.protocol?.name],
+                    ['Patient', selected.patientId],
+                    ['Start Date', selected.startDate ? formatDate(selected.startDate) : '—'],
+                    ['Current Day', selected.currentDay ? `Day ${selected.currentDay}` : '—'],
+                    ['Status', selected.status],
+                    ['Deviations', Array.isArray(selected.deviations) ? String(selected.deviations.length) : '0'],
+                  ].map(([label, value]) => (
+                    <div key={label}>
+                      <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">{label}</p>
+                      <p className="text-gray-800 mt-0.5">{value || '—'}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end p-5 border-t">
+              <button onClick={() => setSelected(null)} className="px-4 py-2 text-sm text-gray-600 border rounded-lg hover:bg-gray-50">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">

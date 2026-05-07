@@ -45,7 +45,7 @@ export class AssetManagementService {
     if (dto.assignedToId !== undefined) data.assignedToId = dto.assignedToId;
     if (dto.assignedToName !== undefined) data.assignedToName = dto.assignedToName;
     if (dto.notes !== undefined) data.notes = dto.notes;
-    return this.prisma.asset.update({ where: { id }, data });
+    return this.prisma.asset.update({ where: { id, tenantId }, data });
   }
 
   async addMaintenance(tenantId: string, assetId: string, dto: any) {
@@ -67,9 +67,9 @@ export class AssetManagementService {
     const existing = await this.prisma.assetMaintenance.findFirst({ where: { id, tenantId } });
     if (!existing) throw new NotFoundException('Maintenance record not found');
     const maint = await this.prisma.assetMaintenance.update({
-      where: { id }, data: { status: 'COMPLETED', completedDate: new Date(), notes: dto.notes },
+      where: { id, tenantId }, data: { status: 'COMPLETED', completedDate: new Date(), notes: dto.notes },
     });
-    await this.prisma.asset.update({ where: { id: maint.assetId }, data: { lastMaintenanceDate: new Date(), nextMaintenanceDate: maint.nextDueDate } });
+    await this.prisma.asset.update({ where: { id: maint.assetId, tenantId }, data: { lastMaintenanceDate: new Date(), nextMaintenanceDate: maint.nextDueDate } });
     return maint;
   }
 }
