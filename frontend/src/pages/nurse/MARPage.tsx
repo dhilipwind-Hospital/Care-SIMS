@@ -8,7 +8,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import api from '../../lib/api';
 
-const emptyScheduleForm = { admissionId: '', prescriptionItemId: '', drugName: '', dose: '', route: 'ORAL', frequency: 'OD', startDate: '', endDate: '', notes: '' };
+const emptyScheduleForm = { admissionId: '', patientId: '', prescriptionItemId: '', drugName: '', dosage: '', route: 'ORAL', frequency: 'OD', scheduledTime: '', notes: '' };
 
 const FIVE_RIGHTS = [
   'Right Patient — confirmed with ID/wristband',
@@ -109,8 +109,8 @@ export default function MARPage() {
   const handleSchedule = async () => {
     if (!scheduleForm.admissionId.trim()) { setScheduleError('Admission ID is required'); return; }
     if (!scheduleForm.drugName.trim()) { setScheduleError('Drug name is required'); return; }
-    if (!scheduleForm.dose.trim()) { setScheduleError('Dose is required'); return; }
-    if (!scheduleForm.startDate) { setScheduleError('Start date is required'); return; }
+    if (!scheduleForm.dosage.trim()) { setScheduleError('Dose is required'); return; }
+    if (!scheduleForm.scheduledTime) { setScheduleError('Scheduled time is required'); return; }
     setScheduleError('');
     try {
       await api.post('/medication-admin/schedule', scheduleForm);
@@ -260,8 +260,9 @@ export default function MARPage() {
           {scheduleError && <p className="text-sm text-red-600">{scheduleError}</p>}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             <input className="hms-input" placeholder="Admission ID *" value={scheduleForm.admissionId} onChange={e => setScheduleForm({ ...scheduleForm, admissionId: e.target.value })} />
+            <input className="hms-input" placeholder="Patient ID *" value={scheduleForm.patientId} onChange={e => setScheduleForm({ ...scheduleForm, patientId: e.target.value })} />
             <input className="hms-input" placeholder="Drug Name *" value={scheduleForm.drugName} onChange={e => setScheduleForm({ ...scheduleForm, drugName: e.target.value })} />
-            <input className="hms-input" placeholder="Dose *" value={scheduleForm.dose} onChange={e => setScheduleForm({ ...scheduleForm, dose: e.target.value })} />
+            <input className="hms-input" placeholder="Dose *" value={scheduleForm.dosage} onChange={e => setScheduleForm({ ...scheduleForm, dosage: e.target.value })} />
             <select className="hms-input" value={scheduleForm.route} onChange={e => setScheduleForm({ ...scheduleForm, route: e.target.value })}>
               <option value="ORAL">Oral</option><option value="IV">IV</option><option value="IM">IM</option><option value="SC">SC</option><option value="TOPICAL">Topical</option><option value="INHALED">Inhaled</option><option value="RECTAL">Rectal</option><option value="SUBLINGUAL">Sublingual</option>
             </select>
@@ -269,8 +270,7 @@ export default function MARPage() {
               <option value="OD">OD (Once daily)</option><option value="BD">BD (Twice daily)</option><option value="TDS">TDS (Thrice daily)</option><option value="QDS">QDS (Four times daily)</option><option value="SOS">SOS (As needed)</option><option value="STAT">STAT (Immediately)</option>
             </select>
             <input className="hms-input" placeholder="Prescription Item ID" value={scheduleForm.prescriptionItemId} onChange={e => setScheduleForm({ ...scheduleForm, prescriptionItemId: e.target.value })} />
-            <div><label className="text-xs text-gray-500 mb-1 block">Start Date *</label><input className="hms-input w-full" type="date" value={scheduleForm.startDate} onChange={e => setScheduleForm({ ...scheduleForm, startDate: e.target.value })} /></div>
-            <div><label className="text-xs text-gray-500 mb-1 block">End Date</label><input className="hms-input w-full" type="date" value={scheduleForm.endDate} onChange={e => setScheduleForm({ ...scheduleForm, endDate: e.target.value })} /></div>
+            <div><label className="text-xs text-gray-500 mb-1 block">Scheduled Date & Time *</label><input className="hms-input w-full" type="datetime-local" value={scheduleForm.scheduledTime} onChange={e => setScheduleForm({ ...scheduleForm, scheduledTime: e.target.value })} /></div>
           </div>
           <textarea className="hms-input w-full" placeholder="Notes" rows={2} value={scheduleForm.notes} onChange={e => setScheduleForm({ ...scheduleForm, notes: e.target.value })} />
           <div className="flex gap-2">

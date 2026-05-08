@@ -72,7 +72,7 @@ export default function PrescriptionsPage() {
     e.preventDefault();
     if (!form.patientId) { toast.error('Please select a patient'); return; }
     try {
-      await api.post('/prescriptions', { ...form, items: form.items.map(it => ({ ...it, durationDays: Number(it.durationDays) })) });
+      await api.post('/prescriptions', { ...form, doctorId: user?.sub, items: form.items.map(it => ({ ...it, durationDays: Number(it.durationDays) })) });
       setShowForm(false);
       setForm({ patientId: '', consultationId: '', prescriptionType: 'OPD', items: [{ ...EMPTY_ITEM }] });
       setSelectedPat(null); setPatSearch('');
