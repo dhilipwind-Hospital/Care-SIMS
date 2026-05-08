@@ -110,17 +110,15 @@ export default function PatientAppointmentsPage() {
 
   // ── Submit booking ─────────────────────────────────────────────
   const submitBooking = async () => {
-    if (!selectedDoc || !selectedDay) return;
+    if (!selectedDoc || !selectedDay || !selectedSlot) return;
     setBooking(true); setBookError('');
     const dateStr = `${calYear}-${String(calMonth + 1).padStart(2,'0')}-${String(selectedDay).padStart(2,'0')}`;
     try {
-      await api.post('/appointments', {
+      await api.post('/auth/patient/me/appointments', {
         doctorId: selectedDoc.userId || selectedDoc.id,
         appointmentDate: dateStr,
-        appointmentTime: selectedSlot || undefined,
-        type: 'CONSULTATION',
+        appointmentTime: selectedSlot,
         chiefComplaint: chiefComplaint || undefined,
-        source: 'PATIENT_PORTAL',
       });
       setBooked(true);
     } catch (err: any) {

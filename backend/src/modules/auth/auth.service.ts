@@ -456,11 +456,44 @@ export class AuthService {
     const skip = (Number(page) - 1) * Number(limit);
     const where: any = { tenantId, patientId: patient.id };
     if (status) where.status = status;
-    const [data, total] = await Promise.all([
+    const [appts, total] = await Promise.all([
       this.prisma.appointment.findMany({ where, skip, take: Number(limit), orderBy: [{ appointmentDate: 'desc' }] }),
       this.prisma.appointment.count({ where }),
     ]);
+    // Enrich with doctor names
+    const doctorIds = [...new Set(appts.map(a => a.doctorId))];
+    const doctors = doctorIds.length
+      ? await this.prisma.tenantUser.findMany({ where: { id: { in: doctorIds } }, select: { id: true, firstName: true, lastName: true } })
+      : [];
+    const docMap = Object.fromEntries(doctors.map(d => [d.id, `Dr. ${d.firstName} ${d.lastName}`]));
+    const data = appts.map(a => ({ ...a, doctorName: docMap[a.doctorId] || null }));
     return { data, meta: { total, page: Number(page), limit: Number(limit) } };
+  }
+
+  async bookPatientAppointment(tenantId: string, patientAccountId: string, dto: any) {
+    const { patient } = await this.resolvePatientRecord(tenantId, patientAccountId);
+    if (!patient) throw new UnauthorizedException('No patient record found for this account in this hospital');
+    // Check slot conflict
+    const conflict = await this.prisma.appointment.findFirst({
+      where: { tenantId, doctorId: dto.doctorId, appointmentDate: new Date(dto.appointmentDate), appointmentTime: dto.appointmentTime, status: { notIn: ['CANCELLED', 'NO_SHOW'] } },
+    });
+    if (conflict) throw new BadRequestException('This slot is no longer available. Please select another time.');
+    return this.prisma.appointment.create({
+      data: {
+        tenantId,
+        locationId: patient.locationId,
+        patientId: patient.id,
+        doctorId: dto.doctorId,
+        appointmentDate: new Date(dto.appointmentDate),
+        appointmentTime: dto.appointmentTime,
+        durationMinutes: 15,
+        type: 'CONSULTATION',
+        source: 'PATIENT_PORTAL',
+        chiefComplaint: dto.chiefComplaint || null,
+        status: 'SCHEDULED',
+        createdById: patientAccountId,
+      },
+    });
   }
 
   async getPatientPrescriptions(tenantId: string, patientAccountId: string, query: any) {

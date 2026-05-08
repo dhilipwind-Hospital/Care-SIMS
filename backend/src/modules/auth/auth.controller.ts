@@ -130,6 +130,12 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Post('patient/me/appointments')
+  bookPatientAppointment(@CurrentUser() user: any, @Body() body: any) {
+    return this.authService.bookPatientAppointment(user.tenantId, user.sub, body);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('patient/me/prescriptions')
   getPatientPrescriptions(@CurrentUser() user: any, @Query() q: any) {
     return this.authService.getPatientPrescriptions(user.tenantId, user.sub, q);
