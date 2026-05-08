@@ -1,37 +1,44 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Users, Calendar, Hash, X } from 'lucide-react';
+import { Search, Users, Calendar, Hash, X, CreditCard, Pill, Bed, FlaskConical } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { navByRole, type NavItem } from './layout/Sidebar';
 import api from '../lib/api';
 
 interface SearchResult {
   patients: Array<{
-    id: string;
-    patientId: string;
-    firstName: string;
-    lastName: string;
-    mobile?: string;
-    gender?: string;
-    ageYears?: number;
+    id: string; patientId: string; firstName: string; lastName: string;
+    mobile?: string; gender?: string; ageYears?: number;
   }>;
   appointments: Array<{
-    id: string;
-    appointmentDate: string;
-    status: string;
+    id: string; appointmentDate: string; status: string;
     patient: { patientId: string; firstName: string; lastName: string };
   }>;
   queue: Array<{
-    id: string;
-    tokenNumber: number;
-    status: string;
-    queueDate: string;
+    id: string; tokenNumber: number; status: string; queueDate: string;
+    patient: { patientId: string; firstName: string; lastName: string };
+  }>;
+  invoices: Array<{
+    id: string; invoiceNumber: string; netTotal: number; status: string; createdAt: string;
+    patient: { patientId: string; firstName: string; lastName: string };
+  }>;
+  prescriptions: Array<{
+    id: string; rxNumber: string; createdAt: string;
+    patient: { patientId: string; firstName: string; lastName: string };
+    items: Array<{ drugName: string }>;
+  }>;
+  admissions: Array<{
+    id: string; admissionNumber: string; admissionDate: string; status: string;
+    patient: { patientId: string; firstName: string; lastName: string };
+  }>;
+  labOrders: Array<{
+    id: string; orderNumber: string; status: string; orderedAt: string;
     patient: { patientId: string; firstName: string; lastName: string };
   }>;
 }
 
 interface FlatItem {
-  type: 'nav' | 'patient' | 'appointment' | 'queue';
+  type: 'nav' | 'patient' | 'appointment' | 'queue' | 'invoice' | 'prescription' | 'admission' | 'labOrder';
   label: string;
   sub?: string;
   icon: React.ElementType;
@@ -167,10 +174,51 @@ export default function CommandPalette() {
           sub: q.status,
           icon: Hash,
           iconColor: 'text-orange-500',
-          action: () => {
-            navigate('/app/queue');
-            close();
-          },
+          action: () => { navigate('/app/queue'); close(); },
+        });
+      });
+
+      results.invoices?.forEach(inv => {
+        items.push({
+          type: 'invoice',
+          label: `Invoice ${inv.invoiceNumber}`,
+          sub: `${inv.patient?.firstName} ${inv.patient?.lastName} · ₹${Number(inv.netTotal).toFixed(0)} · ${inv.status}`,
+          icon: CreditCard,
+          iconColor: 'text-purple-500',
+          action: () => { navigate('/app/billing'); close(); },
+        });
+      });
+
+      results.prescriptions?.forEach(rx => {
+        items.push({
+          type: 'prescription',
+          label: `Rx ${rx.rxNumber}`,
+          sub: `${rx.patient?.firstName} ${rx.patient?.lastName}${rx.items?.[0] ? ` · ${rx.items[0].drugName}` : ''}`,
+          icon: Pill,
+          iconColor: 'text-amber-500',
+          action: () => { navigate('/app/doctor/prescriptions'); close(); },
+        });
+      });
+
+      results.admissions?.forEach(adm => {
+        items.push({
+          type: 'admission',
+          label: `Admission ${adm.admissionNumber}`,
+          sub: `${adm.patient?.firstName} ${adm.patient?.lastName} · ${adm.status}`,
+          icon: Bed,
+          iconColor: 'text-teal-500',
+          action: () => { navigate('/app/nurse/admissions'); close(); },
+        });
+      });
+
+      results.labOrders?.forEach(lab => {
+        items.push({
+          type: 'labOrder',
+          label: `Lab ${lab.orderNumber}`,
+          sub: `${lab.patient?.firstName} ${lab.patient?.lastName} · ${lab.status}`,
+          icon: FlaskConical,
+          iconColor: 'text-red-500',
+          action: () => { navigate('/app/lab/results'); close(); },
         });
       });
     }
@@ -211,23 +259,21 @@ export default function CommandPalette() {
 
   // Determine section header positions
   const sectionHeaders: Record<number, string> = {};
-  let navSeen = false;
-  let patientSeen = false;
-  let apptSeen = false;
-  let queueSeen = false;
+  const seen = new Set<string>();
+  const sectionLabels: Record<string, string> = {
+    nav: query ? 'Matching Pages' : 'Quick Navigation',
+    patient: 'Patients',
+    appointment: 'Appointments',
+    queue: 'Queue',
+    invoice: 'Invoices',
+    prescription: 'Prescriptions',
+    admission: 'Admissions',
+    labOrder: 'Lab Orders',
+  };
   allItems.forEach((item, idx) => {
-    if (item.type === 'nav' && !navSeen) {
-      sectionHeaders[idx] = query ? 'Matching Pages' : 'Quick Navigation';
-      navSeen = true;
-    } else if (item.type === 'patient' && !patientSeen) {
-      sectionHeaders[idx] = 'Patients';
-      patientSeen = true;
-    } else if (item.type === 'appointment' && !apptSeen) {
-      sectionHeaders[idx] = 'Appointments';
-      apptSeen = true;
-    } else if (item.type === 'queue' && !queueSeen) {
-      sectionHeaders[idx] = 'Queue';
-      queueSeen = true;
+    if (!seen.has(item.type)) {
+      seen.add(item.type);
+      sectionHeaders[idx] = sectionLabels[item.type] || item.type;
     }
   });
 

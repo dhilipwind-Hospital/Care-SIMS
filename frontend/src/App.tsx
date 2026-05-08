@@ -7,6 +7,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { I18nProvider } from './context/I18nContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import AppLayout from './components/layout/AppLayout';
+import PatientLayout from './components/layout/PatientLayout';
 
 // ── Lazy page imports (code splitting) ──────────────────────────────────────
 const LandingPage                = lazy(() => import('./pages/LandingPage'));
@@ -256,14 +257,7 @@ function AppRoutes() {
           <Route path="admin/settings" element={<RoleRoute roles={['ADMIN']}><OrgSettingsPage /></RoleRoute>} />
           <Route path="admin/mfa" element={<RoleRoute roles={['ADMIN']}><MfaSetupPage /></RoleRoute>} />
 
-          {/* ── Patient Portal ── */}
-          <Route path="patient/portal" element={<RoleRoute roles={['PATIENT']}><PatientPortalPage /></RoleRoute>} />
-          <Route path="patient/appointments" element={<RoleRoute roles={['PATIENT']}><PatientAppointmentsPage /></RoleRoute>} />
-          <Route path="patient/records" element={<RoleRoute roles={['PATIENT']}><PatientMedicalRecordsPage /></RoleRoute>} />
-          <Route path="patient/prescriptions" element={<RoleRoute roles={['PATIENT']}><PatientPrescriptionsPage /></RoleRoute>} />
-          <Route path="patient/lab" element={<RoleRoute roles={['PATIENT']}><PatientLabReportsPage /></RoleRoute>} />
-          <Route path="patient/billing" element={<RoleRoute roles={['PATIENT']}><PatientBillingPage /></RoleRoute>} />
-          <Route path="patient/vitals" element={<RoleRoute roles={['PATIENT']}><PatientVitalsPage /></RoleRoute>} />
+          {/* ── Patient Portal — uses PatientLayout (see sibling route below) ── */}
 
           {/* ── Clinical Shared (doctors, nurses, admin) ── */}
           <Route path="blood-bank" element={<RoleRoute roles={['NURSE', 'DOCTOR', 'ADMIN']}><BloodBankPage /></RoleRoute>} />
@@ -322,6 +316,18 @@ function AppRoutes() {
           <Route path="platform/audit" element={<RoleRoute roles={['PLATFORM_OWNER', 'PLATFORM_ADMIN']}><PlatformAuditPage /></RoleRoute>} />
           <Route path="flowcharts" element={<ProtectedRoute><FlowChartsPage /></ProtectedRoute>} />
         </Route>
+
+        {/* ── Patient Portal — dedicated PatientLayout (no staff sidebar) ── */}
+        <Route path="/app/patient" element={<ProtectedRoute><PatientLayout /></ProtectedRoute>}>
+          <Route path="portal"        element={<RoleRoute roles={['PATIENT']}><PatientPortalPage /></RoleRoute>} />
+          <Route path="appointments"  element={<RoleRoute roles={['PATIENT']}><PatientAppointmentsPage /></RoleRoute>} />
+          <Route path="records"       element={<RoleRoute roles={['PATIENT']}><PatientMedicalRecordsPage /></RoleRoute>} />
+          <Route path="prescriptions" element={<RoleRoute roles={['PATIENT']}><PatientPrescriptionsPage /></RoleRoute>} />
+          <Route path="lab"           element={<RoleRoute roles={['PATIENT']}><PatientLabReportsPage /></RoleRoute>} />
+          <Route path="billing"       element={<RoleRoute roles={['PATIENT']}><PatientBillingPage /></RoleRoute>} />
+          <Route path="vitals"        element={<RoleRoute roles={['PATIENT']}><PatientVitalsPage /></RoleRoute>} />
+        </Route>
+
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Suspense>
