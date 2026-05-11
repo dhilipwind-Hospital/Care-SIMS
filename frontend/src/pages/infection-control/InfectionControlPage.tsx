@@ -146,7 +146,7 @@ export default function InfectionControlPage() {
           <td className="p-3"><StatusBadge status={r.recordType} /></td>
           <td className="p-3">{r.organism || '—'}</td>
           <td className="p-3">{r.infectionSite || '—'}</td>
-          <td className="p-3">{r.patientId || '—'}</td>
+          <td className="p-3">{r.patient ? `${r.patient.firstName} ${r.patient.lastName}` : r.patientId || '—'}</td>
           <td className="p-3"><StatusBadge status={r.isolationType || 'NONE'} /></td>
           <td className="p-3">{r.isHai ? <span className="text-red-600 font-medium">Yes</span> : 'No'}</td>
           <td className="p-3"><StatusBadge status={r.status} /></td>

@@ -5,6 +5,7 @@ import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import api from '../../lib/api';
 
@@ -259,8 +260,22 @@ export default function MARPage() {
           </div>
           {scheduleError && <p className="text-sm text-red-600">{scheduleError}</p>}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            <input className="hms-input" placeholder="Admission ID *" value={scheduleForm.admissionId} onChange={e => setScheduleForm({ ...scheduleForm, admissionId: e.target.value })} />
-            <input className="hms-input" placeholder="Patient ID *" value={scheduleForm.patientId} onChange={e => setScheduleForm({ ...scheduleForm, patientId: e.target.value })} />
+            <SearchableSelect
+              value={scheduleForm.patientId}
+              onChange={(id) => setScheduleForm({ ...scheduleForm, patientId: id })}
+              placeholder="Search patient *"
+              endpoint="/patients"
+              searchParam="q"
+              mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })}
+            />
+            <SearchableSelect
+              value={scheduleForm.admissionId}
+              onChange={(id) => setScheduleForm({ ...scheduleForm, admissionId: id })}
+              placeholder="Search admission *"
+              endpoint="/admissions"
+              searchParam="q"
+              mapOption={(a: any) => ({ id: a.id, label: a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : a.id, sub: `Bed ${a.bed?.bedNumber || '?'}` })}
+            />
             <input className="hms-input" placeholder="Drug Name *" value={scheduleForm.drugName} onChange={e => setScheduleForm({ ...scheduleForm, drugName: e.target.value })} />
             <input className="hms-input" placeholder="Dose *" value={scheduleForm.dosage} onChange={e => setScheduleForm({ ...scheduleForm, dosage: e.target.value })} />
             <select className="hms-input" value={scheduleForm.route} onChange={e => setScheduleForm({ ...scheduleForm, route: e.target.value })}>

@@ -6,6 +6,7 @@ import Pagination from '../../components/ui/Pagination';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import { SkeletonTableRow, SkeletonKpiRow } from '../../components/ui/Skeleton';
 import api from '../../lib/api';
 
@@ -16,6 +17,7 @@ export default function DietPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ patientId: '', admissionId: '', dietType: 'REGULAR', caloricTarget: '', proteinTarget: '', specialInstructions: '' });
+  const [activeAdmissions, setActiveAdmissions] = useState<any[]>([]);
   const [formError, setFormError] = useState('');
   const [ordersPage, setOrdersPage] = useState(1);
   const [mealsPage, setMealsPage] = useState(1);
@@ -38,6 +40,7 @@ export default function DietPage() {
 
   const fetchData = async () => { setLoading(true); try { const [o, m] = await Promise.all([api.get('/diet/orders'), api.get('/diet/meals/today')]); setOrders(o.data.data || o.data || []); setMeals(m.data.data || m.data || []); } catch (err) { toast.error('Failed to load diet data'); } finally { setLoading(false); } };
   useEffect(() => { fetchData(); }, []);
+  useEffect(() => { api.get('/admissions', { params: { status: 'ACTIVE', limit: 100 } }).then(r => setActiveAdmissions(r.data.data || r.data || [])).catch(() => {}); }, []);
 
   const handleAdd = async () => {
     if (!form.patientId.trim()) { setFormError('Patient ID is required'); return; }
@@ -152,8 +155,20 @@ export default function DietPage() {
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">New Diet Order</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <input className="hms-input" placeholder="Patient ID *" value={form.patientId} onChange={e => setForm({ ...form, patientId: e.target.value })} />
-            <input className="hms-input" placeholder="Admission ID *" value={form.admissionId} onChange={e => setForm({ ...form, admissionId: e.target.value })} />
+            <SearchableSelect
+              value={form.patientId}
+              onChange={(id) => setForm({ ...form, patientId: id })}
+              placeholder="Search patient *"
+              endpoint="/patients"
+              searchParam="q"
+              mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })}
+            />
+            <select className="hms-input" value={form.admissionId} onChange={e => setForm({ ...form, admissionId: e.target.value })}>
+              <option value="">Select active admission *</option>
+              {activeAdmissions.map((a: any) => (
+                <option key={a.id} value={a.id}>{a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : a.id} — Bed {a.bed?.bedNumber || '?'}</option>
+              ))}
+            </select>
             <select className="hms-input" value={form.dietType} onChange={e => setForm({ ...form, dietType: e.target.value })}><option value="REGULAR">Regular</option><option value="DIABETIC">Diabetic</option><option value="RENAL">Renal</option><option value="CARDIAC">Cardiac</option><option value="SOFT">Soft</option><option value="LIQUID">Liquid</option><option value="NPO">NPO</option></select>
             <input className="hms-input" type="number" placeholder="Caloric Target (kcal)" value={form.caloricTarget} onChange={e => setForm({ ...form, caloricTarget: e.target.value })} />
             <input className="hms-input" type="number" placeholder="Protein Target (g)" value={form.proteinTarget} onChange={e => setForm({ ...form, proteinTarget: e.target.value })} />
