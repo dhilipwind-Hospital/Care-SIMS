@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
 import {
   ScanLine, Clock, CheckCircle, Pencil,
-  Eye, FileText, ShieldCheck, AlertTriangle, X, Trash2, Printer,
+  Eye, FileText, ShieldCheck, AlertTriangle, X, Trash2, Printer, Paperclip, Upload,
 } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import Pagination from '../../components/ui/Pagination';
@@ -72,6 +72,11 @@ export default function RadiologyPage() {
   const [resultOrderId, setResultOrderId] = useState('');
   const [resultForm, setResultForm] = useState({ findings: '', impression: '', recommendation: '', isCritical: false });
   const [resultSubmitting, setResultSubmitting] = useState(false);
+
+  // Report attachment
+  const reportFileRef = useRef<HTMLInputElement>(null);
+  const [attachingOrderId, setAttachingOrderId] = useState<string | null>(null);
+  const [attachUploading, setAttachUploading] = useState(false);
 
   // View modal
   const [viewModal, setViewModal] = useState(false);
@@ -195,6 +200,32 @@ export default function RadiologyPage() {
 
   /* ---- delete order ---- */
   const handleDelete = async (id: string) => { if (!confirm('Delete this radiology order?')) return; try { await api.delete(`/radiology/orders/${id}`); toast.success('Radiology order deleted'); fetchOrders(); } catch (err) { console.error('Failed to delete radiology order:', err); toast.error('Failed to delete radiology order'); } };
+
+  /* ---- attach report file ---- */
+  const handleAttachReport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.[0] || !attachingOrderId) return;
+    const file = e.target.files[0];
+    if (file.size > 20 * 1024 * 1024) { toast.error('File must be under 20MB'); return; }
+    setAttachUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const { data: upload } = await api.post('/uploads/document', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await api.patch(`/radiology/orders/${attachingOrderId}`, { reportUrl: upload.url, reportFilename: upload.filename || file.name });
+      toast.success('Report attached');
+      fetchOrders();
+      if (viewOrder?.id === attachingOrderId) {
+        const { data } = await api.get(`/radiology/orders/${attachingOrderId}`);
+        setViewOrder(data.data || data);
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to attach report');
+    } finally {
+      setAttachUploading(false);
+      setAttachingOrderId(null);
+      if (reportFileRef.current) reportFileRef.current.value = '';
+    }
+  };
 
   /* ---- view order detail ---- */
   const openViewModal = async (orderId: string) => {
@@ -470,6 +501,16 @@ export default function RadiologyPage() {
                         </button>
                       )}
 
+                      {/* Attach Report */}
+                      <button
+                        onClick={() => { setAttachingOrderId(o.id); reportFileRef.current?.click(); }}
+                        disabled={attachUploading && attachingOrderId === o.id}
+                        className="p-1 rounded hover:bg-yellow-50 text-yellow-500 hover:text-yellow-700 disabled:opacity-40"
+                        title="Attach report / image"
+                      >
+                        <Paperclip size={16} />
+                      </button>
+
                       {/* Delete (only ORDERED) */}
                       {o.status === 'ORDERED' && (
                         <button
@@ -489,6 +530,15 @@ export default function RadiologyPage() {
         </table>
         <Pagination page={page} totalPages={Math.ceil(orders.length / 20)} onPageChange={setPage} totalItems={orders.length} pageSize={20} />
       </div>
+
+      {/* Hidden file input for report attachment */}
+      <input
+        ref={reportFileRef}
+        type="file"
+        accept=".pdf,.png,.jpg,.jpeg,.webp,.dcm"
+        className="hidden"
+        onChange={handleAttachReport}
+      />
 
       {/* ---- Add Result Modal ---- */}
       <Modal open={resultModal} onClose={() => setResultModal(false)} title="Add Radiology Result">
@@ -623,14 +673,36 @@ export default function RadiologyPage() {
             )}
           </div>
         ) : null}
-        {viewOrder && viewOrder.results && viewOrder.results.length > 0 && (
-          <div className="flex justify-end px-5 pb-4">
-            <button
-              onClick={() => handlePrintRadiology(viewOrder)}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-            >
-              <Printer size={14} /> Print Report
-            </button>
+        {viewOrder && (
+          <div className="px-5 pb-4 space-y-3">
+            {/* Attached report file */}
+            {viewOrder.reportUrl && (
+              <div className="flex items-center gap-3 bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2.5">
+                <Paperclip size={14} className="text-yellow-600 flex-shrink-0" />
+                <a href={viewOrder.reportUrl} target="_blank" rel="noopener noreferrer"
+                  className="text-sm text-yellow-800 hover:underline truncate flex-1 font-medium">
+                  {viewOrder.reportFilename || 'Attached Report'}
+                </a>
+                <span className="text-xs text-yellow-600">Attached</span>
+              </div>
+            )}
+            <div className="flex justify-between items-center">
+              <button
+                onClick={() => { setAttachingOrderId(viewOrder.id); reportFileRef.current?.click(); }}
+                disabled={attachUploading}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-yellow-400 text-yellow-700 rounded-lg hover:bg-yellow-50 disabled:opacity-40"
+              >
+                <Upload size={14} /> {viewOrder.reportUrl ? 'Replace Report' : 'Attach Report / Image'}
+              </button>
+              {viewOrder.results && viewOrder.results.length > 0 && (
+                <button
+                  onClick={() => handlePrintRadiology(viewOrder)}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                >
+                  <Printer size={14} /> Print Report
+                </button>
+              )}
+            </div>
           </div>
         )}
       </Modal>

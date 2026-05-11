@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Pill, ShieldCheck, Plus, X } from 'lucide-react';
+import { Pill, ShieldCheck, Plus, X, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -50,6 +50,27 @@ export default function AntimicrobialPage() {
       fetchData();
     } catch { toast.error('Failed to save'); }
     finally { setSaving(false); }
+  };
+
+  const handlePrint = (r: any) => {
+    const win = window.open('', '_blank', 'width=800,height=600');
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html><html><head><title>Antimicrobial Record</title>
+    <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:13px;color:#111;padding:32px}.header{border-bottom:3px double #0F766E;padding-bottom:16px;margin-bottom:20px;text-align:center}.title{font-size:22px;font-weight:900;color:#0F766E}.subtitle{font-size:13px;color:#555;margin-top:4px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}.field label{font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700}.field p{font-size:13px;margin-top:2px}.full{grid-column:1/-1}@media print{body{padding:20px}}</style>
+    </head><body>
+    <div class="header"><div class="title">AYPHEN HMS</div><div class="subtitle">Antimicrobial Stewardship Record</div></div>
+    <div class="grid">
+      <div class="field"><label>Drug Name</label><p>${r.drugName || '—'}</p></div>
+      <div class="field"><label>Patient</label><p>${r.patientName || r.patientId || '—'}</p></div>
+      <div class="field"><label>Route</label><p>${r.route || '—'}</p></div>
+      <div class="field"><label>Duration</label><p>${r.durationDays ? r.durationDays + ' days' : '—'}</p></div>
+      <div class="field"><label>Prescribed By</label><p>${r.prescribedBy || r.doctorName || '—'}</p></div>
+      <div class="field"><label>Status</label><p>${r.status || '—'}</p></div>
+      <div class="field full"><label>Indication</label><p>${r.indication || '—'}</p></div>
+      ${r.notes ? `<div class="field full"><label>Notes</label><p>${r.notes}</p></div>` : ''}
+    </div>
+    <script>window.onload=function(){window.print();}<\/script></body></html>`);
+    win.document.close();
   };
 
   const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500';
@@ -147,7 +168,10 @@ export default function AntimicrobialPage() {
                 )}
               </div>
             </div>
-            <div className="flex justify-end p-5 border-t">
+            <div className="flex justify-end gap-2 p-5 border-t">
+              <button onClick={() => handlePrint(selected)} className="flex items-center gap-1.5 px-4 py-2 text-sm text-white bg-teal-600 hover:bg-teal-700 rounded-lg">
+                <Printer size={14} /> Print
+              </button>
               <button onClick={() => setSelected(null)} className="px-4 py-2 text-sm text-gray-600 border rounded-lg hover:bg-gray-50">Close</button>
             </div>
           </div>

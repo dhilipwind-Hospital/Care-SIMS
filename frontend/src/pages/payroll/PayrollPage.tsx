@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { DollarSign, Plus, X, Loader2, Printer } from 'lucide-react';
+import { DollarSign, Plus, X, Loader2, Printer, CheckCheck } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -22,6 +22,8 @@ export default function PayrollPage() {
   const [form, setForm] = useState({ staffId: '', month: new Date().getMonth() + 1, year: new Date().getFullYear(), basicPay: '', da: '', hra: '', allowances: '', overtime: '' });
   const [submitting, setSubmitting] = useState(false);
   const [staff, setStaff] = useState<any[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkApproving, setBulkApproving] = useState(false);
 
   const fetchData = async () => { setLoading(true); try { const [list, dash] = await Promise.all([api.get('/payroll', { params: { page, limit: 20, month: monthFilter, year: yearFilter } }), api.get('/payroll/dashboard', { params: { month: monthFilter, year: yearFilter } })]); setRecords(list.data.data || []); setTotal(list.data.meta?.total || 0); setDashboard(dash.data.data || dash.data || {}); } catch { toast.error('Failed'); } finally { setLoading(false); } };
   useEffect(() => { fetchData(); }, [page, monthFilter, yearFilter]);
@@ -30,9 +32,45 @@ export default function PayrollPage() {
   const handleProcess = async () => { if (!form.staffId || !form.basicPay) { toast.error('Staff and basic pay required'); return; } setSubmitting(true); try { await api.post('/payroll', { ...form, basicPay: Number(form.basicPay), da: Number(form.da || 0), hra: Number(form.hra || 0), allowances: Number(form.allowances || 0), overtime: Number(form.overtime || 0) }); toast.success('Payroll processed'); setShowForm(false); fetchData(); } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); } finally { setSubmitting(false); } };
   const handleAction = async (id: string, action: string) => { try { await api.patch(`/payroll/${id}/${action}`); toast.success(`Payroll ${action}d`); fetchData(); } catch { toast.error('Failed'); } };
 
+  const processableIds = records.filter(r => r.status === 'PROCESSED').map(r => r.id);
+  const allProcessableSelected = processableIds.length > 0 && processableIds.every(id => selected.has(id));
+
+  const toggleSelect = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (allProcessableSelected) {
+      setSelected(prev => { const next = new Set(prev); processableIds.forEach(id => next.delete(id)); return next; });
+    } else {
+      setSelected(prev => new Set([...prev, ...processableIds]));
+    }
+  };
+
+  const handleBulkApprove = async () => {
+    const ids = [...selected].filter(id => records.find(r => r.id === id && r.status === 'PROCESSED'));
+    if (ids.length === 0) { toast.error('Select at least one PROCESSED record'); return; }
+    if (!window.confirm(`Approve ${ids.length} payroll record${ids.length > 1 ? 's' : ''}?`)) return;
+    setBulkApproving(true);
+    let succeeded = 0;
+    for (const id of ids) {
+      try { await api.patch(`/payroll/${id}/approve`); succeeded++; } catch { /* continue */ }
+    }
+    toast.success(`${succeeded} of ${ids.length} records approved`);
+    setSelected(new Set());
+    setBulkApproving(false);
+    fetchData();
+  };
+
   const handlePrintPayslip = (r: any) => {
     const staffMember = staff.find(s => s.id === r.staffId);
     const staffName = staffMember ? staffMember.firstName + ' ' + staffMember.lastName : r.staffId?.slice(0, 8) || '—';
+    const staffRole = staffMember?.role?.replace('SYS_', '').replace(/_/g, ' ') || '—';
+    const staffDept = staffMember?.department || '';
     const fmt = (v: number) => '₹' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 });
     const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     const monthLabel = monthNames[(r.month || 1) - 1] + ' ' + r.year;
@@ -83,8 +121,10 @@ export default function PayrollPage() {
   <div class="info-box">
     <div class="info-row"><span class="info-label">Employee Name</span><span class="info-value">${staffName}</span></div>
     <div class="info-row"><span class="info-label">Staff ID</span><span class="info-value">${r.staffId?.slice(0, 8) || '—'}</span></div>
-    <div class="info-row"><span class="info-label">Month</span><span class="info-value">${monthNames[(r.month || 1) - 1]}</span></div>
-    <div class="info-row"><span class="info-label">Year</span><span class="info-value">${r.year}</span></div>
+    <div class="info-row"><span class="info-label">Designation</span><span class="info-value">${staffRole}</span></div>
+    <div class="info-row"><span class="info-label">Department</span><span class="info-value">${staffDept || '—'}</span></div>
+    <div class="info-row"><span class="info-label">Pay Period</span><span class="info-value">${monthLabel}</span></div>
+    <div class="info-row"><span class="info-label">Payment Status</span><span class="info-value">${r.status || '—'}</span></div>
   </div>
   <table class="pay-table">
     <thead><tr><th colspan="2">Earnings</th><th colspan="2">Deductions</th></tr></thead>
@@ -126,18 +166,59 @@ export default function PayrollPage() {
         <KpiCard label="Deductions" value={formatCurrency(dashboard.totalDeductions || 0)} icon={DollarSign} color="#EF4444" />
         <KpiCard label="Paid" value={dashboard.paid || 0} icon={DollarSign} color="#3B82F6" />
       </div>
-      <div className="flex flex-wrap gap-3 items-center">
-        <select className="hms-input" value={monthFilter} onChange={e => setMonthFilter(Number(e.target.value))}>{Array.from({length:12},(_,i)=>i+1).map(m=><option key={m} value={m}>{new Date(2024,m-1).toLocaleString('en',{month:'long'})}</option>)}</select>
-        <select className="hms-input" value={yearFilter} onChange={e => setYearFilter(Number(e.target.value))}>{[2024,2025,2026,2027].map(y=><option key={y}>{y}</option>)}</select>
+      <div className="flex flex-wrap gap-3 items-center justify-between">
+        <div className="flex flex-wrap gap-3 items-center">
+          <select className="hms-input" value={monthFilter} onChange={e => { setMonthFilter(Number(e.target.value)); setSelected(new Set()); }}>{Array.from({length:12},(_,i)=>i+1).map(m=><option key={m} value={m}>{new Date(2024,m-1).toLocaleString('en',{month:'long'})}</option>)}</select>
+          <select className="hms-input" value={yearFilter} onChange={e => { setYearFilter(Number(e.target.value)); setSelected(new Set()); }}>{[2024,2025,2026,2027].map(y=><option key={y}>{y}</option>)}</select>
+          {selected.size > 0 && (
+            <span className="text-sm text-teal-700 font-medium">{selected.size} selected</span>
+          )}
+        </div>
+        {selected.size > 0 && (
+          <button
+            onClick={handleBulkApprove}
+            disabled={bulkApproving}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50"
+          >
+            {bulkApproving ? <Loader2 size={14} className="animate-spin" /> : <CheckCheck size={14} />}
+            Bulk Approve ({[...selected].filter(id => records.find(r => r.id === id && r.status === 'PROCESSED')).length})
+          </button>
+        )}
       </div>
       <div className="hms-card"><div className="overflow-x-auto"><table className="w-full"><thead className="sticky top-0 z-10"><tr>
-        {['Staff', 'Gross', 'PF', 'ESI', 'TDS', 'Total Ded.', 'Net Pay', 'Status', 'Actions'].map(h=><th key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 py-3 text-left bg-gray-50">{h}</th>)}
+        <th className="px-4 py-3 bg-gray-50">
+          <input
+            type="checkbox"
+            checked={allProcessableSelected}
+            onChange={toggleSelectAll}
+            disabled={processableIds.length === 0}
+            className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+            title="Select all approvable"
+          />
+        </th>
+        {['Staff', 'Role', 'Gross', 'PF', 'ESI', 'TDS', 'Total Ded.', 'Net Pay', 'Status', 'Actions'].map(h=><th key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 py-3 text-left bg-gray-50">{h}</th>)}
       </tr></thead><tbody>
-        {loading ? <>{Array.from({length:5}).map((_,i)=><SkeletonTableRow key={i} cols={9}/>)}</>
-        : records.length===0 ? <tr><td colSpan={9}><EmptyState icon={<DollarSign size={36}/>} title="No payroll records"/></td></tr>
-        : records.map(r=>{const staffName=staff.find(s=>s.id===r.staffId); return(
-          <tr key={r.id} className="hover:bg-gray-50 border-t border-gray-50">
-            <td className="px-4 py-3 text-sm font-medium">{staffName ? `${staffName.firstName} ${staffName.lastName}` : r.staffId.slice(0,8)}</td>
+        {loading ? <>{Array.from({length:5}).map((_,i)=><SkeletonTableRow key={i} cols={11}/>)}</>
+        : records.length===0 ? <tr><td colSpan={11}><EmptyState icon={<DollarSign size={36}/>} title="No payroll records"/></td></tr>
+        : records.map(r=>{
+          const staffMember = staff.find(s=>s.id===r.staffId);
+          const staffName = staffMember ? `${staffMember.firstName} ${staffMember.lastName}` : r.staffId?.slice(0,8) || '—';
+          const staffRole = staffMember?.role?.replace('SYS_','').replace(/_/g,' ') || '—';
+          const isSelectable = r.status === 'PROCESSED';
+          return(
+          <tr key={r.id} className={`hover:bg-gray-50 border-t border-gray-50 ${selected.has(r.id) ? 'bg-teal-50' : ''}`}>
+            <td className="px-4 py-3">
+              {isSelectable && (
+                <input
+                  type="checkbox"
+                  checked={selected.has(r.id)}
+                  onChange={() => toggleSelect(r.id)}
+                  className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                />
+              )}
+            </td>
+            <td className="px-4 py-3 text-sm font-medium text-gray-800">{staffName}</td>
+            <td className="px-4 py-3 text-xs text-gray-500">{staffRole}</td>
             <td className="px-4 py-3 text-sm font-bold">{formatCurrency(r.grossPay)}</td>
             <td className="px-4 py-3 text-xs">{formatCurrency(r.pfDeduction)}</td>
             <td className="px-4 py-3 text-xs">{formatCurrency(r.esiDeduction)}</td>
@@ -145,10 +226,10 @@ export default function PayrollPage() {
             <td className="px-4 py-3 text-sm text-red-600">{formatCurrency(r.totalDeductions)}</td>
             <td className="px-4 py-3 text-sm font-bold text-green-700">{formatCurrency(r.netPay)}</td>
             <td className="px-4 py-3"><StatusBadge status={r.status}/></td>
-            <td className="px-4 py-3"><div className="flex gap-1">
+            <td className="px-4 py-3"><div className="flex gap-1 flex-wrap">
               {r.status==='PROCESSED'&&<button onClick={()=>handleAction(r.id,'approve')} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium">Approve</button>}
               {r.status==='APPROVED'&&<button onClick={()=>handleAction(r.id,'pay')} className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">Mark Paid</button>}
-              {(r.status==='PAID'||r.status==='APPROVED')&&<button onClick={()=>handlePrintPayslip(r)} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1" title="Print Payslip"><Printer size={12}/> Slip</button>}
+              <button onClick={()=>handlePrintPayslip(r)} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1" title="Print Payslip"><Printer size={12}/> Slip</button>
             </div></td>
           </tr>)})}
       </tbody></table></div>

@@ -24,6 +24,6 @@ export class TelemedicineService {
     const session = await this.prisma.teleconsultSession.findFirst({ where: { id, tenantId } });
     if (!session) throw new NotFoundException('Session not found');
     if (session.status !== 'SCHEDULED') throw new BadRequestException('Only scheduled sessions can be deleted');
-    return this.prisma.teleconsultSession.delete({ where: { id } });
+    return this.prisma.teleconsultSession.delete({ where: { id, tenantId } });
   }
 }

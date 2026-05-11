@@ -50,7 +50,7 @@ export class PhysiotherapyService {
     if (dto.therapistId !== undefined) data.therapistId = dto.therapistId;
     if (dto.therapistName !== undefined) data.therapistName = dto.therapistName;
     if (dto.status !== undefined) data.status = dto.status;
-    return this.prisma.physiotherapyOrder.update({ where: { id }, data });
+    return this.prisma.physiotherapyOrder.update({ where: { id, tenantId }, data });
   }
 
   async addSession(tenantId: string, orderId: string, dto: any) {
@@ -79,7 +79,7 @@ export class PhysiotherapyService {
     const order = await this.prisma.physiotherapyOrder.findFirst({ where: { id, tenantId } });
     if (!order) throw new NotFoundException('Order not found');
     if (order.status === 'COMPLETED') throw new BadRequestException('Cannot delete completed orders');
-    return this.prisma.physiotherapyOrder.delete({ where: { id } });
+    return this.prisma.physiotherapyOrder.delete({ where: { id, tenantId } });
   }
 
   async listSessions(tenantId: string, orderId: string) {

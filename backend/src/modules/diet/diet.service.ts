@@ -55,7 +55,7 @@ export class DietService {
       const order = await tx.dietOrder.findFirst({ where: { id, tenantId } });
       if (!order) throw new NotFoundException('Diet order not found');
       if (order.status !== 'PENDING') throw new BadRequestException('Can only delete orders with PENDING status');
-      return tx.dietOrder.delete({ where: { id } });
+      return tx.dietOrder.delete({ where: { id, tenantId } });
     });
   }
 

@@ -60,7 +60,7 @@ export class AmbulanceService {
       callback: async (tx, tripNumber) => {
         const v = await tx.ambulance.findFirst({ where: { id: dto.ambulanceId, tenantId } });
         if (!v) throw new NotFoundException('Vehicle not found');
-        await tx.ambulance.update({ where: { id: dto.ambulanceId }, data: { status: 'ON_TRIP' } });
+        await tx.ambulance.update({ where: { id: dto.ambulanceId, tenantId }, data: { status: 'ON_TRIP' } });
         return tx.ambulanceTrip.create({
           data: {
             tenantId, tripNumber,

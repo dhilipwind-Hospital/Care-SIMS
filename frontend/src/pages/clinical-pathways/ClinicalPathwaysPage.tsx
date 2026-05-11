@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { GitBranch, Plus, X } from 'lucide-react';
+import { GitBranch, Plus, X, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -58,6 +58,39 @@ export default function ClinicalPathwaysPage() {
       fetchData();
     } catch { toast.error('Failed to save'); }
     finally { setSaving(false); }
+  };
+
+  const handlePrint = (item: any) => {
+    const win = window.open('', '_blank', 'width=800,height=600');
+    if (!win) return;
+    const isProtocol = item._type === 'protocol';
+    const stepsHtml = isProtocol && item.steps?.length
+      ? `<div class="field full"><label>Steps</label><ol style="margin:4px 0 0 16px">${item.steps.map((s: any) => `<li style="margin:2px 0">${typeof s === 'string' ? s : s.description || JSON.stringify(s)}</li>`).join('')}</ol></div>`
+      : '';
+    win.document.write(`<!DOCTYPE html><html><head><title>${isProtocol ? 'Care Protocol' : 'Patient Pathway'}</title>
+    <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:13px;color:#111;padding:32px}.header{border-bottom:3px double #0F766E;padding-bottom:16px;margin-bottom:20px;text-align:center}.title{font-size:22px;font-weight:900;color:#0F766E}.subtitle{font-size:13px;color:#555;margin-top:4px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field label{font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700}.field p{font-size:13px;margin-top:2px}.full{grid-column:1/-1}@media print{body{padding:20px}}</style>
+    </head><body>
+    <div class="header"><div class="title">AYPHEN HMS</div><div class="subtitle">${isProtocol ? 'Care Protocol' : 'Patient Pathway'}</div></div>
+    <div class="grid">
+    ${isProtocol ? `
+      <div class="field"><label>Protocol Name</label><p>${item.name || '—'}</p></div>
+      <div class="field"><label>Status</label><p>${item.isActive ? 'Active' : 'Inactive'}</p></div>
+      <div class="field"><label>Diagnosis</label><p>${item.diagnosis || '—'}</p></div>
+      <div class="field"><label>ICD Code</label><p>${item.icdCode || '—'}</p></div>
+      <div class="field"><label>Department</label><p>${item.department || '—'}</p></div>
+      <div class="field"><label>Duration</label><p>${item.durationDays ? item.durationDays + ' days' : '—'}</p></div>
+      ${stepsHtml}
+    ` : `
+      <div class="field"><label>Protocol</label><p>${item.protocol?.name || '—'}</p></div>
+      <div class="field"><label>Status</label><p>${item.status || '—'}</p></div>
+      <div class="field"><label>Patient</label><p>${item.patientId || '—'}</p></div>
+      <div class="field"><label>Current Day</label><p>${item.currentDay ? 'Day ' + item.currentDay : '—'}</p></div>
+      <div class="field"><label>Start Date</label><p>${item.startDate ? new Date(item.startDate).toLocaleDateString('en-IN') : '—'}</p></div>
+      <div class="field"><label>Deviations</label><p>${Array.isArray(item.deviations) ? item.deviations.length : 0}</p></div>
+    `}
+    </div>
+    <script>window.onload=function(){window.print();}<\/script></body></html>`);
+    win.document.close();
   };
 
   const activeProtocols = protocols.filter(p => p.isActive !== false).length;
@@ -214,7 +247,10 @@ export default function ClinicalPathwaysPage() {
                 </div>
               )}
             </div>
-            <div className="flex justify-end p-5 border-t">
+            <div className="flex justify-end gap-2 p-5 border-t">
+              <button onClick={() => handlePrint(selected)} className="flex items-center gap-1.5 px-4 py-2 text-sm text-white bg-teal-600 hover:bg-teal-700 rounded-lg">
+                <Printer size={14} /> Print
+              </button>
               <button onClick={() => setSelected(null)} className="px-4 py-2 text-sm text-gray-600 border rounded-lg hover:bg-gray-50">Close</button>
             </div>
           </div>
