@@ -6,6 +6,7 @@ import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import api from '../../lib/api';
 import { formatDate } from '../../lib/format';
@@ -216,8 +217,8 @@ export default function WoundCarePage() {
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Patient ID *</label>
-                  <input value={form.patientId} onChange={e => setForm({ ...form, patientId: e.target.value })} required className="hms-input" placeholder="Patient UUID" />
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Patient *</label>
+                  <SearchableSelect value={form.patientId} onChange={(id) => setForm({ ...form, patientId: id })} placeholder="Search patient…" endpoint="/patients" searchParam="q" mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Wound Type *</label>

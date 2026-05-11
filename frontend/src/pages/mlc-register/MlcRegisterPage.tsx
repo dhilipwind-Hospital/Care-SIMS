@@ -5,6 +5,7 @@ import TopBar from '../../components/layout/TopBar';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import api from '../../lib/api';
 import { formatDateTime } from '../../lib/format';
@@ -200,8 +201,8 @@ export default function MlcRegisterPage() {
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Patient ID</label>
-                  <input className="hms-input w-full" placeholder="Patient ID (optional)" value={form.patientId} onChange={e => sf('patientId', e.target.value)} />
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Patient (optional)</label>
+                  <SearchableSelect value={form.patientId} onChange={(id) => sf('patientId', id)} placeholder="Search patient…" endpoint="/patients" searchParam="q" mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })} />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Brought By</label>

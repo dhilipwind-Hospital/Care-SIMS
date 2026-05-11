@@ -5,6 +5,7 @@ import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import api from '../../lib/api';
 import { formatDate } from '../../lib/format';
@@ -224,7 +225,7 @@ export default function BirthDeathPage() {
               <button onClick={() => setShowForm(false)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
             </div>
             <div className="p-6 space-y-4">
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1">Mother Patient ID *</label><input className="hms-input w-full" placeholder="Patient UUID" value={form.motherPatientId} onChange={e => setForm({ ...form, motherPatientId: e.target.value })} /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1">Mother Patient *</label><SearchableSelect value={form.motherPatientId} onChange={(id) => setForm({ ...form, motherPatientId: id })} placeholder="Search mother patient…" endpoint="/patients" searchParam="q" mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })} /></div>
               <div><label className="block text-xs font-semibold text-gray-600 mb-1">Father Name</label><input className="hms-input w-full" value={form.fatherName} onChange={e => setForm({ ...form, fatherName: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="block text-xs font-semibold text-gray-600 mb-1">Date of Birth *</label><input type="date" className="hms-input w-full" value={form.dateOfBirth} onChange={e => setForm({ ...form, dateOfBirth: e.target.value })} /></div>
@@ -300,7 +301,7 @@ export default function BirthDeathPage() {
               <button onClick={() => setShowDeathForm(false)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
             </div>
             <div className="p-6 space-y-4">
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1">Patient ID *</label><input className="hms-input w-full" placeholder="Patient UUID" value={deathForm.patientId} onChange={e => setDeathForm({ ...deathForm, patientId: e.target.value })} /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1">Patient *</label><SearchableSelect value={deathForm.patientId} onChange={(id) => setDeathForm({ ...deathForm, patientId: id })} placeholder="Search patient…" endpoint="/patients" searchParam="q" mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })} /></div>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="block text-xs font-semibold text-gray-600 mb-1">Date of Death *</label><input type="date" className="hms-input w-full" value={deathForm.dateOfDeath} onChange={e => setDeathForm({ ...deathForm, dateOfDeath: e.target.value })} /></div>
                 <div><label className="block text-xs font-semibold text-gray-600 mb-1">Time</label><input type="time" className="hms-input w-full" value={deathForm.timeOfDeath} onChange={e => setDeathForm({ ...deathForm, timeOfDeath: e.target.value })} /></div>

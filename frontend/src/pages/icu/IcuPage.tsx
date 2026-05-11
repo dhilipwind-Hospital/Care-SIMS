@@ -7,6 +7,7 @@ import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import api from '../../lib/api';
 import { SkeletonKpiRow } from '../../components/ui/Skeleton';
 import { useSocket } from '../../context/SocketContext';
@@ -732,8 +733,8 @@ export default function IcuPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
             <h2 className="font-bold text-gray-900 mb-1">Admit to ICU — Bed {admitBed.bedNumber}</h2>
-            <p className="text-xs text-gray-400 mb-4">Enter the patient ID to assign to this bed</p>
-            <input className="hms-input w-full mb-4" placeholder="Patient ID (UUID)" value={admitPatientId} onChange={e => setAdmitPatientId(e.target.value)} />
+            <p className="text-xs text-gray-400 mb-4">Search and select the patient to assign to this bed</p>
+            <div className="mb-4"><SearchableSelect value={admitPatientId} onChange={(id) => setAdmitPatientId(id)} placeholder="Search patient…" endpoint="/patients" searchParam="q" mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })} /></div>
             <div className="flex justify-end gap-3">
               <button onClick={() => setAdmitBed(null)} className="btn-secondary px-4 py-2">Cancel</button>
               <button onClick={handleAdmit} className="btn-primary px-4 py-2">Admit</button>

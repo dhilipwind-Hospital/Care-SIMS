@@ -5,6 +5,7 @@ import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import api from '../../lib/api';
 import { SkeletonTableRow, SkeletonKpiRow } from '../../components/ui/Skeleton';
 
@@ -96,8 +97,8 @@ export default function PhysiotherapyPage() {
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">New PT Order</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <input className="hms-input" placeholder="Patient ID *" value={form.patientId} onChange={e => setForm({ ...form, patientId: e.target.value })} />
-            <input className="hms-input" placeholder="Doctor ID *" value={form.doctorId} onChange={e => setForm({ ...form, doctorId: e.target.value })} />
+            <SearchableSelect value={form.patientId} onChange={(id) => setForm({ ...form, patientId: id })} placeholder="Search patient *" endpoint="/patients" searchParam="q" mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })} />
+            <SearchableSelect value={form.doctorId} onChange={(id) => setForm({ ...form, doctorId: id })} placeholder="Search doctor *" endpoint="/doctors/affiliations/tenant" searchParam="q" mapOption={(d: any) => ({ id: d.doctorId || d.id, label: `Dr. ${d.doctor?.firstName || d.firstName || ''} ${d.doctor?.lastName || d.lastName || ''}`, sub: d.doctor?.specialization || d.specialization || '' })} />
             <input className="hms-input" placeholder="Diagnosis *" value={form.diagnosis} onChange={e => setForm({ ...form, diagnosis: e.target.value })} />
             <input className="hms-input" placeholder="Treatment Plan *" value={form.treatmentPlan} onChange={e => setForm({ ...form, treatmentPlan: e.target.value })} />
             <input className="hms-input" placeholder="Frequency (e.g. 3x/week)" value={form.frequency} onChange={e => setForm({ ...form, frequency: e.target.value })} />

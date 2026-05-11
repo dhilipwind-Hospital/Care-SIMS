@@ -6,6 +6,7 @@ import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import api from '../../lib/api';
 import { formatDate } from '../../lib/format';
@@ -134,7 +135,7 @@ export default function FeedbackPage() {
               <button onClick={() => setShowForm(false)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
             </div>
             <div className="p-6 space-y-4">
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1">Patient ID *</label><input className="hms-input w-full" placeholder="Patient UUID" value={form.patientId} onChange={e => setForm({ ...form, patientId: e.target.value })} /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1">Patient *</label><SearchableSelect value={form.patientId} onChange={(id) => setForm({ ...form, patientId: id })} placeholder="Search patient…" endpoint="/patients" searchParam="q" mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })} /></div>
               <div><label className="block text-xs font-semibold text-gray-600 mb-1">Visit Type</label>
                 <select className="hms-input w-full" value={form.visitType} onChange={e => setForm({ ...form, visitType: e.target.value })}><option>OPD</option><option>IPD</option><option>ED</option></select></div>
               <div>

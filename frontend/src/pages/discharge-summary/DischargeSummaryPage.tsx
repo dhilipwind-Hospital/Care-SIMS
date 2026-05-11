@@ -4,6 +4,7 @@ import { FileText, CheckCircle, Clock, AlertTriangle, Eye, Edit2, X, Printer } f
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import EmptyState from '../../components/ui/EmptyState';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import api from '../../lib/api';
 
 export default function DischargeSummaryPage() {
@@ -249,9 +250,9 @@ export default function DischargeSummaryPage() {
           <h3 className="font-semibold text-gray-900">Create Discharge Summary</h3>
           {formError && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{formError}</div>}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <input className="hms-input" placeholder="Admission ID *" value={form.admissionId} onChange={e => setForm({ ...form, admissionId: e.target.value })} />
-            <input className="hms-input" placeholder="Patient ID *" value={form.patientId} onChange={e => setForm({ ...form, patientId: e.target.value })} />
-            <input className="hms-input" placeholder="Doctor ID *" value={form.doctorId} onChange={e => setForm({ ...form, doctorId: e.target.value })} />
+            <SearchableSelect value={form.admissionId} onChange={(id) => setForm({ ...form, admissionId: id })} placeholder="Search admission *" endpoint="/admissions" searchParam="q" mapOption={(a: any) => ({ id: a.id, label: a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : a.id, sub: `Bed ${a.bed?.bedNumber || '?'}` })} />
+            <SearchableSelect value={form.patientId} onChange={(id) => setForm({ ...form, patientId: id })} placeholder="Search patient *" endpoint="/patients" searchParam="q" mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })} />
+            <SearchableSelect value={form.doctorId} onChange={(id) => setForm({ ...form, doctorId: id })} placeholder="Search doctor *" endpoint="/doctors/affiliations/tenant" searchParam="q" mapOption={(d: any) => ({ id: d.doctorId || d.id, label: `Dr. ${d.doctor?.firstName || d.firstName || ''} ${d.doctor?.lastName || d.lastName || ''}`, sub: d.doctor?.specialization || d.specialization || '' })} />
             <div><label className="text-xs text-gray-500">Admission Date *</label><input className="hms-input w-full" type="date" value={form.admissionDate} onChange={e => setForm({ ...form, admissionDate: e.target.value })} /></div>
             <div><label className="text-xs text-gray-500">Discharge Date</label><input className="hms-input w-full" type="date" value={form.dischargeDate} onChange={e => setForm({ ...form, dischargeDate: e.target.value })} /></div>
             <div><label className="text-xs text-gray-500">Follow-up Date</label><input className="hms-input w-full" type="date" value={form.followUpDate} onChange={e => setForm({ ...form, followUpDate: e.target.value })} /></div>

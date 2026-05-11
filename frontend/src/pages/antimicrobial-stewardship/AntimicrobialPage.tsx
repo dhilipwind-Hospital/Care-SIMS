@@ -6,6 +6,7 @@ import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import api from '../../lib/api';
 
@@ -192,8 +193,8 @@ export default function AntimicrobialPage() {
                   <input type="text" className={inputCls} value={form.drugName || ''} onChange={e => setForm({ ...form, drugName: e.target.value })} placeholder="Antibiotic name" />
                 </div>
                 <div>
-                  <label className={labelCls}>Patient ID <span className="text-red-500">*</span></label>
-                  <input type="text" className={inputCls} value={form.patientId || ''} onChange={e => setForm({ ...form, patientId: e.target.value })} placeholder="Patient ID" />
+                  <label className={labelCls}>Patient <span className="text-red-500">*</span></label>
+                  <SearchableSelect value={form.patientId || ''} onChange={(id) => setForm({ ...form, patientId: id })} placeholder="Search patient…" endpoint="/patients" searchParam="q" mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })} />
                 </div>
                 <div>
                   <label className={labelCls}>Route</label>

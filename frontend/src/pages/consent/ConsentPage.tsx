@@ -6,6 +6,7 @@ import Pagination from '../../components/ui/Pagination';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import { SkeletonTableRow, SkeletonKpiRow } from '../../components/ui/Skeleton';
 import api from '../../lib/api';
 
@@ -158,7 +159,7 @@ export default function ConsentPage() {
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">{editingId ? 'Edit Consent' : 'Record Consent'}</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <input className="hms-input" placeholder="Patient ID *" value={form.patientId} onChange={e => setForm({ ...form, patientId: e.target.value })} />
+            <SearchableSelect value={form.patientId} onChange={(id) => setForm({ ...form, patientId: id })} placeholder="Search patient *" endpoint="/patients" searchParam="q" mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })} />
             <select className="hms-input" value={form.consentType} onChange={e => setForm({ ...form, consentType: e.target.value })}><option value="GENERAL">General</option><option value="SURGICAL">Surgical</option><option value="ANESTHESIA">Anesthesia</option><option value="BLOOD_TRANSFUSION">Blood Transfusion</option><option value="RESEARCH">Research</option></select>
             <input className="hms-input" placeholder="Procedure Name" value={form.procedureName} onChange={e => setForm({ ...form, procedureName: e.target.value })} />
             <input className="hms-input" placeholder="Consent Given By *" value={form.consentGivenBy} onChange={e => setForm({ ...form, consentGivenBy: e.target.value })} />

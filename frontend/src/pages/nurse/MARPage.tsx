@@ -201,7 +201,7 @@ export default function MARPage() {
           <button onClick={() => { setShowScheduleForm(!showScheduleForm); setScheduleError(''); }} className="px-4 py-2 rounded-lg text-white font-medium text-sm inline-flex items-center gap-1.5" style={{ background: 'var(--accent)' }}><Plus size={15} /> Schedule Medication</button>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <input className="hms-input w-full sm:w-64" placeholder="Enter Admission ID" value={marAdmissionId} onChange={e => setMarAdmissionId(e.target.value)} onKeyDown={e => e.key === 'Enter' && fetchMAR_Grid()} />
+          <div className="w-full sm:w-64"><SearchableSelect value={marAdmissionId} onChange={(id) => { setMarAdmissionId(id); }} placeholder="Search admission…" endpoint="/admissions" searchParam="q" mapOption={(a: any) => ({ id: a.id, label: a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : a.id, sub: `Bed ${a.bed?.bedNumber || '?'}` })} /></div>
           <button onClick={fetchMAR_Grid} className="px-4 py-2 rounded-lg text-white font-medium text-sm" style={{ background: 'var(--accent)' }}>Load MAR</button>
           {showMarGrid && <button onClick={() => { setShowMarGrid(false); setMarData([]); }} className="text-sm text-gray-500 hover:text-gray-700">Clear</button>}
           {showMarGrid && marData.length > 0 && (

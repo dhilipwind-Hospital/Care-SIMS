@@ -8,6 +8,7 @@ import TopBar from '../../components/layout/TopBar';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import api from '../../lib/api';
 import { formatCurrency, formatDate } from '../../lib/format';
@@ -321,8 +322,8 @@ export default function HealthPackagesPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Patient ID *</label>
-                <input className="hms-input w-full" placeholder="Patient UUID" value={bookForm.patientId} onChange={e => setBookForm({ ...bookForm, patientId: e.target.value })} />
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Patient *</label>
+                <SearchableSelect value={bookForm.patientId} onChange={(id) => setBookForm({ ...bookForm, patientId: id })} placeholder="Search patient…" endpoint="/patients" searchParam="q" mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })} />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Scheduled Date</label>

@@ -5,6 +5,7 @@ import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import { SkeletonTableRow, SkeletonKpiRow } from '../../components/ui/Skeleton';
 import Pagination from '../../components/ui/Pagination';
 import api from '../../lib/api';
@@ -108,8 +109,8 @@ ${r.notes ? `<div style="margin-top:12px;padding:12px;background:#F0FDF4;border-
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">Schedule Dialysis Session</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <input className="hms-input" placeholder="Patient ID *" value={form.patientId} onChange={e => setForm({ ...form, patientId: e.target.value })} />
-            <input className="hms-input" placeholder="Doctor ID *" value={form.doctorId} onChange={e => setForm({ ...form, doctorId: e.target.value })} />
+            <SearchableSelect value={form.patientId} onChange={(id) => setForm({ ...form, patientId: id })} placeholder="Search patient *" endpoint="/patients" searchParam="q" mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })} />
+            <SearchableSelect value={form.doctorId} onChange={(id) => setForm({ ...form, doctorId: id })} placeholder="Search doctor *" endpoint="/doctors/affiliations/tenant" searchParam="q" mapOption={(d: any) => ({ id: d.doctorId || d.id, label: `Dr. ${d.doctor?.firstName || d.firstName || ''} ${d.doctor?.lastName || d.lastName || ''}`, sub: d.doctor?.specialization || d.specialization || '' })} />
             <select className="hms-input" value={form.machineId} onChange={e => setForm({ ...form, machineId: e.target.value })}><option value="">Select Machine *</option>{machines.filter(m => m.status === 'AVAILABLE').map(m => <option key={m.id} value={m.id}>{m.machineNumber}</option>)}</select>
             <input className="hms-input" type="date" value={form.scheduledDate} onChange={e => setForm({ ...form, scheduledDate: e.target.value })} />
             <input className="hms-input" type="time" value={form.scheduledTime} onChange={e => setForm({ ...form, scheduledTime: e.target.value })} />
