@@ -21,8 +21,22 @@ export default function SelfBookingPage() {
   const [bookedAppt, setBookedAppt] = useState<any>(null);
 
   useEffect(() => {
-    api.get('/users', { params: { q: search || undefined, role: 'DOCTOR', limit: 30 } })
-      .then(r => setDoctors(r.data.data || []))
+    setLoading(true);
+    api.get('/doctors/affiliations/tenant')
+      .then(r => {
+        const affiliations: any[] = r.data.data || r.data || [];
+        const mapped = affiliations.map((a: any) => ({
+          id: a.doctor?.id || a.doctorId,
+          firstName: a.doctor?.firstName || '',
+          lastName: a.doctor?.lastName || '',
+          specialization: a.doctor?.specialties?.[0] || a.departmentName || '',
+          consultationFee: a.consultationFee,
+          locationId: a.locationId,
+          affiliationId: a.id,
+        })).filter((d: any) => d.firstName);
+        const q = search.trim().toLowerCase();
+        setDoctors(q ? mapped.filter((d: any) => `${d.firstName} ${d.lastName} ${d.specialization}`.toLowerCase().includes(q)) : mapped);
+      })
       .catch((err) => { console.error('Failed to fetch doctors:', err); })
       .finally(() => setLoading(false));
   }, [search]);
@@ -30,7 +44,7 @@ export default function SelfBookingPage() {
   useEffect(() => {
     if (!selectedDoctor || !selectedDate) return;
     setSlotsLoading(true);
-    api.get(`/appointments/slots`, { params: { doctorId: selectedDoctor.id, date: selectedDate } })
+    api.get(`/appointments/slots`, { params: { doctorId: selectedDoctor.id, date: selectedDate, locationId: selectedDoctor.locationId } })
       .then(r => setSlots(r.data || []))
       .catch((err) => { console.error('Failed to fetch appointment slots:', err); setSlots([]); })
       .finally(() => setSlotsLoading(false));
@@ -40,7 +54,8 @@ export default function SelfBookingPage() {
     try {
       const { data } = await api.post('/appointments', {
         doctorId: selectedDoctor.id,
-        patientId: form.patientId,
+        patientId: form.patientId || undefined,
+        locationId: selectedDoctor.locationId,
         appointmentDate: selectedDate,
         slotTime: selectedSlot,
         appointmentType: form.appointmentType,
