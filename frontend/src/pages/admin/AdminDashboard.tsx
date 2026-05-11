@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   Users, Building2, BarChart3, Activity, UserCheck, Shield, MapPin,
   Search, Settings as SettingsIcon, Hospital, DollarSign, Pill, FlaskConical,
@@ -104,7 +104,7 @@ export default function AdminDashboard() {
               <AlertTriangle size={18} className="text-red-500" />
               <h3 className="font-semibold text-gray-800 text-sm">Low Stock Alert</h3>
             </div>
-            <button onClick={() => navigate('/app/admin/inventory')} className="text-xs text-teal-600 hover:underline font-medium">View all</button>
+            <button onClick={() => navigate('/app/inventory')} className="text-xs text-teal-600 hover:underline font-medium">View all</button>
           </div>
           {loading ? (
             <div className="space-y-2">{[...Array(3)].map((_, i) => <div key={i} className="h-8 bg-gray-100 rounded-lg animate-pulse" />)}</div>
@@ -163,8 +163,8 @@ export default function AdminDashboard() {
         <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Quick Access</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
           {modules.map(({ title, link, desc, Icon, color }) => (
-            <button key={link} onClick={() => navigate(link)}
-              className="hms-card p-4 flex flex-col items-center gap-2 hover:border-teal-300 hover:shadow-md transition-all group text-center">
+            <Link key={link} to={link}
+              className="hms-card p-4 flex flex-col items-center gap-2 hover:border-teal-300 hover:shadow-md transition-all group text-center no-underline">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center transition-colors" style={{ background: `${color}15` }}>
                 <Icon size={20} style={{ color }} />
               </div>
@@ -172,7 +172,7 @@ export default function AdminDashboard() {
                 <div className="text-xs font-semibold text-gray-800 leading-tight">{title}</div>
                 <div className="text-xs text-gray-400 leading-tight mt-0.5 hidden sm:block">{desc}</div>
               </div>
-            </button>
+            </Link>
           ))}
         </div>
       </div>
