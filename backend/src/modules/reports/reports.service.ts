@@ -9,9 +9,12 @@ export class ReportsService {
     const where: any = { tenantId };
     if (locationId) where.locationId = locationId;
     const today = new Date(); today.setHours(0, 0, 0, 0);
+    const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7); weekAgo.setHours(0, 0, 0, 0);
+    const monthAgo = new Date(); monthAgo.setDate(monthAgo.getDate() - 30); monthAgo.setHours(0, 0, 0, 0);
     const [
       totalPatients, todayQueue, activeAdmissions, pendingLabOrders,
       todayAppointments, pendingPrescriptions, pharmacyRevenueAgg, todayRevenueAgg,
+      weeklyRevenueAgg, weeklyAppointments,
     ] = await Promise.all([
       this.prisma.patient.count({ where }),
       this.prisma.queueToken.count({ where: { ...where, createdAt: { gte: today } } }),
@@ -20,17 +23,27 @@ export class ReportsService {
       this.prisma.appointment.count({ where: { ...where, appointmentDate: { gte: today } } }),
       this.prisma.prescription.count({ where: { ...where, status: 'SENT_TO_PHARMACY' } }),
       this.prisma.invoice.aggregate({
-        where: { ...where, invoiceType: 'PHARMACY', status: { in: ['PAID', 'PARTIAL'] }, createdAt: { gte: today } },
+        where: { ...where, invoiceType: 'PHARMACY', status: { in: ['PAID', 'PARTIAL'] }, createdAt: { gte: monthAgo } },
         _sum: { paidAmount: true },
       }),
       this.prisma.invoice.aggregate({
-        where: { ...where, status: { in: ['PAID', 'PARTIAL'] }, createdAt: { gte: today } },
+        where: { ...where, status: { in: ['PAID', 'PARTIAL'] }, createdAt: { gte: monthAgo } },
         _sum: { paidAmount: true },
       }),
+      this.prisma.invoice.aggregate({
+        where: { ...where, status: { in: ['PAID', 'PARTIAL'] }, createdAt: { gte: weekAgo } },
+        _sum: { paidAmount: true },
+      }),
+      this.prisma.appointment.count({ where: { ...where, appointmentDate: { gte: weekAgo } } }),
     ]);
     const pharmacyRevenue = Number(pharmacyRevenueAgg._sum.paidAmount ?? 0);
     const todayRevenue = Number(todayRevenueAgg._sum.paidAmount ?? 0);
-    return { totalPatients, todayQueue, activeAdmissions, pendingLabOrders, todayAppointments, pendingPrescriptions, pharmacyRevenue, todayRevenue };
+    const weeklyRevenue = Number(weeklyRevenueAgg._sum.paidAmount ?? 0);
+    return {
+      totalPatients, todayQueue, activeAdmissions, pendingLabOrders,
+      todayAppointments, pendingPrescriptions, pharmacyRevenue, todayRevenue,
+      weeklyRevenue, weeklyAppointments,
+    };
   }
 
   async getPatientReport(tenantId: string, query: any) {

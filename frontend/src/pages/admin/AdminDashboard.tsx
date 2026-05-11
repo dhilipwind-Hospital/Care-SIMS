@@ -79,7 +79,7 @@ export default function AdminDashboard() {
       {loading ? <SkeletonKpiRow count={4} /> : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="Total Patients" value={stats?.totalPatients ?? 0} icon={Users} color="#0F766E" />
-          <KpiCard label="Today's Queue" value={stats?.todayQueue ?? 0} icon={Activity} color="#3B82F6" />
+          <KpiCard label="Queue (Today)" value={stats?.todayQueue ?? 0} icon={Activity} color="#3B82F6" />
           <KpiCard label="Active Admissions" value={stats?.activeAdmissions ?? 0} icon={Building2} color="#F59E0B" />
           <KpiCard label="Active Visitors" value={activeVisitors} icon={UserCheck} color="#10B981" />
         </div>
@@ -89,9 +89,9 @@ export default function AdminDashboard() {
       {loading ? <SkeletonKpiRow count={4} /> : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="Pending Labs" value={stats?.pendingLabOrders ?? 0} icon={FlaskConical} color="#EF4444" />
-          <KpiCard label="Today Appointments" value={stats?.todayAppointments ?? 0} icon={CalendarCheck} color="#8B5CF6" />
+          <KpiCard label="Appointments (7d)" value={stats?.weeklyAppointments ?? stats?.todayAppointments ?? 0} icon={CalendarCheck} color="#8B5CF6" />
           <KpiCard label="Pending Rx" value={stats?.pendingPrescriptions ?? 0} icon={Pill} color="#EC4899" />
-          <KpiCard label="Today Revenue" value={fmt(stats?.todayRevenue ?? 0)} icon={TrendingUp} color="#06B6D4" />
+          <KpiCard label="Revenue (30d)" value={fmt(stats?.todayRevenue ?? stats?.weeklyRevenue ?? 0)} icon={TrendingUp} color="#06B6D4" />
         </div>
       )}
 
@@ -142,11 +142,11 @@ export default function AdminDashboard() {
           ) : (
             <div className="space-y-3">
               <div className="flex items-center justify-between p-3 bg-green-50 rounded-xl">
-                <span className="text-sm text-gray-600">Today's Revenue</span>
+                <span className="text-sm text-gray-600">Revenue (Last 30 Days)</span>
                 <span className="font-bold text-green-700">{fmt(stats?.todayRevenue ?? 0)}</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-blue-50 rounded-xl">
-                <span className="text-sm text-gray-600">Pharmacy Revenue (Today)</span>
+                <span className="text-sm text-gray-600">Pharmacy Revenue (30d)</span>
                 <span className="font-bold text-blue-700">{fmt(stats?.pharmacyRevenue ?? 0)}</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-purple-50 rounded-xl">

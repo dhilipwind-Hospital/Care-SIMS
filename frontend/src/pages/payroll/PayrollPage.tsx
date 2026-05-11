@@ -169,7 +169,7 @@ export default function PayrollPage() {
       <div className="flex flex-wrap gap-3 items-center justify-between">
         <div className="flex flex-wrap gap-3 items-center">
           <select className="hms-input" value={monthFilter} onChange={e => { setMonthFilter(Number(e.target.value)); setSelected(new Set()); }}>{Array.from({length:12},(_,i)=>i+1).map(m=><option key={m} value={m}>{new Date(2024,m-1).toLocaleString('en',{month:'long'})}</option>)}</select>
-          <select className="hms-input" value={yearFilter} onChange={e => { setYearFilter(Number(e.target.value)); setSelected(new Set()); }}>{[2024,2025,2026,2027].map(y=><option key={y}>{y}</option>)}</select>
+          <select className="hms-input" value={yearFilter} onChange={e => { setYearFilter(Number(e.target.value)); setSelected(new Set()); }}>{Array.from({length:5},(_,i)=>new Date().getFullYear()-2+i).map(y=><option key={y}>{y}</option>)}</select>
           {selected.size > 0 && (
             <span className="text-sm text-teal-700 font-medium">{selected.size} selected</span>
           )}
