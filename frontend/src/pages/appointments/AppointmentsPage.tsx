@@ -186,10 +186,10 @@ export default function AppointmentsPage() {
     try {
       if (locId) {
         const { data } = await api.get(`/doctors/by-location/${locId}`);
-        setDoctors(data || []);
+        setDoctors(Array.isArray(data) ? data : data?.data || []);
       } else {
         const { data } = await api.get('/doctors/affiliations/tenant');
-        setDoctors(data || []);
+        setDoctors(Array.isArray(data) ? data : data?.data || []);
       }
     } catch (err) { toast.error('Failed to load data'); }
   };

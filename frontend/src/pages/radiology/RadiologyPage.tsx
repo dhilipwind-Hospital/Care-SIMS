@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
 import {
   ScanLine, Clock, CheckCircle, Pencil,
-  Eye, FileText, ShieldCheck, AlertTriangle, X, Trash2, Printer, Paperclip, Upload,
+  Eye, FileText, ShieldCheck, AlertTriangle, X, Trash2, Printer, Paperclip, Upload, Search,
 } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import Pagination from '../../components/ui/Pagination';
@@ -61,6 +61,9 @@ export default function RadiologyPage() {
   const [form, setForm] = useState({ patientId: '', modality: 'X-RAY', bodyPart: '', clinicalHistory: '', priority: 'ROUTINE' });
   const [formError, setFormError] = useState('');
   const [page, setPage] = useState(1);
+  const [patSearch, setPatSearch] = useState('');
+  const [patResults, setPatResults] = useState<any[]>([]);
+  const [patLabel, setPatLabel] = useState('');
 
   // Filters
   const [modalities, setModalities] = useState<string[]>([]);
@@ -118,6 +121,18 @@ export default function RadiologyPage() {
     setForm({ patientId: '', modality: 'X-RAY', bodyPart: '', clinicalHistory: '', priority: 'ROUTINE' });
     setEditingId(null);
     setFormError('');
+    setPatSearch('');
+    setPatResults([]);
+    setPatLabel('');
+  };
+
+  const searchPatients = async (q: string) => {
+    setPatSearch(q);
+    if (q.length < 2) { setPatResults([]); return; }
+    try {
+      const { data } = await api.get('/patients', { params: { q, limit: 6 } });
+      setPatResults(data.data || []);
+    } catch { setPatResults([]); }
   };
 
   const editRecord = (order: any) => {
@@ -402,7 +417,31 @@ export default function RadiologyPage() {
           <h3 className="font-semibold text-gray-900">{editingId ? 'Edit Order' : 'New Radiology Order'}</h3>
           {formError && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{formError}</div>}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <input className="hms-input" placeholder="Patient ID *" value={form.patientId} onChange={e => setForm({ ...form, patientId: e.target.value })} />
+            <div className="relative">
+              {form.patientId ? (
+                <div className="flex items-center justify-between px-3 py-2 bg-teal-50 border border-teal-200 rounded-xl text-sm">
+                  <span className="font-medium text-teal-800 truncate">{patLabel}</span>
+                  <button type="button" onClick={() => { setForm(f => ({ ...f, patientId: '' })); setPatLabel(''); setPatSearch(''); }} className="ml-2 text-teal-500 hover:text-red-500 flex-shrink-0"><X size={14} /></button>
+                </div>
+              ) : (
+                <>
+                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input className="hms-input pl-8 w-full" placeholder="Search patient *" value={patSearch} onChange={e => searchPatients(e.target.value)} />
+                  {patResults.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 max-h-44 overflow-y-auto">
+                      {patResults.map(p => (
+                        <button key={p.id} type="button"
+                          onClick={() => { setForm(f => ({ ...f, patientId: p.id })); setPatLabel(`${p.firstName} ${p.lastName} — ${p.patientId}`); setPatResults([]); setPatSearch(''); }}
+                          className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm">
+                          <span className="font-medium">{p.firstName} {p.lastName}</span>
+                          <span className="text-gray-400 ml-2 text-xs">{p.patientId}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
             <select className="hms-input" value={form.modality} onChange={e => setForm({ ...form, modality: e.target.value })}>
               {modalities.map(m => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}
             </select>

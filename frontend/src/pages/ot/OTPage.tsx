@@ -187,7 +187,7 @@ export default function OTPage() {
     // Load doctors
     try {
       const { data } = await api.get('/doctors/affiliations/tenant');
-      setDoctors(data.data || data || []);
+      setDoctors(data.data || data || [] as any[]);
     } catch (err) { console.error('Failed to fetch doctors:', err); }
   };
 

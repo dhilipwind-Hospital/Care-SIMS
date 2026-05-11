@@ -36,6 +36,12 @@ export default function EmergencyPage() {
 
   // Disposition modal
   const [dispVisit, setDispVisit] = useState<any>(null);
+
+  // Assign doctor modal
+  const [assignVisit, setAssignVisit] = useState<any>(null);
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const [assignDoctorId, setAssignDoctorId] = useState('');
+  const [assigning, setAssigning] = useState(false);
   const [disposition, setDisposition] = useState('DISCHARGED');
 
   const fetchData = async () => {
@@ -118,13 +124,28 @@ ${(r.allergies || r.medications) ? `<div style="margin-top:16px;padding:12px;bac
     win.document.close();
   };
 
-  const handleAssign = async (id: string) => {
-    // Simplified — in production, would open a doctor/bed selector
+  const openAssignModal = async (visit: any) => {
+    setAssignVisit(visit);
+    setAssignDoctorId('');
     try {
-      await api.patch(`/emergency/${id}/status`, { status: 'BEING_SEEN' });
-      toast.success('Status updated');
+      const { data } = await api.get('/doctors/affiliations/tenant');
+      setDoctors(Array.isArray(data) ? data : data?.data || []);
+    } catch { setDoctors([]); }
+  };
+
+  const handleAssign = async () => {
+    if (!assignVisit) return;
+    setAssigning(true);
+    try {
+      await api.patch(`/emergency/${assignVisit.id}/status`, {
+        status: 'BEING_SEEN',
+        ...(assignDoctorId ? { doctorId: assignDoctorId } : {}),
+      });
+      toast.success('Patient assigned — status updated to Being Seen');
+      setAssignVisit(null);
       fetchData();
-    } catch { toast.error('Failed to update'); }
+    } catch { toast.error('Failed to assign'); }
+    finally { setAssigning(false); }
   };
 
   return (
@@ -210,7 +231,7 @@ ${(r.allergies || r.medications) ? `<div style="margin-top:16px;padding:12px;bac
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5">
                         {v.status === 'WAITING' && (
-                          <button onClick={() => handleAssign(v.id)} className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">See Patient</button>
+                          <button onClick={() => openAssignModal(v)} className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">See Patient</button>
                         )}
                         {['WAITING', 'BEING_SEEN', 'UNDER_OBSERVATION'].includes(v.status) && (
                           <button onClick={() => { setDispVisit(v); setDisposition('DISCHARGED'); }} className="text-xs px-2 py-1 bg-gray-50 text-gray-600 rounded-md hover:bg-gray-100 font-medium">Dispose</button>
@@ -324,6 +345,40 @@ ${(r.allergies || r.medications) ? `<div style="margin-top:16px;padding:12px;bac
             <div className="flex justify-end gap-3">
               <button onClick={() => setDispVisit(null)} className="btn-secondary px-4 py-2">Cancel</button>
               <button onClick={handleDisposition} className="btn-primary px-4 py-2">Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assign Doctor Modal */}
+      {assignVisit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 className="font-bold text-gray-900 mb-1">Assign Doctor</h2>
+            <p className="text-xs text-gray-400 mb-4">
+              {assignVisit.visitNumber} — {assignVisit.patient?.firstName} {assignVisit.patient?.lastName}
+            </p>
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Select Doctor <span className="text-gray-400">(optional)</span></label>
+              <select className="hms-input w-full" value={assignDoctorId} onChange={e => setAssignDoctorId(e.target.value)}>
+                <option value="">— Assign later —</option>
+                {doctors.map((d: any) => (
+                  <option key={d.id || d.doctorId} value={d.id || d.doctorId}>
+                    Dr. {d.firstName || d.doctor?.firstName} {d.lastName || d.doctor?.lastName}
+                    {d.departmentName ? ` — ${d.departmentName}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="bg-teal-50 rounded-xl p-3 text-xs text-teal-700 mb-4">
+              Status will change to <strong>Being Seen</strong>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setAssignVisit(null)} className="btn-secondary px-4 py-2">Cancel</button>
+              <button onClick={handleAssign} disabled={assigning}
+                className="btn-primary px-4 py-2 disabled:opacity-60">
+                {assigning ? 'Assigning…' : 'Confirm'}
+              </button>
             </div>
           </div>
         </div>

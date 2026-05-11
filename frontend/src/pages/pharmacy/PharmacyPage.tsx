@@ -37,6 +37,9 @@ export default function PharmacyPage() {
   const [drugPage,      setDrugPage]      = useState(1);
   const [drugTotal,     setDrugTotal]     = useState(0);
   const [showScanner,   setShowScanner]   = useState(false);
+  const [showManual,    setShowManual]    = useState(false);
+  const [manualForm,    setManualForm]    = useState({ patientName: '', drugName: '', quantity: '', dosage: '', instructions: '', notes: '' });
+  const [manualSubmitting, setManualSubmitting] = useState(false);
 
   const handleBarcodeScan = (code: string) => {
     setShowScanner(false);
@@ -183,7 +186,7 @@ export default function PharmacyPage() {
             <button onClick={() => setShowScanner(true)} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 font-medium">
               <Barcode size={14} /> Scan Barcode
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium"
+            <button onClick={() => setShowManual(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium"
               style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
               <ClipboardList size={14} /> + Manual Entry
             </button>
@@ -535,6 +538,84 @@ export default function PharmacyPage() {
                   {selectedDrug.batches?.reduce((s: number, b: any) => s + b.quantityInStock, 0) || 0}
                   <span className="text-sm font-normal text-teal-500 ml-1">units</span>
                 </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Entry Modal */}
+      {showManual && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white">
+              <div>
+                <h2 className="font-bold text-gray-900">Manual Dispense Entry</h2>
+                <p className="text-xs text-gray-400 mt-0.5">Record a manual medication dispense</p>
+              </div>
+              <button onClick={() => setShowManual(false)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Patient Name <span className="text-red-500">*</span></label>
+                <input value={manualForm.patientName} onChange={e => setManualForm(f => ({ ...f, patientName: e.target.value }))}
+                  placeholder="Enter patient name" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Drug / Medication <span className="text-red-500">*</span></label>
+                <input value={manualForm.drugName} onChange={e => setManualForm(f => ({ ...f, drugName: e.target.value }))}
+                  placeholder="e.g. Paracetamol 500mg" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Quantity <span className="text-red-500">*</span></label>
+                  <input type="number" value={manualForm.quantity} onChange={e => setManualForm(f => ({ ...f, quantity: e.target.value }))}
+                    placeholder="0" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Dosage</label>
+                  <input value={manualForm.dosage} onChange={e => setManualForm(f => ({ ...f, dosage: e.target.value }))}
+                    placeholder="e.g. 1 tab TID" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Instructions</label>
+                <input value={manualForm.instructions} onChange={e => setManualForm(f => ({ ...f, instructions: e.target.value }))}
+                  placeholder="e.g. After meals" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Notes</label>
+                <textarea value={manualForm.notes} onChange={e => setManualForm(f => ({ ...f, notes: e.target.value }))}
+                  rows={2} placeholder="Any additional notes..." className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none" />
+              </div>
+              <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
+                <button onClick={() => setShowManual(false)} className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button
+                  disabled={manualSubmitting || !manualForm.patientName.trim() || !manualForm.drugName.trim() || !manualForm.quantity}
+                  onClick={async () => {
+                    if (!manualForm.patientName.trim() || !manualForm.drugName.trim() || !manualForm.quantity) return;
+                    setManualSubmitting(true);
+                    try {
+                      await api.post('/pharmacy/manual-dispense', {
+                        patientName: manualForm.patientName,
+                        drugName: manualForm.drugName,
+                        quantity: Number(manualForm.quantity),
+                        dosage: manualForm.dosage,
+                        instructions: manualForm.instructions,
+                        notes: manualForm.notes,
+                      });
+                      toast.success('Manual dispense recorded');
+                      setShowManual(false);
+                      setManualForm({ patientName: '', drugName: '', quantity: '', dosage: '', instructions: '', notes: '' });
+                      fetchData();
+                    } catch (err: any) {
+                      toast.error(err.response?.data?.message || 'Failed to record dispense');
+                    } finally { setManualSubmitting(false); }
+                  }}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-60"
+                  style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
+                  {manualSubmitting ? 'Saving…' : 'Record Dispense'}
+                </button>
               </div>
             </div>
           </div>
