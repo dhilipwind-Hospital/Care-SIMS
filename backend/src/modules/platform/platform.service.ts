@@ -101,20 +101,26 @@ export class PlatformService {
       },
     });
 
-    // Provision features — use frontend enabledModules if provided, else defaults
-    const features = (dto.enabledModules && dto.enabledModules.length > 0)
+    // Provision features — use frontend enabledModules if provided, else defaults.
+    // Batched: 1 findMany + 1 createMany instead of 2N sequential round-trips.
+    const requestedFeatures = (dto.enabledModules && dto.enabledModules.length > 0)
       ? dto.enabledModules
       : (DEFAULT_FEATURES[dto.orgType] || DEFAULT_FEATURES['CLINIC']);
-    for (const moduleId of features) {
-      const mod = await this.prisma.featureModule.findUnique({ where: { moduleId } });
-      if (mod) {
-        await this.prisma.organizationFeature.create({
-          data: { tenantId: tenant.id, moduleId, isEnabled: true, enabledAt: new Date(), enabledById: adminId },
-        });
-      }
+    const validModules = await this.prisma.featureModule.findMany({
+      where: { moduleId: { in: requestedFeatures } },
+      select: { moduleId: true },
+    });
+    if (validModules.length) {
+      const now = new Date();
+      await this.prisma.organizationFeature.createMany({
+        data: validModules.map(m => ({
+          tenantId: tenant.id, moduleId: m.moduleId, isEnabled: true, enabledAt: now, enabledById: adminId,
+        })),
+        skipDuplicates: true,
+      });
     }
 
-    // Provision system roles
+    // Provision system roles (batched inside)
     await this.provisionSystemRoles(tenant.id, dto.orgType);
 
     // Create primary admin user — support both flat and nested field formats
@@ -123,7 +129,7 @@ export class PlatformService {
     if (adminEmail) {
       const tempPassword = 'Ayphen@' + Math.random().toString(36).slice(2, 10).toUpperCase();
       adminTempPassword = tempPassword;
-      const hash = await bcrypt.hash(tempPassword, 12);
+      const hash = await bcrypt.hash(tempPassword, 10);
       const adminRole = await this.prisma.tenantRole.findFirst({ where: { tenantId: tenant.id, systemRoleId: 'SYS_ORG_ADMIN' } });
       if (adminRole) {
         const adminFirstName = dto.adminUser?.firstName || dto.primaryAdminName?.split(' ')[0] || 'Admin';
@@ -483,13 +489,14 @@ export class PlatformService {
     };
 
     const roles = rolesByType[orgType] || rolesByType['CLINIC'];
-    for (const r of roles) {
-      await this.prisma.tenantRole.upsert({
-        where: { tenantId_name: { tenantId, name: r.name } },
-        update: {},
-        create: { tenantId, name: r.name, description: r.description, systemRoleId: r.systemRoleId, isSystemRole: true, isActive: true },
-      });
-    }
+    // Batched insert; skipDuplicates handles the unique (tenantId, name) constraint
+    // that the previous per-row upsert was guarding against.
+    await this.prisma.tenantRole.createMany({
+      data: roles.map(r => ({
+        tenantId, name: r.name, description: r.description, systemRoleId: r.systemRoleId, isSystemRole: true, isActive: true,
+      })),
+      skipDuplicates: true,
+    });
   }
 
   async logPlatformEvent(eventType: string, actorId: string, targetType: string, targetId: string, targetName: string, description: string) {
