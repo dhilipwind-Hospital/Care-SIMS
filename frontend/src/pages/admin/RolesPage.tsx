@@ -75,7 +75,7 @@ function PermCell({ checked, onChange, color }: { checked: boolean; onChange: ()
       onClick={onChange}
       className="flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:scale-110"
       style={checked ? { background: `${color}20`, color } : { background: '#F3F4F6', color: '#D1D5DB' }}
-      title={checked ? 'Enabled' : 'Disabled'}
+      title={checked ? 'Granted — click to remove' : 'Click to grant'}
     >
       {checked ? <CheckSquare size={16} /> : <Square size={16} />}
     </button>

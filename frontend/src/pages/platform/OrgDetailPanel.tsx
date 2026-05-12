@@ -271,6 +271,16 @@ export default function OrgDetailPanel({ org, onClose, onRefresh }: Props) {
                       </button>
                     )}
                     <button onClick={() => { setNewPlan(detail.subscriptionPlan); setShowChangePlan(true); }} className="text-xs px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 font-medium">Change Plan</button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const { data } = await api.post(`/platform/organizations/${org.id}/seed-role-permissions`);
+                          toast.success(`Seeded ${data.permissionsInserted} permissions across ${data.rolesUpdated} roles`);
+                        } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to seed permissions'); }
+                      }}
+                      className="text-xs px-3 py-1.5 bg-teal-50 text-teal-700 rounded-lg hover:bg-teal-100 font-medium">
+                      Seed Default Permissions
+                    </button>
                   </div>
                 </div>
               </div>

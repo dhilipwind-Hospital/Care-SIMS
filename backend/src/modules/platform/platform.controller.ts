@@ -30,6 +30,9 @@ export class PlatformController {
   @Patch('organizations/:id/activate')
   activateOrg(@Param('id') id: string, @CurrentUser('sub') adminId: string) { return this.platformService.activateOrganization(id, adminId); }
 
+  @Post('organizations/:id/seed-role-permissions')
+  seedRolePerms(@Param('id') id: string) { return this.platformService.seedRolePermissionsForOrg(id); }
+
   @Patch('organizations/:id/subscription')
   updateSubscription(@Param('id') id: string, @Body() body: any, @CurrentUser('sub') adminId: string) { return this.platformService.updateSubscription(id, body, adminId); }
 

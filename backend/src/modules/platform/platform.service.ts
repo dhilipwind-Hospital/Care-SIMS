@@ -19,6 +19,100 @@ function emailTemplate(title: string, body: string): string {
 </div>`;
 }
 
+// Module → resource string used in TenantRolePermission.resource. Kept in sync with
+// frontend/src/pages/admin/RolesPage.tsx MODULES so the role-edit UI lights up.
+const MODULE_RESOURCE: Record<string, string> = {
+  MOD_QUEUE: 'queue',
+  MOD_PATIENTS: 'patients',
+  MOD_APPOINTMENTS: 'appointments',
+  MOD_CONSULT: 'consultations',
+  MOD_RX: 'prescriptions',
+  MOD_LAB_ORD: 'lab_orders',
+  MOD_LAB_RES: 'lab_results',
+  MOD_VITALS: 'vitals',
+  MOD_TRIAGE: 'triage',
+  MOD_WARD: 'wards',
+  MOD_MED_ADMIN: 'medication_admin',
+  MOD_BILLING: 'invoices',
+  MOD_PHARMA_FULL: 'pharmacy_dispense',
+  MOD_INVENTORY: 'inventory',
+  MOD_PO: 'purchase_orders',
+  MOD_OT: 'ot',
+  MOD_REPORTS: 'reports',
+  MOD_AUDIT: 'audit_logs',
+  MOD_USERS: 'users',
+  MOD_ROLES: 'roles',
+};
+
+const FULL = ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'APPROVE', 'EXPORT'];
+const RW = ['VIEW', 'CREATE', 'EDIT'];
+const RO = ['VIEW'];
+
+// Default permission matrix per system role. Matches each role's description.
+// Admins can edit/add/remove permissions afterwards from /admin/roles.
+const DEFAULT_ROLE_PERMISSIONS: Record<string, Record<string, string[]>> = {
+  // Admin / governance
+  SYS_ORG_ADMIN: Object.fromEntries(Object.keys(MODULE_RESOURCE).map(m => [m, FULL])),
+  SYS_NETWORK_ADMIN: Object.fromEntries(Object.keys(MODULE_RESOURCE).map(m => [m, FULL])),
+  SYS_COO: Object.fromEntries(Object.keys(MODULE_RESOURCE).map(m => [m, ['VIEW', 'EXPORT']])),
+  SYS_MEDICAL_DIRECTOR: {
+    MOD_PATIENTS: RO, MOD_CONSULT: RO, MOD_RX: RO, MOD_LAB_ORD: RO, MOD_LAB_RES: RO,
+    MOD_VITALS: RO, MOD_TRIAGE: RO, MOD_WARD: RO, MOD_MED_ADMIN: RO, MOD_REPORTS: ['VIEW', 'EXPORT'], MOD_AUDIT: RO,
+  },
+  SYS_REGIONAL_MANAGER: {
+    MOD_QUEUE: RW, MOD_PATIENTS: RW, MOD_APPOINTMENTS: RW, MOD_BILLING: RW, MOD_REPORTS: ['VIEW', 'EXPORT'], MOD_USERS: RW,
+  },
+  SYS_COMPLIANCE_OFFICER: { MOD_AUDIT: ['VIEW', 'EXPORT'], MOD_REPORTS: ['VIEW', 'EXPORT'] },
+
+  // Doctors
+  SYS_DOCTOR: {
+    MOD_QUEUE: RO, MOD_PATIENTS: RO, MOD_APPOINTMENTS: RO,
+    MOD_CONSULT: RW, MOD_RX: RW, MOD_LAB_ORD: RW, MOD_LAB_RES: RO, MOD_VITALS: RO, MOD_TRIAGE: RO,
+  },
+  SYS_SENIOR_DOCTOR: {
+    MOD_QUEUE: RO, MOD_PATIENTS: RO, MOD_APPOINTMENTS: RO,
+    MOD_CONSULT: RW, MOD_RX: RW, MOD_LAB_ORD: RW, MOD_LAB_RES: RW, MOD_VITALS: RO, MOD_TRIAGE: RO,
+    MOD_WARD: RO, MOD_MED_ADMIN: RO,
+  },
+  SYS_HOD: {
+    MOD_QUEUE: RO, MOD_PATIENTS: RO, MOD_APPOINTMENTS: RO,
+    MOD_CONSULT: RW, MOD_RX: RW, MOD_LAB_ORD: RW, MOD_LAB_RES: RW, MOD_VITALS: RO, MOD_TRIAGE: RO,
+    MOD_WARD: RW, MOD_MED_ADMIN: RW, MOD_REPORTS: ['VIEW', 'EXPORT'],
+  },
+  SYS_VISITING_DOCTOR: { MOD_PATIENTS: RO, MOD_CONSULT: RW, MOD_RX: RW },
+  SYS_LOCUM_DOCTOR: { MOD_PATIENTS: RO, MOD_CONSULT: RW },
+
+  // Reception / front office
+  SYS_RECEPTIONIST: {
+    MOD_QUEUE: RW, MOD_PATIENTS: RW, MOD_APPOINTMENTS: RW, MOD_TRIAGE: RO,
+  },
+  SYS_FRONT_OFFICE: {
+    MOD_QUEUE: RW, MOD_PATIENTS: RW, MOD_APPOINTMENTS: RW, MOD_TRIAGE: RO, MOD_REPORTS: RO,
+  },
+
+  // Billing
+  SYS_BILLING: { MOD_BILLING: RW, MOD_PATIENTS: RO },
+  SYS_BILLING_MANAGER: { MOD_BILLING: ['VIEW', 'CREATE', 'EDIT', 'APPROVE', 'EXPORT'], MOD_PATIENTS: RO, MOD_REPORTS: ['VIEW', 'EXPORT'] },
+  SYS_INSURANCE_EXEC: { MOD_BILLING: RW, MOD_PATIENTS: RO },
+
+  // Nursing
+  SYS_NURSE: { MOD_QUEUE: RO, MOD_PATIENTS: RO, MOD_VITALS: RW, MOD_TRIAGE: RW },
+  SYS_WARD_NURSE: { MOD_QUEUE: RO, MOD_PATIENTS: RO, MOD_VITALS: RW, MOD_TRIAGE: RW, MOD_WARD: RW, MOD_MED_ADMIN: RW },
+  SYS_CHARGE_NURSE: { MOD_QUEUE: RO, MOD_PATIENTS: RO, MOD_VITALS: RW, MOD_TRIAGE: RW, MOD_WARD: ['VIEW', 'CREATE', 'EDIT', 'APPROVE'], MOD_MED_ADMIN: RW },
+
+  // Pharmacy
+  SYS_PHARMACIST: { MOD_RX: RO, MOD_PHARMA_FULL: RW, MOD_INVENTORY: RO },
+  SYS_PHARMACY_INCHARGE: { MOD_RX: RO, MOD_PHARMA_FULL: RW, MOD_INVENTORY: RW, MOD_PO: RW, MOD_REPORTS: ['VIEW', 'EXPORT'] },
+
+  // Lab
+  SYS_LAB_TECH: { MOD_LAB_ORD: RO, MOD_LAB_RES: RW },
+  SYS_LAB_SUPERVISOR: { MOD_LAB_ORD: RO, MOD_LAB_RES: ['VIEW', 'CREATE', 'EDIT', 'APPROVE'], MOD_REPORTS: ['VIEW', 'EXPORT'] },
+
+  // OT
+  SYS_OT_NURSE: { MOD_OT: RW },
+  SYS_OT_COORDINATOR: { MOD_OT: ['VIEW', 'CREATE', 'EDIT', 'APPROVE'], MOD_REPORTS: RO },
+};
+
 const DEFAULT_FEATURES: Record<string, string[]> = {
   CLINIC: ['MOD_PAT_REG','MOD_PAT_SELF_BOOK','MOD_PAT_RECORDS','MOD_QUEUE','MOD_APPT','MOD_WALKIN','MOD_CONSULT','MOD_RX','MOD_LAB_ORD','MOD_VITALS','MOD_LAB_BASIC','MOD_BILL_OPD','MOD_GST','MOD_REPORTS','MOD_AUDIT'],
   HOSPITAL: ['MOD_PAT_REG','MOD_PAT_SELF_BOOK','MOD_PAT_RECORDS','MOD_QUEUE','MOD_APPT','MOD_WALKIN','MOD_TOKEN','MOD_TRIAGE','MOD_CONSULT','MOD_RX','MOD_LAB_ORD','MOD_REFERRAL','MOD_ICD','MOD_VITALS','MOD_WARD','MOD_ADMISSION','MOD_MED_ADMIN','MOD_DISCHARGE','MOD_DISPENSARY','MOD_PHARMA_FULL','MOD_PHARMA_PO','MOD_PHARMA_RETURNS','MOD_PHARMA_REPORTS','MOD_LAB_BASIC','MOD_LAB_FULL','MOD_LAB_QC','MOD_LAB_REPORTS','MOD_BILL_OPD','MOD_BILL_IPD','MOD_BILL_INS','MOD_GST','MOD_OT_BASIC','MOD_OT_SCHEDULE','MOD_OT_LIVE','MOD_OT_EQUIPMENT','MOD_MULTI_LOC','MOD_REPORTS','MOD_AUDIT','MOD_COMPLIANCE'],
@@ -497,6 +591,55 @@ export class PlatformService {
       })),
       skipDuplicates: true,
     });
+
+    // Seed default permissions per system role. Without this every fresh org
+    // shows "0 permissions" on every role and the admin has to click through
+    // hundreds of checkboxes before staff can log in productively.
+    const created = await this.prisma.tenantRole.findMany({
+      where: { tenantId, systemRoleId: { in: roles.map(r => r.systemRoleId) } },
+      select: { id: true, systemRoleId: true },
+    });
+    const permRows: { roleId: string; moduleId: string; resource: string; action: string }[] = [];
+    for (const role of created) {
+      const matrix = DEFAULT_ROLE_PERMISSIONS[role.systemRoleId || ''] || {};
+      for (const [moduleId, actions] of Object.entries(matrix)) {
+        const resource = MODULE_RESOURCE[moduleId] || moduleId.toLowerCase();
+        for (const action of actions) {
+          permRows.push({ roleId: role.id, moduleId, resource, action });
+        }
+      }
+    }
+    if (permRows.length) {
+      await this.prisma.tenantRolePermission.createMany({ data: permRows, skipDuplicates: true });
+    }
+  }
+
+  // Idempotent backfill: re-seed default permissions for an existing org's
+  // system roles. Safe to run multiple times — skipDuplicates handles the
+  // (roleId, moduleId, resource, action) unique constraint.
+  async seedRolePermissionsForOrg(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) throw new NotFoundException('Organization not found');
+    const sysRoles = await this.prisma.tenantRole.findMany({
+      where: { tenantId, isSystemRole: true, systemRoleId: { not: null } },
+      select: { id: true, systemRoleId: true, name: true },
+    });
+    const permRows: { roleId: string; moduleId: string; resource: string; action: string }[] = [];
+    for (const role of sysRoles) {
+      const matrix = DEFAULT_ROLE_PERMISSIONS[role.systemRoleId || ''] || {};
+      for (const [moduleId, actions] of Object.entries(matrix)) {
+        const resource = MODULE_RESOURCE[moduleId] || moduleId.toLowerCase();
+        for (const action of actions) {
+          permRows.push({ roleId: role.id, moduleId, resource, action });
+        }
+      }
+    }
+    let inserted = 0;
+    if (permRows.length) {
+      const result = await this.prisma.tenantRolePermission.createMany({ data: permRows, skipDuplicates: true });
+      inserted = result.count;
+    }
+    return { rolesUpdated: sysRoles.length, permissionsInserted: inserted };
   }
 
   async logPlatformEvent(eventType: string, actorId: string, targetType: string, targetId: string, targetName: string, description: string) {
