@@ -73,6 +73,18 @@ export class CreatePrescriptionDto {
 
   @IsOptional()
   @IsString()
+  prescriptionType?: string;
+
+  @IsOptional()
+  @IsString()
+  rxType?: string;
+
+  @IsOptional()
+  @IsString()
+  validityDate?: string;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 
   @IsArray({ message: 'items must be an array' })
