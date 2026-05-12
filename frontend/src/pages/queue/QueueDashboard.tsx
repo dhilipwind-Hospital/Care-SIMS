@@ -21,7 +21,7 @@ export default function QueueDashboard() {
 
   // Issue token modal
   const [showIssue, setShowIssue] = useState(false);
-  const [issueForm, setIssueForm] = useState({ patientId: '', doctorId: '', priorityLevel: 'NORMAL' });
+  const [issueForm, setIssueForm] = useState({ patientId: '', doctorId: '', priority: 'NORMAL' });
   const [issuing, setIssuing] = useState(false);
 
   const issueToken = async () => {
@@ -33,11 +33,11 @@ export default function QueueDashboard() {
         patientId: issueForm.patientId,
         locationId: user.locationId,
         doctorId: issueForm.doctorId || undefined,
-        priorityLevel: issueForm.priorityLevel,
+        priority: issueForm.priority,
       });
       toast.success('Queue token issued');
       setShowIssue(false);
-      setIssueForm({ patientId: '', doctorId: '', priorityLevel: 'NORMAL' });
+      setIssueForm({ patientId: '', doctorId: '', priority: 'NORMAL' });
       fetchQueue();
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to issue token');
@@ -249,7 +249,7 @@ export default function QueueDashboard() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Priority</label>
-                <select className="hms-input w-full" value={issueForm.priorityLevel} onChange={e => setIssueForm(f => ({ ...f, priorityLevel: e.target.value }))}>
+                <select className="hms-input w-full" value={issueForm.priority} onChange={e => setIssueForm(f => ({ ...f, priority: e.target.value }))}>
                   {['NORMAL', 'URGENT', 'EMERGENCY'].map(p => <option key={p}>{p}</option>)}
                 </select>
               </div>

@@ -77,6 +77,10 @@ export class CreateInvoiceDto {
   @IsString()
   policyNumber?: string;
 
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
   @IsArray({ message: 'lineItems must be an array' })
   @ValidateNested({ each: true })
   @Type(() => InvoiceLineItemDto)

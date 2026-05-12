@@ -72,7 +72,7 @@ export class PharmacyService {
     if (rx.status === 'DISPENSED') throw new BadRequestException('Already dispensed');
 
     return this.prisma.$transaction(async (tx) => {
-      for (const item of dto.dispensedItems) {
+      for (const item of dto.dispensedItems || []) {
         const batch = await tx.drugBatch.findFirst({ where: { id: item.batchId, tenantId, quantityInStock: { gte: item.quantity } } });
         if (!batch) throw new BadRequestException(`Insufficient stock for batch ${item.batchId}`);
         await tx.drugBatch.update({ where: { id: item.batchId }, data: { quantityInStock: { decrement: item.quantity } } });

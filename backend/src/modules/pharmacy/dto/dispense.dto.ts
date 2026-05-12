@@ -1,5 +1,5 @@
 import {
-  IsArray, IsNotEmpty, IsNumber, IsString, IsUUID, Min, ValidateNested,
+  IsArray, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min, ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -13,8 +13,13 @@ export class DispensedItemDto {
 }
 
 export class DispenseDto {
+  @IsOptional()
   @IsArray({ message: 'dispensedItems must be an array' })
   @ValidateNested({ each: true })
   @Type(() => DispensedItemDto)
-  dispensedItems: DispensedItemDto[];
+  dispensedItems?: DispensedItemDto[];
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }
