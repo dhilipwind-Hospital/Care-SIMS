@@ -13,7 +13,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 
 const EMPTY_FORM = { patientId: '', invoiceType: 'OPD', notes: '' };
-const EMPTY_ITEM = { description: '', category: 'CONSULTATION', quantity: 1, unitPrice: '', taxPercent: 0 };
+const EMPTY_ITEM = { description: '', category: 'CONSULTATION', quantity: 1, unitPrice: '', taxPct: 0 };
 
 export default function BillingPage() {
   const { user } = useAuth();
@@ -271,8 +271,8 @@ export default function BillingPage() {
           <td>${item.category || '—'}</td>
           <td style="text-align:right">${item.quantity || 1}</td>
           <td style="text-align:right">${fmt(item.unitPrice)}</td>
-          <td style="text-align:right">${item.discountPercent || 0}%</td>
-          <td style="text-align:right">${item.taxPercent || 0}%</td>
+          <td style="text-align:right">${item.discountPct || 0}%</td>
+          <td style="text-align:right">${item.taxPct || 0}%</td>
           <td style="text-align:right"><strong>${fmt(item.lineTotal || item.total || (item.unitPrice * (item.quantity || 1)))}</strong></td>
         </tr>`).join('')}
     </tbody>

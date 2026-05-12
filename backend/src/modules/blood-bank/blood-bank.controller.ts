@@ -17,13 +17,13 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class BloodBankController {
   constructor(private svc: BloodBankService) {}
   @Get('donors') donors(@CurrentUser('tenantId') tid: string, @Query('bloodGroup') bg?: string) { return this.svc.listDonors(tid, bg); }
-  @Post('donors') addDonor(@CurrentUser('tenantId') tid: string, @Body() body: any) { return this.svc.addDonor(tid, body); }
+  @Post('donors') addDonor(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any) { return this.svc.addDonor(tid, { ...body, locationId: body.locationId || lid }); }
   @Get('donors/:id') getDonor(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getDonor(tid, id); }
-  @Post('donations') donate(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @Body() body: any) { return this.svc.recordDonation(tid, uid, body); }
+  @Post('donations') donate(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @CurrentUser('userId') uid: string, @Body() body: any) { return this.svc.recordDonation(tid, uid, { ...body, locationId: body.locationId || lid }); }
   @Get('inventory') inventory(@CurrentUser('tenantId') tid: string, @Query('bloodGroup') bg?: string, @Query('status') s?: string) { return this.svc.listInventory(tid, bg, s); }
   @Get('inventory/summary') summary(@CurrentUser('tenantId') tid: string) { return this.svc.inventorySummary(tid); }
   @Get('transfusions') listTransfusions(@CurrentUser('tenantId') tid: string, @Query('status') s?: string) { return this.svc.listTransfusions(tid, s); }
-  @Post('transfusions') orderTransfusion(@CurrentUser('tenantId') tid: string, @Body() body: any) { return this.svc.orderTransfusion(tid, body); }
+  @Post('transfusions') orderTransfusion(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any) { return this.svc.orderTransfusion(tid, { ...body, locationId: body.locationId || lid }); }
   @Patch('transfusions/:id/crossmatch') crossmatch(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @Param('id') id: string) { return this.svc.crossMatch(tid, id, uid); }
   @Patch('transfusions/:id/administer') administer(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @Param('id') id: string, @Body() body: any) { return this.svc.administer(tid, id, uid, body); }
 }

@@ -29,8 +29,8 @@ export class HousekeepingController {
   }
 
   @Post()
-  create(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @Body() body: any) {
-    return this.svc.create(tid, uid, body);
+  create(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @CurrentUser('userId') uid: string, @Body() body: any) {
+    return this.svc.create(tid, uid, { ...body, locationId: body.locationId || lid });
   }
 
   @Patch(':id')

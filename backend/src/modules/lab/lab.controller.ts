@@ -38,7 +38,7 @@ export class LabController {
   }
   @Get('orders/:id') getOrder(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getOrder(tid, id); }
   @Patch('orders/:id/status') updateStatus(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: UpdateLabOrderStatusDto) { return this.svc.updateOrderStatus(tid, id, body.status); }
-  @Post('orders/:id/results') enterResult(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: EnterResultDto, @CurrentUser('sub') uid: string) { return this.svc.enterResult(tid, id, body, uid); }
+  @Post('orders/:id/results') enterResult(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Param('id') id: string, @Body() body: EnterResultDto, @CurrentUser('sub') uid: string) { return this.svc.enterResult(tid, id, { ...body, locationId: body.locationId || lid }, uid); }
   @Patch('results/:id/validate') validateResult(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @CurrentUser('sub') uid: string) { return this.svc.validateResult(tid, id, uid); }
   @Post('results/:id/validate') validateResultAlias(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @CurrentUser('sub') uid: string) { return this.svc.validateResult(tid, id, uid); }
   @Post('results/:id/print') printResult(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.printResult(tid, id); }

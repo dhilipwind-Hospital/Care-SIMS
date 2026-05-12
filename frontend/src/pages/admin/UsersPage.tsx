@@ -9,7 +9,7 @@ import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import Pagination from '../../components/ui/Pagination';
 import api from '../../lib/api';
 
-const EMPTY_FORM = { firstName: '', lastName: '', email: '', password: '', roleId: '', departmentId: '' };
+const EMPTY_FORM = { firstName: '', lastName: '', email: '', password: '', roleId: '' };
 
 type Tab = 'staff' | 'pending';
 
@@ -20,7 +20,6 @@ export default function UsersPage() {
   const [loading, setLoading]       = useState(true);
   const [page, setPage]             = useState(1);
   const [roles, setRoles]           = useState<any[]>([]);
-  const [depts, setDepts]           = useState<any[]>([]);
   const [locations, setLocations]   = useState<any[]>([]);
 
   // Pending approvals
@@ -76,13 +75,11 @@ export default function UsersPage() {
 
   const fetchMeta = async () => {
     try {
-      const [r, d, l] = await Promise.all([
+      const [r, l] = await Promise.all([
         api.get('/roles', { params: { limit: 50 } }),
-        api.get('/org/departments', { params: { limit: 50 } }),
         api.get('/org/locations').catch((err) => { console.error('Failed to fetch locations:', err); return { data: [] }; }),
       ]);
       setRoles(r.data.data || r.data || []);
-      setDepts(d.data.data || d.data || []);
       setLocations(l.data.data || l.data || []);
     } catch (err) { toast.error('Failed to load roles and departments'); }
   };
@@ -175,7 +172,7 @@ export default function UsersPage() {
 
   const openEdit = (u: any) => {
     setEditing(u);
-    setEditForm({ firstName: u.firstName, lastName: u.lastName, email: u.email, roleId: u.roleId || u.role?.id || '', departmentId: u.departmentId || u.department?.id || '' });
+    setEditForm({ firstName: u.firstName, lastName: u.lastName, roleId: u.roleId || u.role?.id || '' });
     setEditError('');
   };
 
@@ -264,14 +261,6 @@ export default function UsersPage() {
                   {roles.map((r: any) => <option key={r.id} value={r.id}>{r.name}</option>)}
                 </select>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
-                <select value={addForm.departmentId} onChange={e => setAddForm(f => ({ ...f, departmentId: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
-                  <option value="">Select department...</option>
-                  {depts.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
-                </select>
-              </div>
               {addError && <div className="col-span-2 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">{addError}</div>}
               <div className="col-span-2 flex justify-end gap-3 pt-2 border-t border-gray-100">
                 <button type="button" onClick={() => setShowAdd(false)} className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
@@ -336,14 +325,6 @@ export default function UsersPage() {
                   className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                   <option value="">No role</option>
                   {roles.map((r: any) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
-                <select value={editForm.departmentId || ''} onChange={e => setEditForm((f: any) => ({ ...f, departmentId: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
-                  <option value="">No department</option>
-                  {depts.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
               </div>
               {editError && <div className="col-span-2 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">{editError}</div>}

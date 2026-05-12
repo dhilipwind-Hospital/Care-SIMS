@@ -12,10 +12,12 @@ export class StaffAttendanceService {
     return this.prisma.staffAttendance.findMany({ where, orderBy: { attendanceDate: 'desc' }, take: 500 });
   }
 
-  async clockIn(tenantId: string, userId: string, userName: string, dto: any) {
+  async clockIn(tenantId: string, userId: string, dto: any) {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const existing = await this.prisma.staffAttendance.findFirst({ where: { tenantId, userId, attendanceDate: today } });
     if (existing) throw new ConflictException('Already clocked in today');
+    const user = await this.prisma.tenantUser.findFirst({ where: { id: userId, tenantId }, select: { firstName: true, lastName: true, email: true } });
+    const userName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'Unknown';
     return this.prisma.staffAttendance.create({
       data: { tenantId, locationId: dto.locationId, userId, userName, departmentId: dto.departmentId, attendanceDate: today, shiftType: dto.shiftType || 'GENERAL', clockIn: new Date(), status: 'PRESENT' },
     });

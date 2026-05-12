@@ -20,7 +20,7 @@ import { CreateBedDto } from './dto/create-bed.dto';
 export class WardsController {
   constructor(private svc: WardsService) {}
   @Get() getWards(@CurrentUser('tenantId') tid: string, @Query('locationId') lid: string) { return this.svc.getWards(tid, lid); }
-  @Post() create(@CurrentUser('tenantId') tid: string, @Body() body: CreateWardDto) { return this.svc.createWard(tid, body); }
+  @Post() create(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: CreateWardDto) { return this.svc.createWard(tid, { ...body, locationId: body.locationId || lid } as CreateWardDto); }
   @Put(':id') update(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: UpdateWardDto) { return this.svc.updateWard(tid, id, body); }
   @Get(':wardId/beds') getBeds(@CurrentUser('tenantId') tid: string, @Param('wardId') wid: string) { return this.svc.getBeds(tid, wid); }
   @Post(':wardId/beds') addBed(@CurrentUser('tenantId') tid: string, @Param('wardId') wid: string, @Body() body: CreateBedDto) { return this.svc.addBed(tid, wid, body); }

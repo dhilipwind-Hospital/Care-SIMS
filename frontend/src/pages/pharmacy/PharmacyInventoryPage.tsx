@@ -9,7 +9,7 @@ const CATEGORIES = ['ANALGESICS','ANTIBIOTICS','ANTIHYPERTENSIVES','ANTIDIABETIC
 const DOSAGE_FORMS = ['TABLET','CAPSULE','SYRUP','INJECTION','DROPS','CREAM','POWDER'];
 const STORAGE = [{ value: 'ROOM_TEMP', label: 'Room Temperature' }, { value: 'REFRIGERATED', label: 'Refrigerated' }, { value: 'FROZEN', label: 'Frozen' }];
 
-const BLANK = { drugName: '', genericName: '', category: 'ANALGESICS', dosageForm: 'TABLET', strength: '', manufacturer: '', reorderLevel: 50, storageCondition: 'ROOM_TEMP', isControlled: false };
+const BLANK = { brandName: '', genericName: '', category: 'ANALGESICS', dosageForm: 'TABLET', strength: '', manufacturer: '', reorderLevel: 50, storageCondition: 'ROOM_TEMP', isControlled: false };
 
 const stockColor: Record<string, string> = {
   ADEQUATE: 'bg-green-100 text-green-700',
@@ -60,7 +60,7 @@ export default function PharmacyInventoryPage() {
   const openEdit = (d: any) => {
     setEditDrug(d);
     setEditForm({
-      drugName: d.drugName || d.brandName || '',
+      brandName: d.brandName || '',
       genericName: d.genericName || '',
       category: d.category || 'ANALGESICS',
       dosageForm: d.dosageForm || 'TABLET',
@@ -88,7 +88,7 @@ export default function PharmacyInventoryPage() {
   const DrugFormFields = ({ values, onChange }: { values: any; onChange: (k: string, v: any) => void }) => (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div><label className="block text-xs font-medium text-gray-600 mb-1">Drug Name (Brand) *</label>
-        <input required value={values.drugName} onChange={e => onChange('drugName', e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" /></div>
+        <input required value={values.brandName} onChange={e => onChange('brandName', e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" /></div>
       <div><label className="block text-xs font-medium text-gray-600 mb-1">Generic Name</label>
         <input value={values.genericName} onChange={e => onChange('genericName', e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" /></div>
       <div><label className="block text-xs font-medium text-gray-600 mb-1">Strength</label>
@@ -152,7 +152,7 @@ export default function PharmacyInventoryPage() {
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h3 className="text-base font-bold text-gray-900">Edit Drug — {editDrug.drugName || editDrug.brandName}</h3>
+              <h3 className="text-base font-bold text-gray-900">Edit Drug — {editDrug.brandName}</h3>
               <button onClick={() => setEditDrug(null)} className="p-1 rounded hover:bg-gray-100"><X size={16} className="text-gray-500" /></button>
             </div>
             <form onSubmit={saveEdit} className="p-6 space-y-4">
@@ -191,7 +191,7 @@ export default function PharmacyInventoryPage() {
               {drugs.length === 0 ? <tr><td colSpan={9} className="px-4 py-10 text-center text-gray-400 text-sm">No drugs found</td></tr> :
                 drugs.map(d => (
                   <tr key={d.id} className={`hover:bg-gray-50 ${d.stockStatus === 'OUT_OF_STOCK' ? 'bg-red-50/40' : d.stockStatus === 'CRITICAL_STOCK' ? 'bg-orange-50/40' : ''}`}>
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-900">{d.drugName || d.brandName}</td>
+                    <td className="px-4 py-3 text-sm font-semibold text-gray-900">{d.brandName}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{d.genericName || '—'}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{d.category}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{d.dosageForm}</td>

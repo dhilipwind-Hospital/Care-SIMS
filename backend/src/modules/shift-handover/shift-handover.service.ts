@@ -57,10 +57,12 @@ export class ShiftHandoverService {
     });
   }
 
-  async acknowledge(tenantId: string, id: string, userId: string, userName: string) {
+  async acknowledge(tenantId: string, id: string, userId: string) {
     return this.prisma.$transaction(async (tx) => {
       const rec = await tx.shiftHandover.findFirst({ where: { id, tenantId } });
       if (!rec) throw new NotFoundException('Shift handover not found');
+      const user = await tx.tenantUser.findFirst({ where: { id: userId, tenantId }, select: { firstName: true, lastName: true, email: true } });
+      const userName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'Unknown';
       return tx.shiftHandover.update({
         where: { id },
         data: { handoverToId: userId, handoverToName: userName, status: 'ACKNOWLEDGED', acknowledgedAt: new Date() },

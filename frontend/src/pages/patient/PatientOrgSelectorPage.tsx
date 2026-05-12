@@ -58,11 +58,13 @@ export default function PatientOrgSelectorPage() {
     setLoading(true);
     setError('');
     try {
+      const patientToken = sessionStorage.getItem('patient_token');
+      if (!patientToken) { navigate('/patient/login'); return; }
       const { data } = await api.post('/auth/patient/select-org', {
         patientAccountId: patient.id,
         tenantId: selected.id,
         locationId: locationId || undefined,
-      });
+      }, { headers: { Authorization: `Bearer ${patientToken}` } });
       // Store patient session via setAuth so getUser() can read it back correctly
       setAuth(data.accessToken, {
         sub: patient.id,

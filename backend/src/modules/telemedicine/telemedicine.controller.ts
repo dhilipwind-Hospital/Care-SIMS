@@ -12,7 +12,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class TelemedicineController {
   constructor(private svc: TelemedicineService) {}
   @Get('sessions') list(@CurrentUser('tenantId') tid: string, @Query('status') s?: string, @Query('doctorId') did?: string) { return this.svc.list(tid, s, did); }
-  @Post('sessions') create(@CurrentUser('tenantId') tid: string, @Body() body: any) { return this.svc.create(tid, body); }
+  @Post('sessions') create(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any) { return this.svc.create(tid, { ...body, locationId: body.locationId || lid }); }
   @Get('sessions/:id') getOne(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getOne(tid, id); }
   @Patch('sessions/:id/start') start(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.start(tid, id); }
   @Patch('sessions/:id/end') end(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.end(tid, id); }

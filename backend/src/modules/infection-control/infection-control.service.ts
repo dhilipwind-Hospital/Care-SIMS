@@ -12,7 +12,9 @@ export class InfectionControlService {
     return this.prisma.infectionControlRecord.findMany({ where, orderBy: { createdAt: 'desc' }, take: 500 });
   }
 
-  async create(tenantId: string, userId: string, userName: string, dto: any) {
+  async create(tenantId: string, userId: string, dto: any) {
+    const user = await this.prisma.tenantUser.findFirst({ where: { id: userId, tenantId }, select: { firstName: true, lastName: true, email: true } });
+    const userName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'Unknown';
     return this.prisma.infectionControlRecord.create({
       data: {
         tenantId, locationId: dto.locationId, recordType: dto.recordType,

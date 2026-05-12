@@ -101,7 +101,7 @@ export default function WardsPage() {
       const payload = {
         name: wardForm.name.trim(),
         type: wardForm.type,
-        floor: wardForm.floor ? parseInt(wardForm.floor) : undefined,
+        floor: wardForm.floor || undefined,
         totalBeds: wardForm.totalBeds ? parseInt(wardForm.totalBeds) : undefined,
       };
       if (editingWard) {

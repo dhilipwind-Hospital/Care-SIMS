@@ -44,12 +44,13 @@ export default function PatientLoginPage() {
       const savedOrg = savedTenantId ? orgs.find((o: any) => o.id === savedTenantId) : null;
 
       if (savedOrg) {
-        // Re-use saved hospital — call select-org directly
+        // Re-use saved hospital — call select-org directly using the
+        // unscoped patient token we just got from /auth/patient/login.
         const selRes = await api.post('/auth/patient/select-org', {
           patientAccountId: data.patient.id,
           tenantId: savedOrg.id,
           locationId: savedOrg.locations?.[0]?.id || undefined,
-        });
+        }, { headers: { Authorization: `Bearer ${data.accessToken}` } });
         setAuth(selRes.data.accessToken, {
           sub: data.patient.id,
           id: data.patient.id,

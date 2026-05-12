@@ -21,7 +21,7 @@ export class DialysisController {
   machines(@CurrentUser('tenantId') tid: string, @Query('status') s?: string) { return this.svc.listMachines(tid, s); }
 
   @Post('machines')
-  addMachine(@CurrentUser('tenantId') tid: string, @Body() body: any) { return this.svc.addMachine(tid, body); }
+  addMachine(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any) { return this.svc.addMachine(tid, { ...body, locationId: body.locationId || lid }); }
 
   @Patch('machines/:id')
   updateMachine(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.updateMachine(tid, id, body); }
@@ -30,7 +30,7 @@ export class DialysisController {
   sessions(@CurrentUser('tenantId') tid: string, @Query('date') date?: string, @Query('status') s?: string) { return this.svc.listSessions(tid, date, s); }
 
   @Post('sessions')
-  createSession(@CurrentUser('tenantId') tid: string, @Body() body: any) { return this.svc.createSession(tid, body); }
+  createSession(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any) { return this.svc.createSession(tid, { ...body, locationId: body.locationId || lid }); }
 
   @Get('sessions/:id')
   getSession(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getSession(tid, id); }

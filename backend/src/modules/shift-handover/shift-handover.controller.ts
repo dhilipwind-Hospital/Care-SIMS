@@ -29,8 +29,8 @@ export class ShiftHandoverController {
   }
 
   @Post()
-  create(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @Body() body: any) {
-    return this.svc.create(tid, uid, body);
+  create(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @CurrentUser('userId') uid: string, @Body() body: any) {
+    return this.svc.create(tid, uid, { ...body, locationId: body.locationId || lid });
   }
 
   @Patch(':id')
@@ -42,11 +42,9 @@ export class ShiftHandoverController {
   acknowledge(
     @CurrentUser('tenantId') tid: string,
     @CurrentUser('userId') uid: string,
-    @CurrentUser('firstName') fname: string,
-    @CurrentUser('lastName') lname: string,
     @Param('id') id: string,
   ) {
-    return this.svc.acknowledge(tid, id, uid, `${fname} ${lname}`);
+    return this.svc.acknowledge(tid, id, uid);
   }
 
   @Get(':id')

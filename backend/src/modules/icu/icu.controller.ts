@@ -23,8 +23,8 @@ export class IcuController {
   }
 
   @Post('beds')
-  addBed(@CurrentUser('tenantId') tid: string, @Body() body: any) {
-    return this.svc.addBed(tid, body);
+  addBed(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any) {
+    return this.svc.addBed(tid, { ...body, locationId: body.locationId || lid });
   }
 
   @Patch('beds/:id/status')
@@ -48,8 +48,8 @@ export class IcuController {
   }
 
   @Post('monitoring')
-  record(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string, @Body() body: any) {
-    return this.svc.recordMonitoring(tid, uid, body);
+  record(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @CurrentUser('sub') uid: string, @Body() body: any) {
+    return this.svc.recordMonitoring(tid, uid, { ...body, locationId: body.locationId || lid });
   }
 
   @Post('rounds')

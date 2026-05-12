@@ -21,7 +21,7 @@ export class AmbulanceController {
   vehicles(@CurrentUser('tenantId') tid: string, @Query('status') s?: string) { return this.svc.listVehicles(tid, s); }
 
   @Post('vehicles')
-  addVehicle(@CurrentUser('tenantId') tid: string, @Body() body: any) { return this.svc.addVehicle(tid, body); }
+  addVehicle(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any) { return this.svc.addVehicle(tid, { ...body, locationId: body.locationId || lid }); }
 
   @Patch('vehicles/:id')
   updateVehicle(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.updateVehicle(tid, id, body); }

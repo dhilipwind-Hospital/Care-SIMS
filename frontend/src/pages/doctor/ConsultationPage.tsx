@@ -77,10 +77,24 @@ export default function ConsultationPage() {
     setSaving(true);
     try {
       const { data } = await api.post('/consultations', {
-        ...form, patientId, doctorId: user?.sub, queueTokenId: tokenId,
-        followUpDays: form.followUpDays ? Number(form.followUpDays) : undefined,
+        patientId,
+        doctorId: user?.sub,
+        queueTokenId: tokenId || undefined,
+        chiefComplaint: form.chiefComplaint || undefined,
       });
-      setConsultationId(data?.id || null);
+      const id = data?.id;
+      const history = [form.historyOfPresentIllness, form.pastMedicalHistory].filter(Boolean).join('\n\n');
+      const assessment = [form.diagnosis, form.diagnosisCode].filter(Boolean).join(' ');
+      const plan = [form.plan, form.followUpDays && `Follow-up in ${form.followUpDays} day(s)`, form.notes].filter(Boolean).join('\n\n');
+      const soap: Record<string, string> = {};
+      if (history) soap.historySubjective = history;
+      if (form.examination) soap.examinationFindings = form.examination;
+      if (assessment) soap.assessment = assessment;
+      if (plan) soap.plan = plan;
+      if (id && Object.keys(soap).length) {
+        await api.put(`/consultations/${id}`, soap);
+      }
+      setConsultationId(id || null);
       setCompleted(true);
       toast.success('Consultation saved');
     } catch (err: any) {

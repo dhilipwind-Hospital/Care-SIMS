@@ -29,8 +29,8 @@ export class VisitorsController {
   }
 
   @Post()
-  checkIn(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @Body() body: any) {
-    return this.svc.checkIn(tid, uid, body);
+  checkIn(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @CurrentUser('userId') uid: string, @Body() body: any) {
+    return this.svc.checkIn(tid, uid, { ...body, locationId: body.locationId || lid });
   }
 
   @Patch(':id')

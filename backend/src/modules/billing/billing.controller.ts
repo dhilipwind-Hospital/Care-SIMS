@@ -41,7 +41,7 @@ export class BillingController {
     ];
     sendCsvResponse(res, `invoices-${new Date().toISOString().slice(0, 10)}.csv`, generateCsv(columns, data));
   }
-  @Post('invoices') create(@CurrentUser('tenantId') tid: string, @Body() body: CreateInvoiceDto, @CurrentUser('sub') uid: string) { return this.svc.createInvoice(tid, body, uid); }
+  @Post('invoices') create(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: CreateInvoiceDto, @CurrentUser('sub') uid: string) { return this.svc.createInvoice(tid, { ...body, locationId: body.locationId || lid } as CreateInvoiceDto, uid); }
   @Get('invoices/:id') getOne(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getInvoice(tid, id); }
   @Patch('invoices/:id/finalize') finalize(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.finalizeInvoice(tid, id); }
   @Post('invoices/:id/payments') pay(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: RecordPaymentDto, @CurrentUser('sub') uid: string) { return this.svc.recordPayment(tid, id, body, uid); }

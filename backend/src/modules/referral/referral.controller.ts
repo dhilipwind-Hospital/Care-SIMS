@@ -12,7 +12,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class ReferralController {
   constructor(private svc: ReferralService) {}
   @Get() list(@CurrentUser('tenantId') tid: string, @Query('status') s?: string) { return this.svc.list(tid, s); }
-  @Post() create(@CurrentUser('tenantId') tid: string, @Body() body: any) { return this.svc.create(tid, body); }
+  @Post() create(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any) { return this.svc.create(tid, { ...body, locationId: body.locationId || lid }); }
   @Patch(':id') update(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.update(tid, id, body); }
   @Get('my-referrals') myReferrals(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string) { return this.svc.myReferrals(tid, uid); }
   @Get(':id') getOne(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getOne(tid, id); }

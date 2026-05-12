@@ -14,12 +14,12 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class BirthDeathController {
   constructor(private svc: BirthDeathService) {}
 
-  @Post('births') registerBirth(@CurrentUser('tenantId') tid: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.registerBirth(tid, body, uid); }
+  @Post('births') registerBirth(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.registerBirth(tid, { ...body, locationId: body.locationId || lid }, uid); }
   @Get('births') getBirths(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getBirths(tid, q); }
   @Get('births/:id') getBirth(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getBirth(tid, id); }
   @Patch('births/:id') updateBirth(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.updateBirth(tid, id, body); }
 
-  @Post('deaths') registerDeath(@CurrentUser('tenantId') tid: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.registerDeath(tid, body, uid); }
+  @Post('deaths') registerDeath(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.registerDeath(tid, { ...body, locationId: body.locationId || lid }, uid); }
   @Get('deaths') getDeaths(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getDeaths(tid, q); }
   @Get('deaths/:id') getDeath(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getDeath(tid, id); }
   @Patch('deaths/:id') updateDeath(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.updateDeath(tid, id, body); }

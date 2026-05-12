@@ -21,7 +21,7 @@ export class AssetManagementController {
   list(@CurrentUser('tenantId') tid: string, @Query('category') cat?: string, @Query('status') s?: string) { return this.svc.list(tid, cat, s); }
 
   @Post()
-  create(@CurrentUser('tenantId') tid: string, @Body() body: any) { return this.svc.create(tid, body); }
+  create(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any) { return this.svc.create(tid, { ...body, locationId: body.locationId || lid }); }
 
   @Get(':id')
   get(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.get(tid, id); }

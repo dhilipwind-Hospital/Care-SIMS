@@ -27,8 +27,8 @@ export class InventoryController {
   }
 
   @Post('items')
-  addItem(@CurrentUser('tenantId') tid: string, @Body() body: CreateInventoryItemDto) {
-    return this.svc.addItem(tid, body);
+  addItem(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: CreateInventoryItemDto) {
+    return this.svc.addItem(tid, { ...body, locationId: body.locationId || lid } as CreateInventoryItemDto);
   }
 
   @Get('items/:id')

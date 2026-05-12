@@ -42,7 +42,7 @@ export class PharmacyController {
   @Post('drugs') createDrug(@CurrentUser('tenantId') tid: string, @Body() body: CreateDrugDto) { return this.svc.createDrug(tid, body); }
   @Put('drugs/:id') updateDrug(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: UpdateDrugDto) { return this.svc.updateDrug(tid, id, body); }
   @Get('stock') getStock(@CurrentUser('tenantId') tid: string, @Query('locationId') lid: string) { return this.svc.getStock(tid, lid); }
-  @Post('batches') receiveBatch(@CurrentUser('tenantId') tid: string, @Body() body: ReceiveBatchDto) { return this.svc.receiveBatch(tid, body); }
+  @Post('batches') receiveBatch(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: ReceiveBatchDto) { return this.svc.receiveBatch(tid, { ...body, locationId: (body as any).locationId || lid } as ReceiveBatchDto); }
   @Post('dispense/:prescriptionId') dispense(@CurrentUser('tenantId') tid: string, @Param('prescriptionId') pid: string, @Body() body: DispenseDto, @CurrentUser('sub') uid: string) { return this.svc.dispensePrescription(tid, pid, body, uid); }
   @Post('prescriptions/:prescriptionId/dispense') dispenseAlias(@CurrentUser('tenantId') tid: string, @Param('prescriptionId') pid: string, @Body() body: DispenseDto, @CurrentUser('sub') uid: string) { return this.svc.dispensePrescription(tid, pid, body, uid); }
   @Get('low-stock') lowStock(@CurrentUser('tenantId') tid: string, @Query('locationId') lid: string) { return this.svc.getLowStockAlerts(tid, lid); }
