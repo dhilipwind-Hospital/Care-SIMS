@@ -18,7 +18,7 @@ import { CreatePrescriptionDto } from './dto/create-prescription.dto';
 export class PrescriptionsController {
   constructor(private svc: PrescriptionsService) {}
   @Get() findAll(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.findAll(tid, q); }
-  @Post() create(@CurrentUser('tenantId') tid: string, @Body() body: CreatePrescriptionDto) { return this.svc.create(tid, body); }
+  @Post() create(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: CreatePrescriptionDto) { return this.svc.create(tid, { ...body, locationId: (body as any).locationId || lid }); }
   @Get(':id') findOne(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.findOne(tid, id); }
   @Patch(':id/send-to-pharmacy') send(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.sendToPharmacy(tid, id); }
   @Post(':id/send-pharmacy') sendAlias(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.sendToPharmacy(tid, id); }

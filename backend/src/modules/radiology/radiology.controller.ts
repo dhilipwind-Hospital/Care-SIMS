@@ -12,7 +12,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class RadiologyController {
   constructor(private svc: RadiologyService) {}
   @Get('orders') list(@CurrentUser('tenantId') tid: string, @Query('status') s?: string, @Query('modality') m?: string) { return this.svc.listOrders(tid, s, m); }
-  @Post('orders') create(@CurrentUser('tenantId') tid: string, @Body() body: any) { return this.svc.createOrder(tid, body); }
+  @Post('orders') create(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any) { return this.svc.createOrder(tid, { ...body, locationId: body.locationId || lid, examType: body.examType || body.modality || 'GENERAL' }); }
   @Get('orders/:id') getOne(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getOrder(tid, id); }
   @Patch('orders/:id') updateOrder(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.updateOrder(tid, id, body); }
   @Post('results') addResult(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @Body() body: any) { return this.svc.addResult(tid, uid, body); }

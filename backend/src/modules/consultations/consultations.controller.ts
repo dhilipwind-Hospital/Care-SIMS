@@ -20,7 +20,7 @@ import { CompleteConsultationDto } from './dto/complete-consultation.dto';
 export class ConsultationsController {
   constructor(private svc: ConsultationsService) {}
   @Get() findAll(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.findAll(tid, q); }
-  @Post() start(@CurrentUser('tenantId') tid: string, @Body() body: StartConsultationDto) { return this.svc.start(tid, body); }
+  @Post() start(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: StartConsultationDto) { return this.svc.start(tid, { ...body, locationId: (body as any).locationId || lid }); }
   @Get(':id') findOne(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.findOne(tid, id); }
   @Put(':id') update(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: UpdateConsultationDto) { return this.svc.update(tid, id, body); }
   @Patch(':id/complete') complete(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: CompleteConsultationDto) { return this.svc.complete(tid, id, body); }

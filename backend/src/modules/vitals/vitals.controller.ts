@@ -16,7 +16,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 @Controller('vitals')
 export class VitalsController {
   constructor(private svc: VitalsService) {}
-  @Post() record(@CurrentUser('tenantId') tid: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.record(tid, body, uid); }
+  @Post() record(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.record(tid, { ...body, locationId: body.locationId || lid }, uid); }
   @Get('patient/:patientId') forPatient(@CurrentUser('tenantId') tid: string, @Param('patientId') pid: string, @Query('limit') limit: number) { return this.svc.getForPatient(tid, pid, limit); }
   @Get('consultation/:consultationId') forConsult(@CurrentUser('tenantId') tid: string, @Param('consultationId') cid: string) { return this.svc.getForConsultation(tid, cid); }
   @Get('admission/:admissionId') forAdmission(@CurrentUser('tenantId') tid: string, @Param('admissionId') aid: string) { return this.svc.getForAdmission(tid, aid); }

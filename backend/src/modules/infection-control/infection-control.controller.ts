@@ -21,7 +21,7 @@ export class InfectionControlController {
   list(@CurrentUser('tenantId') tid: string, @Query('status') s?: string, @Query('recordType') rt?: string) { return this.svc.list(tid, s, rt); }
 
   @Post()
-  create(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @CurrentUser('name') name: string, @Body() body: any) { return this.svc.create(tid, uid, name, body); }
+  create(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @CurrentUser('userId') uid: string, @CurrentUser('name') name: string, @Body() body: any) { return this.svc.create(tid, uid, name, { ...body, locationId: body.locationId || lid }); }
 
   @Get(':id')
   get(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.get(tid, id); }

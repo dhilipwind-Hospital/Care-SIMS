@@ -21,7 +21,7 @@ export class DietController {
   orders(@CurrentUser('tenantId') tid: string, @Query('status') s?: string, @Query('wardId') wid?: string) { return this.svc.listOrders(tid, s, wid); }
 
   @Post('orders')
-  createOrder(@CurrentUser('tenantId') tid: string, @Body() body: any) { return this.svc.createOrder(tid, body); }
+  createOrder(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any) { return this.svc.createOrder(tid, { ...body, locationId: body.locationId || lid }); }
 
   @Get('orders/:id')
   getOrder(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getOrder(tid, id); }

@@ -21,7 +21,7 @@ import { DischargeDto } from './dto/discharge.dto';
 export class AdmissionsController {
   constructor(private svc: AdmissionsService) {}
   @Get() getAll(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getAdmissions(tid, q); }
-  @Post() admit(@CurrentUser('tenantId') tid: string, @Body() body: AdmitPatientDto) { return this.svc.admit(tid, body); }
+  @Post() admit(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: AdmitPatientDto) { return this.svc.admit(tid, { ...body, locationId: (body as any).locationId || lid }); }
   @Get(':id') getOne(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getAdmission(tid, id); }
   @Put(':id') update(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: UpdateAdmissionDto) { return this.svc.updateAdmission(tid, id, body); }
   @Patch(':id/transfer-bed') transfer(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: TransferBedDto) { return this.svc.transferBed(tid, id, body.newBedId); }

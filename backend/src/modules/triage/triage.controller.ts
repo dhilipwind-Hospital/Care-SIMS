@@ -17,7 +17,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class TriageController {
   constructor(private svc: TriageService) {}
   @Get() list(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.list(tid, q); }
-  @Post() create(@CurrentUser('tenantId') tid: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.create(tid, body, uid); }
+  @Post() create(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.create(tid, { ...body, locationId: body.locationId || lid }, uid); }
   @Get('by-token/:tokenId') byToken(@CurrentUser('tenantId') tid: string, @Param('tokenId') id: string) { return this.svc.getByToken(tid, id); }
   @Get('by-patient/:patientId') byPatient(@CurrentUser('tenantId') tid: string, @Param('patientId') pid: string) { return this.svc.getByPatient(tid, pid); }
   @Put(':id') update(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.update(tid, id, body); }

@@ -21,7 +21,7 @@ import { UpdateLabOrderStatusDto } from './dto/update-order-status.dto';
 @Controller('lab')
 export class LabController {
   constructor(private svc: LabService) {}
-  @Post('orders') createOrder(@CurrentUser('tenantId') tid: string, @Body() body: CreateLabOrderDto) { return this.svc.createOrder(tid, body); }
+  @Post('orders') createOrder(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: CreateLabOrderDto) { return this.svc.createOrder(tid, { ...body, locationId: body.locationId || lid }); }
   @Get('orders') getOrders(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getOrders(tid, q); }
 
   @Get('orders/export')

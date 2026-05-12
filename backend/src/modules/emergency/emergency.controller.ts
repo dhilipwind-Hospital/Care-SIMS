@@ -14,7 +14,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class EmergencyController {
   constructor(private svc: EmergencyService) {}
 
-  @Post('register') register(@CurrentUser('tenantId') tid: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.register(tid, body, uid); }
+  @Post('register') register(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.register(tid, { ...body, locationId: body.locationId || lid }, uid); }
   @Get('active') active(@CurrentUser('tenantId') tid: string, @Query('locationId') lid: string) { return this.svc.getActive(tid, lid); }
   @Get() getAll(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getAll(tid, q); }
   @Get('dashboard') dashboard(@CurrentUser('tenantId') tid: string, @Query('locationId') lid: string) { return this.svc.dashboard(tid, lid); }
