@@ -35,8 +35,13 @@ function handleAuthFailure() {
 }
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('hms_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  // Respect an explicit per-request Authorization header — only fall back to
+  // the stored token when the caller hasn't set one. The patient-login flow
+  // relies on this to send the unscoped patient token before it's stored.
+  if (!config.headers.Authorization) {
+    const token = localStorage.getItem('hms_token');
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+  }
 
   // Attach a cancel token to track this request
   const source = axios.CancelToken.source();
