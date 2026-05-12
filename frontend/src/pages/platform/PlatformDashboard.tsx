@@ -41,6 +41,29 @@ export default function PlatformDashboard() {
   const [showRegister, setShowRegister] = useState(false);
   const [selectedOrg, setSelectedOrg] = useState<any>(null);
   const [suspendingId, setSuspendingId] = useState<string | null>(null);
+  const [deletingOrg, setDeletingOrg] = useState<any>(null);
+  const [confirmSlugInput, setConfirmSlugInput] = useState('');
+  const [deletePending, setDeletePending] = useState(false);
+
+  const handleDelete = async () => {
+    if (!deletingOrg) return;
+    if (confirmSlugInput !== deletingOrg.slug) {
+      toast.error(`Type the slug "${deletingOrg.slug}" to confirm`);
+      return;
+    }
+    setDeletePending(true);
+    try {
+      await api.delete(`/platform/organizations/${deletingOrg.id}`, {
+        data: { confirmSlug: confirmSlugInput },
+      });
+      toast.success(`Organization "${deletingOrg.legalName}" permanently deleted`);
+      setDeletingOrg(null);
+      setConfirmSlugInput('');
+      fetchTenants();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to delete organization');
+    } finally { setDeletePending(false); }
+  };
 
   const handleSuspend = async (orgId: string) => {
     setSuspendingId(orgId);
@@ -268,6 +291,11 @@ export default function PlatformDashboard() {
                             {suspendingId === t.id ? 'Activating...' : 'Activate'}
                           </button>
                         ) : null}
+                        <button
+                          onClick={() => { setDeletingOrg(t); setConfirmSlugInput(''); }}
+                          className="text-xs px-2.5 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 font-medium">
+                          Delete
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -349,6 +377,42 @@ export default function PlatformDashboard() {
 
       {showRegister && <OrgRegisterModal onClose={() => setShowRegister(false)} onSuccess={() => { setShowRegister(false); fetchTenants(); }} />}
       {selectedOrg && <OrgDetailPanel org={selectedOrg} onClose={() => setSelectedOrg(null)} onRefresh={fetchTenants} />}
+
+      {deletingOrg && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <h3 className="text-lg font-bold text-red-700 mb-2">Permanently delete this organization?</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              This will <strong>irreversibly delete</strong> "{deletingOrg.legalName}" and ALL its data — patients, appointments, prescriptions, invoices, users, everything. There is no undo.
+            </p>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-xs text-red-700">
+              Type the organization's slug to confirm: <strong className="font-mono">{deletingOrg.slug}</strong>
+            </div>
+            <input
+              autoFocus
+              type="text"
+              value={confirmSlugInput}
+              onChange={e => setConfirmSlugInput(e.target.value)}
+              placeholder={`Type "${deletingOrg.slug}"`}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 mb-4 font-mono"
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => { setDeletingOrg(null); setConfirmSlugInput(''); }}
+                disabled={deletePending}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deletePending || confirmSlugInput !== deletingOrg.slug}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                {deletePending ? 'Deleting…' : 'Delete Permanently'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -314,6 +314,150 @@ export class PlatformService {
     return { message: 'Organization activated' };
   }
 
+  // Hard-delete an organization and ALL its data. Irreversible.
+  // Requires the caller to confirm by passing the tenant's slug — protects
+  // against accidental clicks. Platform-admin only (PlatformGuard at the route).
+  async deleteOrganization(id: string, confirmSlug: string, adminId: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id } });
+    if (!tenant) throw new NotFoundException('Organization not found');
+    if (tenant.slug !== confirmSlug) {
+      throw new BadRequestException(`Slug mismatch — type the org's slug "${tenant.slug}" to confirm`);
+    }
+
+    // Tenant-scoped tables grouped by deletion order. Within each group,
+    // tables have no FKs to other tables in later groups. Groups before
+    // [tenant_locations, tenants] handle inter-table FKs that aren't
+    // covered by onDelete: Cascade.
+    //
+    // Note: tables wired with onDelete: Cascade (lab result items, invoice
+    // line items, prescription items, role permissions, etc.) get wiped
+    // automatically when their parent is deleted. We only list parents.
+    await this.prisma.$transaction(async (tx) => {
+      const where = { tenantId: id };
+
+      // Group 1 — clinical workflow leaves that reference Patient/Doctor/Order/Appointment
+      await tx.medicationAdministration.deleteMany({ where });
+      await tx.medicationReconciliation.deleteMany({ where });
+      await tx.payment.deleteMany({ where });
+      await tx.insuranceClaim.deleteMany({ where });
+      await tx.dietMeal.deleteMany({ where });
+      await tx.physiotherapySession.deleteMany({ where });
+      await tx.icuMonitoring.deleteMany({ where });
+      await tx.icuRound.deleteMany({ where });
+      await tx.preOpAssessment.deleteMany({ where });
+      await tx.anaesthesiaRecord.deleteMany({ where });
+      await tx.bloodTransfusion.deleteMany({ where });
+      await tx.bloodDonation.deleteMany({ where });
+      await tx.bloodInventory.deleteMany({ where });
+      await tx.dialysisSession.deleteMany({ where });
+      await tx.nicuDailyRecord.deleteMany({ where });
+      await tx.ambulanceTrip.deleteMany({ where });
+      await tx.queueToken.deleteMany({ where });
+      await tx.vital.deleteMany({ where });
+      await tx.triageRecord.deleteMany({ where });
+      await tx.consentForm.deleteMany({ where });
+      await tx.referral.deleteMany({ where });
+      await tx.dischargeSummary.deleteMany({ where });
+      await tx.medicalCertificate.deleteMany({ where });
+      await tx.medicalRecordFile.deleteMany({ where });
+      await tx.patientAccessLog.deleteMany({ where });
+      await tx.patientPathway.deleteMany({ where });
+      await tx.feedbackSurvey.deleteMany({ where });
+      await tx.notification.deleteMany({ where });
+      await tx.payroll.deleteMany({ where });
+      await tx.payrollConfig.deleteMany({ where });
+      await tx.staffAttendance.deleteMany({ where });
+      await tx.leaveRequest.deleteMany({ where });
+      await tx.dutyRoster.deleteMany({ where });
+      await tx.shiftHandover.deleteMany({ where });
+      await tx.qualityIncident.deleteMany({ where });
+      await tx.qualityIndicator.deleteMany({ where });
+      await tx.grievance.deleteMany({ where });
+      await tx.infectionControlRecord.deleteMany({ where });
+      await tx.antibioticUsage.deleteMany({ where });
+      await tx.wasteCollection.deleteMany({ where });
+      await tx.linenTransaction.deleteMany({ where });
+      await tx.sterilizationItem.deleteMany({ where });
+      await tx.assetMaintenance.deleteMany({ where });
+      await tx.storeTransaction.deleteMany({ where });
+      await tx.inventoryTransaction.deleteMany({ where });
+      await tx.pharmacyReturn.deleteMany({ where });
+      await tx.purchaseIndent.deleteMany({ where });
+      await tx.vendorContract.deleteMany({ where });
+      await tx.healthPackageBooking.deleteMany({ where });
+      await tx.workOrder.deleteMany({ where });
+      await tx.woundAssessment.deleteMany({ where });
+      await tx.palliativeCareRecord.deleteMany({ where });
+      await tx.homeVisit.deleteMany({ where });
+      await tx.mortuaryRecord.deleteMany({ where });
+      await tx.mlcRecord.deleteMany({ where });
+      await tx.birthRecord.deleteMany({ where });
+      await tx.deathRecord.deleteMany({ where });
+      await tx.visitor.deleteMany({ where });
+      await tx.housekeepingTask.deleteMany({ where });
+      await tx.emergencyVisit.deleteMany({ where });
+      await tx.teleconsultSession.deleteMany({ where });
+      await tx.labCalibration.deleteMany({ where });
+      await tx.labQCRun.deleteMany({ where });
+      await tx.orgAuditLog.deleteMany({ where });
+
+      // Group 2 — order-level records (children of Patient/Doctor)
+      await tx.labResult.deleteMany({ where });
+      await tx.labOrder.deleteMany({ where });
+      await tx.radiologyResult.deleteMany({ where });
+      await tx.radiologyOrder.deleteMany({ where });
+      await tx.prescription.deleteMany({ where });
+      await tx.consultation.deleteMany({ where });
+      await tx.dietOrder.deleteMany({ where });
+      await tx.physiotherapyOrder.deleteMany({ where });
+      await tx.oTBooking.deleteMany({ where });
+      await tx.appointment.deleteMany({ where });
+      await tx.invoice.deleteMany({ where });
+      await tx.insurancePolicy.deleteMany({ where });
+      await tx.nicuAdmission.deleteMany({ where });
+      await tx.admission.deleteMany({ where });
+      await tx.bed.deleteMany({ where });
+      await tx.icuBed.deleteMany({ where });
+
+      // Group 3 — top-level domain entities
+      await tx.patient.deleteMany({ where });
+      await tx.ward.deleteMany({ where });
+      await tx.dialysisMachine.deleteMany({ where });
+      await tx.ambulance.deleteMany({ where });
+      await tx.drugBatch.deleteMany({ where });
+      await tx.inventoryBatch.deleteMany({ where });
+      await tx.drug.deleteMany({ where });
+      await tx.inventoryItem.deleteMany({ where });
+      await tx.storeItem.deleteMany({ where });
+      await tx.vendor.deleteMany({ where });
+      await tx.healthPackage.deleteMany({ where });
+      await tx.careProtocol.deleteMany({ where });
+      await tx.oTEquipment.deleteMany({ where });
+      await tx.oTRoom.deleteMany({ where });
+      await tx.instrumentSet.deleteMany({ where });
+      await tx.sterilizationBatch.deleteMany({ where });
+      await tx.linenItem.deleteMany({ where });
+      await tx.bloodDonor.deleteMany({ where });
+      await tx.asset.deleteMany({ where });
+
+      // Group 4 — directory / access
+      await tx.doctorOrgAffiliation.deleteMany({ where });
+      await tx.tenantUser.deleteMany({ where });
+      await tx.tenantRole.deleteMany({ where });
+      await tx.department.deleteMany({ where });
+
+      // Group 5 — tenant scaffolding
+      await tx.organizationFeature.deleteMany({ where });
+      await tx.tenantLocation.deleteMany({ where });
+
+      await tx.tenant.delete({ where: { id } });
+    }, { timeout: 60000 });
+
+    await this.logPlatformEvent('TENANT_DELETED', adminId, 'TENANT', id, tenant.legalName,
+      `Organization "${tenant.legalName}" (${tenant.slug}) and all its data permanently deleted`);
+    return { message: 'Organization permanently deleted', slug: tenant.slug };
+  }
+
   async getOrgFeatures(tenantId: string) {
     return this.prisma.organizationFeature.findMany({
       where: { tenantId },

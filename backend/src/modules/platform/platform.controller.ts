@@ -33,6 +33,11 @@ export class PlatformController {
   @Post('organizations/:id/seed-role-permissions')
   seedRolePerms(@Param('id') id: string) { return this.platformService.seedRolePermissionsForOrg(id); }
 
+  @Delete('organizations/:id')
+  deleteOrg(@Param('id') id: string, @Body() body: { confirmSlug: string }, @CurrentUser('sub') adminId: string) {
+    return this.platformService.deleteOrganization(id, body?.confirmSlug, adminId);
+  }
+
   @Patch('organizations/:id/subscription')
   updateSubscription(@Param('id') id: string, @Body() body: any, @CurrentUser('sub') adminId: string) { return this.platformService.updateSubscription(id, body, adminId); }
 
