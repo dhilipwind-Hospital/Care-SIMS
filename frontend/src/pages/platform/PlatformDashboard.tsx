@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
-import { Building2, Shield, Plus, Search, CheckCircle, Clock, XCircle, TrendingUp, Globe, Layers } from 'lucide-react';
+import { Building2, Shield, Plus, Search, CheckCircle, Clock, XCircle, TrendingUp, Globe, Layers, Trash2 } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import api from '../../lib/api';
@@ -275,7 +275,7 @@ export default function PlatformDashboard() {
                       {t.trialEndsAt ? new Date(t.trialEndsAt).toLocaleDateString('en-IN') : '—'}
                     </td>
                     <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         <button onClick={() => setSelectedOrg(t)}
                           className="text-xs px-2.5 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">
                           Manage
@@ -293,8 +293,9 @@ export default function PlatformDashboard() {
                         ) : null}
                         <button
                           onClick={() => { setDeletingOrg(t); setConfirmSlugInput(''); }}
-                          className="text-xs px-2.5 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 font-medium">
-                          Delete
+                          title="Permanently delete this organization"
+                          className="text-xs px-2.5 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 font-medium inline-flex items-center gap-1">
+                          <Trash2 size={12} /> Delete
                         </button>
                       </div>
                     </td>
