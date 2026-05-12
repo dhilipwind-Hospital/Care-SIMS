@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Pill, Send, Clock, CheckCircle, Search, X, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -64,8 +64,48 @@ export default function PrescriptionsPage() {
   const dispensed = rxList.filter(r => r.status === 'DISPENSED').length;
   const draft = rxList.filter(r => r.status === 'DRAFT').length;
 
-  const addItem = () => setForm(f => ({ ...f, items: [...f.items, { drugName: '', dosage: '', frequency: '', durationDays: 7, route: 'ORAL', instructions: '' }] }));
-  const removeItem = (i: number) => setForm(f => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
+  // Per-item drug search state
+  const [drugSearches, setDrugSearches]   = useState<string[]>(['']);
+  const [drugResults, setDrugResults]     = useState<Record<number, any[]>>({});
+  const [drugSelected, setDrugSelected]   = useState<Record<number, boolean>>({});
+  const drugTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+
+  const searchDrugs = (idx: number, q: string) => {
+    setDrugSearches(prev => { const a = [...prev]; a[idx] = q; return a; });
+    if (!q.trim()) { setDrugResults(prev => ({ ...prev, [idx]: [] })); return; }
+    clearTimeout(drugTimers.current[idx]);
+    drugTimers.current[idx] = setTimeout(async () => {
+      try {
+        const { data } = await api.get('/pharmacy/drugs', { params: { q, limit: 8 } });
+        setDrugResults(prev => ({ ...prev, [idx]: data.data || data || [] }));
+      } catch { /* silent */ }
+    }, 300);
+  };
+
+  const selectDrug = (idx: number, drug: any) => {
+    const name = [drug.name, drug.strength].filter(Boolean).join(' ');
+    updateItem(idx, 'drugName', name);
+    setDrugSearches(prev => { const a = [...prev]; a[idx] = name; return a; });
+    setDrugResults(prev => ({ ...prev, [idx]: [] }));
+    setDrugSelected(prev => ({ ...prev, [idx]: true }));
+  };
+
+  const clearDrug = (idx: number) => {
+    updateItem(idx, 'drugName', '');
+    setDrugSearches(prev => { const a = [...prev]; a[idx] = ''; return a; });
+    setDrugSelected(prev => ({ ...prev, [idx]: false }));
+  };
+
+  const addItem = () => {
+    setForm(f => ({ ...f, items: [...f.items, { drugName: '', dosage: '', frequency: '', durationDays: 7, route: 'ORAL', instructions: '' }] }));
+    setDrugSearches(prev => [...prev, '']);
+  };
+  const removeItem = (i: number) => {
+    setForm(f => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
+    setDrugSearches(prev => prev.filter((_, idx) => idx !== i));
+    setDrugResults(prev => { const n = { ...prev }; delete n[i]; return n; });
+    setDrugSelected(prev => { const n = { ...prev }; delete n[i]; return n; });
+  };
   const updateItem = (i: number, key: string, val: string | number) => setForm(f => ({ ...f, items: f.items.map((item, idx) => idx === i ? { ...item, [key]: val } : item) }));
 
   const submit = async (e: React.FormEvent) => {
@@ -211,8 +251,38 @@ export default function PrescriptionsPage() {
                     <div className="grid grid-cols-3 gap-2">
                       <div className="col-span-2">
                         <label className="block text-xs font-medium text-gray-600 mb-1">Drug Name</label>
-                        <input required value={item.drugName} onChange={e => updateItem(i,'drugName',e.target.value)}
-                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="e.g. Paracetamol 500mg" />
+                        <div className="relative">
+                          {drugSelected[i] ? (
+                            <div className="flex items-center justify-between px-3 py-2 bg-teal-50 border border-teal-200 rounded-lg">
+                              <span className="text-sm font-medium text-teal-800">{item.drugName}</span>
+                              <button type="button" onClick={() => clearDrug(i)} className="text-teal-400 hover:text-red-500 ml-2"><X size={13} /></button>
+                            </div>
+                          ) : (
+                            <>
+                              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                              <input
+                                required
+                                value={drugSearches[i] ?? item.drugName}
+                                onChange={e => { updateItem(i, 'drugName', e.target.value); searchDrugs(i, e.target.value); }}
+                                className="w-full pl-8 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                placeholder="Search drug catalog or type name…"
+                              />
+                              {(drugResults[i]?.length ?? 0) > 0 && (
+                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-40 overflow-y-auto">
+                                  {drugResults[i].map((d: any) => (
+                                    <button key={d.id} type="button"
+                                      onClick={() => selectDrug(i, d)}
+                                      className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm border-b border-gray-50 last:border-0">
+                                      <span className="font-medium">{d.name}</span>
+                                      {d.strength && <span className="text-gray-500 ml-1">{d.strength}</span>}
+                                      {d.dosageForm && <span className="text-xs text-gray-400 ml-2 bg-gray-100 px-1.5 py-0.5 rounded">{d.dosageForm}</span>}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Dosage</label>

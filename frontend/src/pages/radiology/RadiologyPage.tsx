@@ -10,6 +10,7 @@ import KpiCard from '../../components/ui/KpiCard';
 import EmptyState from '../../components/ui/EmptyState';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import api from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 
 /* ---------- helpers ---------- */
 const statusColors: Record<string, string> = {
@@ -54,6 +55,7 @@ function Modal({ open, onClose, title, children, width = 'max-w-lg' }: { open: b
 
 /* ---------- Main page ---------- */
 export default function RadiologyPage() {
+  const { user } = useAuth();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -158,7 +160,7 @@ export default function RadiologyPage() {
         await api.patch(`/radiology/orders/${editingId}`, form);
         toast.success('Radiology order updated');
       } else {
-        await api.post('/radiology/orders', form);
+        await api.post('/radiology/orders', { ...form, doctorId: user?.sub });
         toast.success('Radiology order submitted');
       }
       setShowForm(false);

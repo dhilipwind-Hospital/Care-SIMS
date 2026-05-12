@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { FlaskConical, Pill, UserCheck, Calendar, CheckCircle, AlertTriangle, ChevronRight, Plus, X, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 
 const TABS = ['Overview', 'SOAP Notes', 'Orders', 'History'] as const;
 type Tab = typeof TABS[number];
@@ -10,6 +11,7 @@ type Tab = typeof TABS[number];
 const LAB_CATEGORIES = ['HEMATOLOGY', 'BIOCHEMISTRY', 'MICROBIOLOGY', 'SEROLOGY', 'URINE', 'RADIOLOGY', 'OTHER'];
 
 export default function ConsultationPage() {
+  const { user } = useAuth();
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const patientId = params.get('patientId');
@@ -60,7 +62,7 @@ export default function ConsultationPage() {
     setSaving(true);
     try {
       const { data } = await api.post('/consultations', {
-        ...form, patientId, queueTokenId: tokenId,
+        ...form, patientId, doctorId: user?.sub, queueTokenId: tokenId,
         followUpDays: form.followUpDays ? Number(form.followUpDays) : undefined,
       });
       setConsultationId(data?.id || null);
@@ -81,7 +83,8 @@ export default function ConsultationPage() {
     setLabSubmitting(true);
     try {
       await api.post('/lab/orders', {
-        patientId, consultationId: consultationId || undefined,
+        patientId, doctorId: user?.sub,
+        consultationId: consultationId || undefined,
         priority: labPriority, clinicalNotes: labNotes || undefined,
         tests: labTests.map(t => ({ testCode: t.testCode || t.testName, testName: t.testName, category: t.category, urgency: t.urgency })),
       });

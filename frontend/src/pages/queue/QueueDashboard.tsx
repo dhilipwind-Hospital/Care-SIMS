@@ -1,22 +1,48 @@
 import { useEffect, useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
-import { Users, RefreshCw, Clock, CheckCircle, Activity, UserPlus } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Users, RefreshCw, Clock, CheckCircle, Activity, UserPlus, X } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { SkeletonTableRow, SkeletonKpiRow } from '../../components/ui/Skeleton';
 import ExportButton from '../../components/ui/ExportButton';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import { useSocket } from '../../context/SocketContext';
+import { useAuth } from '../../context/AuthContext';
 import api from '../../lib/api';
 
 export default function QueueDashboard() {
-  const navigate = useNavigate();
+  const { user } = useAuth();
   const { subscribe } = useSocket();
   const [tokens, setTokens] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+
+  // Issue token modal
+  const [showIssue, setShowIssue] = useState(false);
+  const [issueForm, setIssueForm] = useState({ patientId: '', doctorId: '', priorityLevel: 'NORMAL' });
+  const [issuing, setIssuing] = useState(false);
+
+  const issueToken = async () => {
+    if (!issueForm.patientId) { toast.error('Patient is required'); return; }
+    if (!user?.locationId) { toast.error('No location assigned to your account'); return; }
+    setIssuing(true);
+    try {
+      await api.post('/queue/token', {
+        patientId: issueForm.patientId,
+        locationId: user.locationId,
+        doctorId: issueForm.doctorId || undefined,
+        priorityLevel: issueForm.priorityLevel,
+      });
+      toast.success('Queue token issued');
+      setShowIssue(false);
+      setIssueForm({ patientId: '', doctorId: '', priorityLevel: 'NORMAL' });
+      fetchQueue();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to issue token');
+    } finally { setIssuing(false); }
+  };
 
   const fetchQueue = async () => {
     setLoading(true);
@@ -76,11 +102,11 @@ export default function QueueDashboard() {
               <RefreshCw size={14} /> Refresh Queue
             </button>
             <button
-              onClick={() => navigate('/app/patients')}
+              onClick={() => setShowIssue(true)}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium"
               style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}
             >
-              <UserPlus size={14} /> Walk-in Registration
+              <UserPlus size={14} /> Issue Token
             </button>
           </div>
         }
@@ -190,6 +216,53 @@ export default function QueueDashboard() {
           ))}
         </div>
       </div>
+
+      {showIssue && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="font-bold text-gray-900">Issue Queue Token</h2>
+              <button onClick={() => setShowIssue(false)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Patient *</label>
+                <SearchableSelect
+                  value={issueForm.patientId}
+                  onChange={id => setIssueForm(f => ({ ...f, patientId: id }))}
+                  placeholder="Search patient…"
+                  endpoint="/patients"
+                  searchParam="q"
+                  mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Doctor (optional)</label>
+                <SearchableSelect
+                  value={issueForm.doctorId}
+                  onChange={id => setIssueForm(f => ({ ...f, doctorId: id }))}
+                  placeholder="Assign to doctor…"
+                  endpoint="/doctors/affiliations/tenant"
+                  searchParam="q"
+                  mapOption={(d: any) => ({ id: d.doctorId || d.id, label: `Dr. ${d.doctor?.firstName || d.firstName || ''} ${d.doctor?.lastName || d.lastName || ''}`, sub: d.doctor?.specialization || '' })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Priority</label>
+                <select className="hms-input w-full" value={issueForm.priorityLevel} onChange={e => setIssueForm(f => ({ ...f, priorityLevel: e.target.value }))}>
+                  {['NORMAL', 'URGENT', 'EMERGENCY'].map(p => <option key={p}>{p}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+              <button onClick={() => setShowIssue(false)} className="btn-secondary px-4 py-2">Cancel</button>
+              <button onClick={issueToken} disabled={issuing} className="btn-primary px-4 py-2">
+                {issuing ? 'Issuing…' : 'Issue Token'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

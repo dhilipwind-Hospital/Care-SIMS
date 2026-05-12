@@ -9,10 +9,12 @@ import SearchableSelect from '../../components/ui/SearchableSelect';
 import api from '../../lib/api';
 import Pagination from '../../components/ui/Pagination';
 import { SkeletonTableRow, SkeletonKpiRow } from '../../components/ui/Skeleton';
+import { useAuth } from '../../context/AuthContext';
 
 const emptyForm = { patientId: '', toDepartmentId: '', toDoctorId: '', reason: '', urgency: 'ROUTINE', clinicalNotes: '' };
 
 export default function ReferralPage() {
+  const { user } = useAuth();
   const [referrals, setReferrals] = useState<any[]>([]);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -108,7 +110,7 @@ export default function ReferralPage() {
         await api.patch(`/referrals/${editingId}`, form);
         toast.success('Referral updated successfully');
       } else {
-        await api.post('/referrals', form);
+        await api.post('/referrals', { ...form, referringDoctorId: user?.sub });
         toast.success('Referral created successfully');
       }
       resetForm();
