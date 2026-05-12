@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { FlaskConical, Pill, UserCheck, Calendar, CheckCircle, AlertTriangle, ChevronRight, Plus, X, Clock } from 'lucide-react';
+import { FlaskConical, Pill, UserCheck, Calendar, CheckCircle, AlertTriangle, ChevronRight, Plus, X, Clock, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
@@ -14,8 +14,23 @@ export default function ConsultationPage() {
   const { user } = useAuth();
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const patientId = params.get('patientId');
   const tokenId   = params.get('tokenId');
+
+  // Patient — may come from URL param or be picked via inline search
+  const [patientId,      setPatientId]      = useState<string | null>(params.get('patientId'));
+  const [patSearch,      setPatSearch]      = useState('');
+  const [patResults,     setPatResults]     = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!patSearch.trim()) { setPatResults([]); return; }
+    const t = setTimeout(async () => {
+      try {
+        const { data } = await api.get('/patients', { params: { q: patSearch, limit: 8 } });
+        setPatResults(data.data || []);
+      } catch { /* silent */ }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [patSearch]);
 
   const [patient,        setPatient]        = useState<any>(null);
   const [vitals,         setVitals]         = useState<any>(null);
@@ -110,27 +125,59 @@ export default function ConsultationPage() {
       {/* Patient Banner */}
       <div className="bg-white border-b border-gray-100 px-6 py-4">
         <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0">
-              <span className="text-teal-700 text-sm font-bold">
-                {patient ? `${patient.firstName?.[0] || ''}${patient.lastName?.[0] || ''}` : '?'}
-              </span>
+          {!patientId ? (
+            /* ── No patient yet: show inline search ── */
+            <div className="flex-1 max-w-md">
+              <p className="text-xs font-semibold text-gray-500 mb-1">Select Patient to Begin Consultation</p>
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <input
+                  autoFocus
+                  value={patSearch}
+                  onChange={e => setPatSearch(e.target.value)}
+                  placeholder="Search patient by name or ID…"
+                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+                {patResults.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 max-h-52 overflow-y-auto">
+                    {patResults.map(p => (
+                      <button key={p.id} type="button"
+                        onClick={() => { setPatientId(p.id); setPatient(p); setPatSearch(''); setPatResults([]); }}
+                        className="w-full text-left px-4 py-2.5 hover:bg-teal-50 text-sm border-b border-gray-50 last:border-0">
+                        <span className="font-medium text-gray-900">{p.firstName} {p.lastName}</span>
+                        <span className="text-gray-400 ml-2 text-xs font-mono">{p.patientId}</span>
+                        {p.phone && <span className="text-gray-400 ml-2 text-xs">· {p.phone}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-            <div>
-              <div className="flex items-center gap-3">
-                <span className="font-bold text-gray-900 text-base">
-                  {patient ? `${patient.firstName} ${patient.lastName}` : 'Loading…'}
+          ) : (
+            /* ── Patient selected: show banner ── */
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0">
+                <span className="text-teal-700 text-sm font-bold">
+                  {patient ? `${patient.firstName?.[0] || ''}${patient.lastName?.[0] || ''}` : '?'}
                 </span>
-                {patient?.patientId && <span className="text-xs text-teal-600 font-mono bg-teal-50 px-2 py-0.5 rounded">{patient.patientId}</span>}
               </div>
-              <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500">
-                {age && <span>{age} yrs</span>}
-                {patient?.gender && <span>• {patient.gender === 'MALE' ? 'Male' : patient.gender === 'FEMALE' ? 'Female' : patient.gender}</span>}
-                {patient?.bloodGroup && <span>• {patient.bloodGroup}</span>}
-                {patient?.phone && <span>• {patient.phone}</span>}
+              <div>
+                <div className="flex items-center gap-3">
+                  <span className="font-bold text-gray-900 text-base">
+                    {patient ? `${patient.firstName} ${patient.lastName}` : 'Loading…'}
+                  </span>
+                  {patient?.patientId && <span className="text-xs text-teal-600 font-mono bg-teal-50 px-2 py-0.5 rounded">{patient.patientId}</span>}
+                  <button onClick={() => { setPatientId(null); setPatient(null); }} className="text-xs text-gray-400 hover:text-red-500 ml-1"><X size={13} /></button>
+                </div>
+                <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500">
+                  {age && <span>{age} yrs</span>}
+                  {patient?.gender && <span>• {patient.gender === 'MALE' ? 'Male' : patient.gender === 'FEMALE' ? 'Female' : patient.gender}</span>}
+                  {patient?.bloodGroup && <span>• {patient.bloodGroup}</span>}
+                  {patient?.phone && <span>• {patient.phone}</span>}
+                </div>
               </div>
             </div>
-          </div>
+          )}
           {patient?.knownAllergies && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 bg-red-50">
               <AlertTriangle size={13} className="text-red-500" />
