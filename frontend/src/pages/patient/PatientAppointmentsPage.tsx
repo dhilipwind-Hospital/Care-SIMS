@@ -57,7 +57,7 @@ export default function PatientAppointmentsPage() {
 
   // ── Load departments ──────────────────────────────────────────
   useEffect(() => {
-    api.get('/departments', { params: { limit: 50 } })
+    api.get('/auth/patient/me/departments')
       .then(r => setDepartments(r.data.data || []))
       .catch(() => {});
   }, []);
@@ -69,7 +69,7 @@ export default function PatientAppointmentsPage() {
       const params: any = { limit: 20 };
       if (docSearch.trim()) params.q = docSearch;
       if (deptFilter !== 'All') params.specialty = deptFilter;
-      const { data } = await api.get('/doctors', { params });
+      const { data } = await api.get('/auth/patient/me/doctors', { params });
       setDoctors(data.data || []);
     } catch { toast.error('Failed to load doctors'); setDoctors([]); }
     finally { setDocsLoading(false); }
@@ -86,7 +86,7 @@ export default function PatientAppointmentsPage() {
     const dateStr = `${calYear}-${String(calMonth + 1).padStart(2,'0')}-${String(selectedDay).padStart(2,'0')}`;
     setSlotsLoading(true);
     setSelectedSlot(null);
-    api.get('/appointments/slots', {
+    api.get('/auth/patient/me/slots', {
       params: { doctorId: selectedDoc.userId || selectedDoc.id, date: dateStr },
     })
       .then(r => setSlots(r.data || []))

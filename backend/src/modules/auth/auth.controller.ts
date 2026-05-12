@@ -166,6 +166,24 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('patient/me/doctors')
+  getPatientDoctors(@CurrentUser() user: any, @Query() q: any) {
+    return this.authService.getPatientFacingDoctors(user.tenantId, q);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('patient/me/departments')
+  getPatientDepartments(@CurrentUser() user: any) {
+    return this.authService.getPatientFacingDepartments(user.tenantId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('patient/me/slots')
+  getPatientSlots(@CurrentUser() user: any, @Query('doctorId') doctorId: string, @Query('date') date: string) {
+    return this.authService.getPatientFacingSlots(user.tenantId, doctorId, date);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Post('device-token')
   @HttpCode(200)
   registerDeviceToken(@CurrentUser('sub') userId: string, @CurrentUser('type') type: string, @Body() body: any) {

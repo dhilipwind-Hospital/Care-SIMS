@@ -449,6 +449,73 @@ export class AuthService {
     return { account, patient };
   }
 
+  // Patient-facing read-only lookups — scoped to the patient's selected tenant.
+  // Mirror the staff doctor/department/slot endpoints but without the role gate
+  // so PATIENT_TENANT tokens (which carry no staff role) can drive the booking UI.
+  async getPatientFacingDoctors(tenantId: string, query: any) {
+    const { q, specialty, limit = 20 } = query;
+    const affiliations = await this.prisma.doctorOrgAffiliation.findMany({
+      where: { tenantId, isActive: true },
+      include: {
+        doctor: { select: { id: true, firstName: true, lastName: true, specialties: true, photoUrl: true } },
+        location: { select: { id: true, name: true, city: true } },
+      },
+      take: Number(limit),
+    });
+    let data = affiliations
+      .filter(a => a.doctor)
+      .map(a => ({
+        id: a.doctor!.id,
+        userId: a.doctor!.id,
+        firstName: a.doctor!.firstName,
+        lastName: a.doctor!.lastName,
+        name: `Dr. ${a.doctor!.firstName} ${a.doctor!.lastName}`,
+        specialties: a.doctor!.specialties || [],
+        photoUrl: a.doctor!.photoUrl || null,
+        locationId: a.locationId,
+        locationName: a.location?.name || null,
+      }));
+    if (q) {
+      const needle = String(q).toLowerCase();
+      data = data.filter(d => `${d.firstName} ${d.lastName}`.toLowerCase().includes(needle));
+    }
+    if (specialty && specialty !== 'All') {
+      data = data.filter(d => Array.isArray(d.specialties) && d.specialties.includes(specialty));
+    }
+    return { data, meta: { total: data.length } };
+  }
+
+  async getPatientFacingDepartments(tenantId: string) {
+    const data = await this.prisma.department.findMany({
+      where: { tenantId, isActive: true },
+      select: { id: true, name: true, code: true, type: true },
+      orderBy: { name: 'asc' },
+    });
+    return { data, meta: { total: data.length } };
+  }
+
+  async getPatientFacingSlots(tenantId: string, doctorId: string, date: string) {
+    if (!doctorId || !date) return [];
+    const aff = await this.prisma.doctorOrgAffiliation.findFirst({ where: { tenantId, doctorId, isActive: true } });
+    if (!aff) return [];
+    const booked = await this.prisma.appointment.findMany({
+      where: { tenantId, doctorId, appointmentDate: new Date(date), status: { notIn: ['CANCELLED', 'NO_SHOW'] } },
+      select: { appointmentTime: true },
+    });
+    const bookedTimes = new Set(booked.map(a => a.appointmentTime));
+    const slots: string[] = [];
+    const duration = aff.slotDurationMinutes || 15;
+    let cur = 9 * 60;
+    const end = 18 * 60;
+    while (cur < end) {
+      const h = Math.floor(cur / 60).toString().padStart(2, '0');
+      const m = (cur % 60).toString().padStart(2, '0');
+      slots.push(`${h}:${m}`);
+      cur += duration;
+    }
+    return slots.map(time => ({ time, available: !bookedTimes.has(time) }));
+  }
+
   async getPatientAppointments(tenantId: string, patientAccountId: string, query: any) {
     const { patient } = await this.resolvePatientRecord(tenantId, patientAccountId);
     if (!patient) return { data: [], meta: { total: 0 } };
