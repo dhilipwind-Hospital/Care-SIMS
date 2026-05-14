@@ -166,6 +166,12 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('patient/me/timeline')
+  getPatientTimeline(@CurrentUser() user: any, @Query() q: any) {
+    return this.authService.getPatientTimeline(user.tenantId, user.sub, q);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('patient/me/doctors')
   getPatientDoctors(@CurrentUser() user: any, @Query() q: any) {
     return this.authService.getPatientFacingDoctors(user.tenantId, q);

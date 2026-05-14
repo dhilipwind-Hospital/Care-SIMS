@@ -621,6 +621,222 @@ export class AuthService {
     };
   }
 
+  // Unified visit timeline — pulls every clinical & financial event for the
+  // patient at this tenant and merges them into one chronological stream.
+  // Used by the patient portal to give patients a single-screen story of
+  // each visit (triage → consult → Rx → lab order → lab result → invoice
+  // → payment). Returns newest first.
+  async getPatientTimeline(tenantId: string, patientAccountId: string, query: any) {
+    const { patient } = await this.resolvePatientRecord(tenantId, patientAccountId);
+    if (!patient) return { events: [], meta: { total: 0 } };
+
+    const limit = Math.min(200, Number(query?.limit) || 60);
+    const where = { tenantId, patientId: patient.id };
+
+    const [
+      triages,
+      consultations,
+      prescriptions,
+      labOrders,
+      invoices,
+      payments,
+      appointments,
+      admissions,
+    ] = await Promise.all([
+      this.prisma.triageRecord.findMany({ where, orderBy: { triageTime: 'desc' }, take: limit }),
+      this.prisma.consultation.findMany({
+        where,
+        orderBy: { startedAt: 'desc' },
+        take: limit,
+        include: { diagnoses: true },
+      }),
+      this.prisma.prescription.findMany({
+        where,
+        orderBy: { issuedAt: 'desc' },
+        take: limit,
+        include: { items: true },
+      }),
+      this.prisma.labOrder.findMany({
+        where,
+        orderBy: { orderedAt: 'desc' },
+        take: limit,
+        include: { items: true, results: { include: { items: true } } },
+      }),
+      this.prisma.invoice.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        include: { lineItems: true, payments: true },
+      }),
+      this.prisma.payment.findMany({
+        where: { tenantId, invoice: { patientId: patient.id } },
+        orderBy: { paymentDate: 'desc' },
+        take: limit,
+      }),
+      this.prisma.appointment.findMany({
+        where,
+        orderBy: { appointmentDate: 'desc' },
+        take: limit,
+      }),
+      this.prisma.admission.findMany({
+        where,
+        orderBy: { admissionDate: 'desc' },
+        take: limit,
+      }),
+    ]);
+
+    // Fetch doctor display names for any consultation / prescription /
+    // appointment we surface in the timeline.
+    const doctorIds = Array.from(new Set([
+      ...consultations.map(c => c.doctorId),
+      ...prescriptions.map(r => r.doctorId),
+      ...appointments.map(a => a.doctorId),
+    ].filter(Boolean) as string[]));
+    const doctors = doctorIds.length
+      ? await this.prisma.tenantUser.findMany({
+          where: { id: { in: doctorIds } },
+          select: { id: true, firstName: true, lastName: true },
+        })
+      : [];
+    const docMap = Object.fromEntries(doctors.map(d => [d.id, `Dr. ${d.firstName} ${d.lastName}`]));
+
+    type Event = {
+      id: string;
+      type: 'APPOINTMENT' | 'TRIAGE' | 'CONSULT' | 'PRESCRIPTION' | 'LAB_ORDER' | 'LAB_RESULT' | 'INVOICE' | 'PAYMENT' | 'ADMISSION';
+      at: Date;
+      title: string;
+      summary?: string;
+      status?: string;
+      meta?: Record<string, any>;
+    };
+    const events: Event[] = [];
+
+    for (const a of appointments) {
+      events.push({
+        id: `appt-${a.id}`,
+        type: 'APPOINTMENT',
+        at: a.appointmentDate,
+        title: 'Appointment booked',
+        summary: `${docMap[a.doctorId] || 'Doctor'} · ${a.appointmentTime || ''}`.trim(),
+        status: a.status,
+        meta: { appointmentId: a.id },
+      });
+    }
+
+    for (const t of triages) {
+      const v = (t.vitalsOnArrival as any) || {};
+      const vitalsBits: string[] = [];
+      if (v.systolicBp && v.diastolicBp) vitalsBits.push(`BP ${v.systolicBp}/${v.diastolicBp}`);
+      if (v.heartRate) vitalsBits.push(`HR ${v.heartRate}`);
+      if (v.spo2) vitalsBits.push(`SpO₂ ${v.spo2}%`);
+      events.push({
+        id: `triage-${t.id}`,
+        type: 'TRIAGE',
+        at: t.triageTime,
+        title: `Triage · ${t.triageLevel}`,
+        summary: [t.chiefComplaint, vitalsBits.join(' · ')].filter(Boolean).join(' — '),
+        status: t.triageLevel,
+        meta: { triageId: t.id, painScore: t.painScore },
+      });
+    }
+
+    for (const c of consultations) {
+      const dx = (c.diagnoses || []).map((d: any) => d.description || d.icdCode).filter(Boolean).join(', ');
+      events.push({
+        id: `consult-${c.id}`,
+        type: 'CONSULT',
+        at: c.startedAt || c.createdAt,
+        title: `Consultation · ${docMap[c.doctorId] || 'Doctor'}`,
+        summary: [c.chiefComplaint, dx ? `Dx: ${dx}` : null].filter(Boolean).join(' — '),
+        status: c.status,
+        meta: { consultationId: c.id },
+      });
+    }
+
+    for (const r of prescriptions) {
+      const itemNames = (r.items || []).slice(0, 3).map((i: any) => i.drugName).filter(Boolean);
+      const more = (r.items?.length || 0) > 3 ? ` +${r.items.length - 3} more` : '';
+      events.push({
+        id: `rx-${r.id}`,
+        type: 'PRESCRIPTION',
+        at: r.issuedAt,
+        title: `Prescription · ${r.rxNumber || ''}`.trim(),
+        summary: itemNames.length ? itemNames.join(', ') + more : `${r.items?.length || 0} item(s)`,
+        status: r.status,
+        meta: { prescriptionId: r.id, doctor: docMap[r.doctorId] || null },
+      });
+    }
+
+    for (const o of labOrders) {
+      const tests = (o.items || []).map((i: any) => i.testName).filter(Boolean).join(', ');
+      events.push({
+        id: `lab-order-${o.id}`,
+        type: 'LAB_ORDER',
+        at: o.orderedAt,
+        title: `Lab order · ${o.orderNumber || ''}`.trim(),
+        summary: tests || `${o.items?.length || 0} test(s)`,
+        status: o.status,
+        meta: { labOrderId: o.id, priority: o.priority },
+      });
+      for (const res of o.results || []) {
+        const summary = (res.items || []).slice(0, 3)
+          .map((it: any) => `${it.testName}: ${it.resultValue}${it.flag && it.flag !== 'NORMAL' ? ` (${it.flag})` : ''}`)
+          .join(' · ');
+        events.push({
+          id: `lab-result-${res.id}`,
+          type: 'LAB_RESULT',
+          at: (res as any).validatedAt || (res as any).createdAt,
+          title: `Lab result · ${o.orderNumber || ''}`.trim(),
+          summary: summary || 'Results ready',
+          status: res.isCritical ? 'CRITICAL' : res.status,
+          meta: { labResultId: res.id, labOrderId: o.id },
+        });
+      }
+    }
+
+    for (const inv of invoices) {
+      const lineCount = inv.lineItems?.length || 0;
+      events.push({
+        id: `invoice-${inv.id}`,
+        type: 'INVOICE',
+        at: inv.createdAt,
+        title: `Invoice · ${inv.invoiceNumber || ''}`.trim(),
+        summary: `${lineCount} item(s) — Total ₹${Number(inv.netTotal).toFixed(2)}`,
+        status: inv.status,
+        meta: { invoiceId: inv.id, paid: Number(inv.paidAmount) },
+      });
+    }
+
+    for (const p of payments) {
+      events.push({
+        id: `payment-${p.id}`,
+        type: 'PAYMENT',
+        at: p.paymentDate,
+        title: 'Payment received',
+        summary: `₹${Number(p.amount).toFixed(2)} · ${p.paymentMethod || 'Cash'}`,
+        status: 'COMPLETED',
+        meta: { paymentId: p.id, invoiceId: p.invoiceId },
+      });
+    }
+
+    for (const a of admissions) {
+      events.push({
+        id: `admission-${a.id}`,
+        type: 'ADMISSION',
+        at: a.admissionDate,
+        title: 'Admission',
+        summary: a.diagnosisOnAdmission || a.admissionType || 'Admitted',
+        status: a.status,
+        meta: { admissionId: a.id },
+      });
+    }
+
+    // Sort newest first.
+    events.sort((x, y) => (y.at?.getTime?.() || 0) - (x.at?.getTime?.() || 0));
+
+    return { events: events.slice(0, limit), meta: { total: events.length, limit } };
+  }
+
   // ── FORGOT / RESET PASSWORD ─────────────────────────────────────────────
 
   async forgotPassword(email: string) {

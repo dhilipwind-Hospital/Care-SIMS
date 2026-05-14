@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Calendar, FileText, Pill, FlaskConical,
-  CreditCard, Building2, ChevronRight, Activity, Phone, Clock, CheckCircle,
+  CreditCard, Building2, ChevronRight, Activity, Phone, Clock, CheckCircle, History,
 } from 'lucide-react';
 import { clearAuth, getUser, type AuthUser } from '../../lib/auth';
 import api from '../../lib/api';
 
 const QUICK_ACTIONS = [
+  { icon: History,      label: 'My Visit Timeline',color: '#0EA5E9', bg: '#F0F9FF', path: '/app/patient/timeline',     desc: 'Complete care history in one view' },
   { icon: Calendar,     label: 'Book Appointment', color: '#0F766E', bg: '#F0FDFA', path: '/app/patient/appointments', desc: 'Schedule a visit with a doctor' },
   { icon: FileText,     label: 'Medical Records',  color: '#3B82F6', bg: '#EFF6FF', path: '/app/patient/records',      desc: 'View consultation history' },
   { icon: Pill,         label: 'Prescriptions',    color: '#F59E0B', bg: '#FFFBEB', path: '/app/patient/prescriptions',desc: 'View & download prescriptions' },

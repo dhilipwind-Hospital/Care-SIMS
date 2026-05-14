@@ -96,6 +96,7 @@ const PatientPrescriptionsPage   = lazy(() => import('./pages/patient/PatientPre
 const PatientLabReportsPage      = lazy(() => import('./pages/patient/PatientLabReportsPage'));
 const PatientBillingPage         = lazy(() => import('./pages/patient/PatientBillingPage'));
 const PatientVitalsPage          = lazy(() => import('./pages/patient/PatientVitalsPage'));
+const PatientTimelinePage        = lazy(() => import('./pages/patient/PatientTimelinePage'));
 
 // Operations
 const VisitorsPage               = lazy(() => import('./pages/visitors/VisitorsPage'));
@@ -326,6 +327,7 @@ function AppRoutes() {
           <Route path="lab"           element={<RoleRoute roles={['PATIENT']}><PatientLabReportsPage /></RoleRoute>} />
           <Route path="billing"       element={<RoleRoute roles={['PATIENT']}><PatientBillingPage /></RoleRoute>} />
           <Route path="vitals"        element={<RoleRoute roles={['PATIENT']}><PatientVitalsPage /></RoleRoute>} />
+          <Route path="timeline"      element={<RoleRoute roles={['PATIENT']}><PatientTimelinePage /></RoleRoute>} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />

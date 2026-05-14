@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, Calendar, FileText, Pill,
+  LayoutDashboard, Calendar, FileText, Pill, Clock,
   FlaskConical, CreditCard, Activity, LogOut, Menu, X, ChevronRight,
 } from 'lucide-react';
 import { clearAuth, getUser } from '../../lib/auth';
@@ -9,6 +9,7 @@ import SessionTimeoutWarning from '../ui/SessionTimeoutWarning';
 
 const NAV = [
   { label: 'Dashboard',      icon: LayoutDashboard, path: '/app/patient/portal' },
+  { label: 'Timeline',       icon: Clock,           path: '/app/patient/timeline' },
   { label: 'Appointments',   icon: Calendar,        path: '/app/patient/appointments' },
   { label: 'Medical Records',icon: FileText,        path: '/app/patient/records' },
   { label: 'Prescriptions',  icon: Pill,            path: '/app/patient/prescriptions' },
