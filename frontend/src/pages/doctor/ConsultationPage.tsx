@@ -41,6 +41,9 @@ export default function ConsultationPage() {
   const [completed,      setCompleted]      = useState(false);
   const [history,        setHistory]        = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [labOrders,      setLabOrders]      = useState<any[]>([]);
+  const [labOrdersLoading, setLabOrdersLoading] = useState(false);
+  const [prescriptions,  setPrescriptions]  = useState<any[]>([]);
 
   const [form, setForm] = useState({
     chiefComplaint: '', historyOfPresentIllness: '', pastMedicalHistory: '',
@@ -83,6 +86,21 @@ export default function ConsultationPage() {
       .catch(() => {})
       .finally(() => setHistoryLoading(false));
   }, [activeTab, patientId]);
+
+  // Load patient's existing lab orders + prescriptions when Orders tab opens,
+  // so the doctor sees what's already pending/back for this patient.
+  useEffect(() => {
+    if (activeTab !== 'Orders' || !patientId) return;
+    setLabOrdersLoading(true);
+    Promise.all([
+      api.get('/lab/orders', { params: { patientId, limit: 20 } })
+        .then(r => setLabOrders(r.data?.data || []))
+        .catch(() => setLabOrders([])),
+      api.get('/prescriptions', { params: { patientId, limit: 20 } })
+        .then(r => setPrescriptions(r.data?.data || []))
+        .catch(() => setPrescriptions([])),
+    ]).finally(() => setLabOrdersLoading(false));
+  }, [activeTab, patientId, consultationId]);
 
   const age = patient?.dateOfBirth
     ? new Date().getFullYear() - new Date(patient.dateOfBirth).getFullYear()
@@ -429,6 +447,84 @@ export default function ConsultationPage() {
                       </button>
                       <button onClick={() => setShowLabOrder(false)} className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
                     </div>
+                  </div>
+                )}
+
+                {/* Existing lab orders for this patient — see status of past
+                    orders and click through to results when available. */}
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Patient Lab Orders</div>
+                  {labOrdersLoading ? (
+                    <div className="text-center py-4 text-gray-400 text-sm">Loading…</div>
+                  ) : labOrders.length === 0 ? (
+                    <div className="text-center py-4 text-gray-400 text-sm">No lab orders for this patient yet</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {labOrders.map((o: any) => {
+                        const statusColor =
+                          o.status === 'COMPLETED' || o.status === 'VALIDATED' ? 'bg-green-100 text-green-700' :
+                          o.status === 'IN_PROGRESS' || o.status === 'COLLECTED' ? 'bg-blue-100 text-blue-700' :
+                          o.status === 'CANCELLED' ? 'bg-gray-100 text-gray-500' :
+                          'bg-amber-100 text-amber-700';
+                        return (
+                          <div key={o.id} className="flex items-center gap-3 px-3 py-2 rounded-lg border border-gray-100 hover:bg-gray-50">
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-medium text-gray-900 truncate">
+                                {o.orderNumber || o.id?.slice(0, 8)} · {(o.items || []).map((t: any) => t.testName).join(', ') || '—'}
+                              </div>
+                              <div className="text-xs text-gray-400 mt-0.5">
+                                {o.orderedAt ? new Date(o.orderedAt).toLocaleString('en-IN') : ''} · Priority: {o.priority || 'ROUTINE'}
+                              </div>
+                            </div>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor}`}>
+                              {o.status || 'ORDERED'}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Patient prescriptions snapshot — shows what's already written
+                  / sent to pharmacy / dispensed for this patient. */}
+              <div className="hms-card p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-gray-800">Prescriptions</h3>
+                  <button onClick={goToRx}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-teal-50 text-teal-700 hover:bg-teal-100 font-medium">
+                    <Pill size={13} /> Write Prescription
+                  </button>
+                </div>
+                {prescriptions.length === 0 ? (
+                  <div className="text-center py-4 text-gray-400 text-sm">No prescriptions for this patient yet</div>
+                ) : (
+                  <div className="space-y-2">
+                    {prescriptions.map((rx: any) => {
+                      const statusColor =
+                        rx.status === 'DISPENSED' ? 'bg-green-100 text-green-700' :
+                        rx.status === 'SENT_TO_PHARMACY' || rx.status === 'READY' ? 'bg-blue-100 text-blue-700' :
+                        rx.status === 'CANCELLED' || rx.status === 'REJECTED' ? 'bg-gray-100 text-gray-500' :
+                        'bg-amber-100 text-amber-700';
+                      const itemSummary = (rx.items || []).slice(0, 2).map((it: any) => it.drugName).filter(Boolean).join(', ');
+                      const more = (rx.items?.length || 0) > 2 ? ` +${rx.items.length - 2} more` : '';
+                      return (
+                        <div key={rx.id} className="flex items-center gap-3 px-3 py-2 rounded-lg border border-gray-100 hover:bg-gray-50">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-medium text-gray-900 truncate">
+                              {rx.rxNumber || rx.id?.slice(0, 8)} · {itemSummary || '—'}{more}
+                            </div>
+                            <div className="text-xs text-gray-400 mt-0.5">
+                              {rx.issuedAt ? new Date(rx.issuedAt).toLocaleString('en-IN') : ''} · {(rx.items?.length || 0)} item(s)
+                            </div>
+                          </div>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor}`}>
+                            {rx.status === 'SENT_TO_PHARMACY' ? 'AT PHARMACY' : rx.status || 'PENDING'}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

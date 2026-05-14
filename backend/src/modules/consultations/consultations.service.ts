@@ -1,5 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { generateSequentialId } from '../../common/utils/id-generator';
+
+// Default consultation fee when the org hasn't configured a per-doctor rate.
+// Reception/billing can edit the draft invoice before finalizing.
+const DEFAULT_CONSULT_FEE = 500;
 
 @Injectable()
 export class ConsultationsService {
@@ -67,7 +72,7 @@ export class ConsultationsService {
   }
 
   async complete(tenantId: string, id: string, dto: any) {
-    return this.prisma.$transaction(async (tx) => {
+    const completed = await this.prisma.$transaction(async (tx) => {
       const c = await tx.consultation.findFirst({ where: { id, tenantId } });
       if (!c) throw new NotFoundException('Consultation not found');
       if (dto.diagnoses) {
@@ -75,6 +80,68 @@ export class ConsultationsService {
         if (dto.diagnoses.length) await tx.consultationDiagnosis.createMany({ data: dto.diagnoses.map((d: any, i: number) => ({ consultationId: id, icdCode: d.icdCode, description: d.description, type: d.type || 'PRIMARY', sortOrder: i })) });
       }
       return tx.consultation.update({ where: { id }, data: { status: 'COMPLETED', completedAt: new Date(), assessment: dto.assessment, plan: dto.plan, historySubjective: dto.historySubjective, historyObjective: dto.historyObjective, examinationFindings: dto.examinationFindings } });
+    });
+
+    // Auto-create a DRAFT invoice with a consultation-fee line item so reception
+    // can collect payment. Idempotent: skip if an invoice already exists for
+    // this consultation. Failure here must never block the completion.
+    try {
+      await this.autoCreateConsultInvoice(tenantId, completed, dto.consultationFee);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to auto-create consultation invoice:', err);
+    }
+
+    return completed;
+  }
+
+  private async autoCreateConsultInvoice(tenantId: string, consult: any, feeOverride?: number) {
+    // Idempotency — invoice line items carry the consultation id in referenceId.
+    const existing = await this.prisma.invoiceLineItem.findFirst({
+      where: { referenceId: consult.id, invoice: { tenantId, patientId: consult.patientId } },
+      select: { invoiceId: true },
+    });
+    if (existing) return null;
+
+    const fee = Number(feeOverride) > 0 ? Number(feeOverride) : DEFAULT_CONSULT_FEE;
+    return generateSequentialId(this.prisma, {
+      table: 'Invoice',
+      idColumn: 'invoiceNumber',
+      prefix: `INV-${new Date().getFullYear()}-`,
+      tenantId,
+      callback: async (tx, invoiceNumber) => {
+        // Cast as any — Prisma's discriminated CreateInput union conflicts
+        // when both raw FK (patientId) and nested relation (lineItems.create)
+        // are used together. billing.service.createInvoice does the same.
+        const data: any = {
+          tenantId,
+          invoiceNumber,
+          locationId: consult.locationId,
+          patientId: consult.patientId,
+          doctorId: consult.doctorId,
+          invoiceType: 'OPD',
+          subtotal: fee,
+          discountAmount: 0,
+          taxAmount: 0,
+          netTotal: fee,
+          paidAmount: 0,
+          status: 'DRAFT',
+          lineItems: {
+            create: [{
+              description: 'Doctor Consultation',
+              category: 'CONSULTATION',
+              quantity: 1,
+              unitPrice: fee,
+              discountPct: 0,
+              taxPct: 0,
+              amount: fee,
+              referenceId: consult.id,
+              sortOrder: 0,
+            }],
+          },
+        };
+        return tx.invoice.create({ data });
+      },
     });
   }
 }

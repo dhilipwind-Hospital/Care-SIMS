@@ -112,13 +112,19 @@ export default function PrescriptionsPage() {
     e.preventDefault();
     if (!form.patientId) { toast.error('Please select a patient'); return; }
     try {
-      await api.post('/prescriptions', {
+      const { data: created } = await api.post('/prescriptions', {
         patientId: form.patientId,
         doctorId: user?.sub,
         consultationId: form.consultationId || undefined,
         notes: (form as any).notes || undefined,
         items: form.items.map(it => ({ ...it, durationDays: Number(it.durationDays) })),
       });
+      // Auto-route to pharmacy so it appears in the dispense queue immediately.
+      // Doesn't block the toast if the secondary call fails.
+      if (created?.id) {
+        api.post(`/prescriptions/${created.id}/send-pharmacy`).catch(() => {});
+      }
+      toast.success('Prescription saved & sent to pharmacy');
       setShowForm(false);
       setForm({ patientId: '', consultationId: '', prescriptionType: 'OPD', items: [{ ...EMPTY_ITEM }] });
       setSelectedPat(null); setPatSearch('');
