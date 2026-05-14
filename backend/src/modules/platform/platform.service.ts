@@ -786,6 +786,299 @@ export class PlatformService {
     return { rolesUpdated: sysRoles.length, permissionsInserted: inserted };
   }
 
+  // One-shot demo provisioning. Creates a complete hospital with one user
+  // per system role, an affiliated doctor, sample departments, drugs, and
+  // a sample patient — everything the OPD demo flow needs. Returns the
+  // credentials so the platform admin can hand them out at the demo.
+  // Idempotent on the org slug: if the slug already exists, throws so the
+  // caller can pick a different one.
+  async seedDemoOrganization(input: { name?: string; slug?: string } = {}, platformAdminId: string) {
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const slug = (input.slug || `demo-${stamp}-${Math.random().toString(36).slice(2, 6)}`).toLowerCase();
+    const name = input.name || `Demo Hospital — ${stamp}`;
+
+    const existing = await this.prisma.tenant.findUnique({ where: { slug } });
+    if (existing) throw new BadRequestException(`Slug '${slug}' already exists — pick another`);
+
+    const sharedPassword = 'Demo@1234';
+    const passwordHash = await bcrypt.hash(sharedPassword, 10);
+
+    // Step 1 — Tenant + location via the existing createOrganization path so
+    // it also gets default features + system roles + role permissions seeded.
+    const tenant = await this.createOrganization({
+      legalName: name,
+      tradeName: name,
+      orgType: 'HOSPITAL',
+      slug,
+      primaryEmail: `admin@${slug}.demo`,
+      primaryPhone: '9999999999',
+      subscriptionPlan: 'STANDARD',
+      trialDays: 30,
+      timezone: 'Asia/Kolkata',
+      currency: 'INR',
+      location: {
+        name: `${name} — Main Campus`,
+        code: 'MAIN',
+        type: 'MAIN',
+        address: { line1: '1 Demo Road', city: 'Chennai', state: 'Tamil Nadu', pin: '600001', country: 'IN' },
+        phone: '9999999999',
+        email: `info@${slug}.demo`,
+      },
+      adminUser: {
+        firstName: 'Admin',
+        lastName: 'Demo',
+        email: `admin@${slug}.demo`,
+        phone: '9999999999',
+      },
+    }, platformAdminId);
+
+    const tenantId = tenant.id as string;
+    const location = await this.prisma.tenantLocation.findFirst({ where: { tenantId } });
+    if (!location) throw new BadRequestException('Demo seed: primary location creation failed');
+    const locationId = location.id;
+
+    // Override the auto-generated admin password with the shared demo password
+    // so the credentials we hand out actually work.
+    await this.prisma.tenantUser.updateMany({
+      where: { tenantId, email: `admin@${slug}.demo` },
+      data: { passwordHash, forcePasswordChange: false },
+    });
+
+    // Step 2 — One staff user per clinical role we need for the demo.
+    const staffUsers = [
+      { firstName: 'Nikhil',   lastName: 'Reception', role: 'SYS_RECEPTIONIST',     emailLocal: 'reception' },
+      { firstName: 'Priya',    lastName: 'Nurse',     role: 'SYS_NURSE',            emailLocal: 'nurse' },
+      { firstName: 'Vikram',   lastName: 'Pharma',    role: 'SYS_PHARMACIST',       emailLocal: 'pharmacy' },
+      { firstName: 'Anjali',   lastName: 'Lab',       role: 'SYS_LAB_TECH',         emailLocal: 'lab' },
+      { firstName: 'Suresh',   lastName: 'Billing',   role: 'SYS_BILLING',          emailLocal: 'billing' },
+    ];
+    const roleByName: Record<string, string> = {};
+    const rolesInOrg = await this.prisma.tenantRole.findMany({
+      where: { tenantId, isSystemRole: true },
+      select: { id: true, systemRoleId: true },
+    });
+    for (const r of rolesInOrg) if (r.systemRoleId) roleByName[r.systemRoleId] = r.id;
+
+    const createdStaff: Array<{ role: string; email: string }> = [];
+    for (const s of staffUsers) {
+      const email = `${s.emailLocal}@${slug}.demo`;
+      const roleId = roleByName[s.role];
+      if (!roleId) continue;
+      // upsert in case the seed is re-run for the same org accidentally
+      await this.prisma.tenantUser.upsert({
+        where: { tenantId_email: { tenantId, email } as any },
+        update: { passwordHash, roleId, primaryLocationId: locationId, isActive: true, forcePasswordChange: false },
+        create: {
+          tenantId, email, passwordHash,
+          firstName: s.firstName, lastName: s.lastName,
+          phone: '9000000000',
+          roleId, primaryLocationId: locationId,
+          locationScope: 'ALL',
+          forcePasswordChange: false, isActive: true,
+        },
+      } as any).catch(async () => {
+        // Fallback when the (tenantId, email) compound isn't a Prisma named
+        // unique — find/create manually.
+        const ex = await this.prisma.tenantUser.findFirst({ where: { tenantId, email } });
+        if (ex) {
+          await this.prisma.tenantUser.update({ where: { id: ex.id }, data: { passwordHash, roleId, primaryLocationId: locationId, isActive: true, forcePasswordChange: false } });
+        } else {
+          await this.prisma.tenantUser.create({
+            data: {
+              tenantId, email, passwordHash,
+              firstName: s.firstName, lastName: s.lastName,
+              phone: '9000000000',
+              roleId, primaryLocationId: locationId,
+              locationScope: 'ALL',
+              forcePasswordChange: false, isActive: true,
+            },
+          });
+        }
+      });
+      createdStaff.push({ role: s.role, email });
+    }
+
+    // Step 3 — Sample doctor (DoctorRegistry is global, email unique).
+    const doctorEmail = `doctor@${slug}.demo`;
+    let doctor = await this.prisma.doctorRegistry.findUnique({ where: { email: doctorEmail } });
+    if (!doctor) {
+      doctor = await this.prisma.doctorRegistry.create({
+        data: {
+          email: doctorEmail,
+          passwordHash,
+          firstName: 'Rahul',
+          lastName: 'Sharma',
+          phone: `+91${Math.floor(7000000000 + Math.random() * 999999999)}`,
+          gender: 'MALE',
+          dateOfBirth: new Date('1985-06-15'),
+          primaryDegree: 'MBBS',
+          pgDegree: 'MD',
+          pgSpecialization: 'General Medicine',
+          experienceYears: 12,
+          specialties: ['General Medicine', 'Internal Medicine'],
+          subspecialties: [],
+          languages: ['English', 'Hindi', 'Tamil'],
+          medicalCouncil: 'TNMC',
+          registrationNo: `TN-${Math.floor(10000 + Math.random() * 89999)}`,
+          registrationDate: new Date('2010-01-01'),
+          ayphenStatus: 'VERIFIED',
+          mfaEnabled: false,
+        } as any,
+      });
+    }
+
+    // Affiliate the doctor to this tenant (single affiliation, single location).
+    const existingAff = await this.prisma.doctorOrgAffiliation.findFirst({
+      where: { doctorId: doctor.id, tenantId },
+    });
+    if (!existingAff) {
+      await this.prisma.doctorOrgAffiliation.create({
+        data: {
+          doctorId: doctor.id,
+          tenantId,
+          locationId,
+          designation: 'Consultant',
+          employmentType: 'FULL_TIME',
+          departmentName: 'General Medicine',
+          availableDays: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'],
+          slotDurationMinutes: 15,
+          consultationFee: 500,
+          status: 'ACTIVE',
+          isActive: true,
+          acceptedAt: new Date(),
+          joinedAt: new Date(),
+        },
+      });
+    }
+
+    // Step 4 — A couple of departments so the patient-portal selector and
+    // doctor filter have something to show.
+    const deptDefs = [
+      { name: 'General Medicine', code: 'GMED' },
+      { name: 'Pediatrics',       code: 'PEDS' },
+      { name: 'Pharmacy',         code: 'PHARM' },
+      { name: 'Laboratory',       code: 'LAB' },
+    ];
+    for (const d of deptDefs) {
+      const ex = await this.prisma.department.findFirst({ where: { tenantId, code: d.code } });
+      if (!ex) {
+        await this.prisma.department.create({
+          data: { tenantId, locationId, name: d.name, code: d.code, isActive: true } as any,
+        });
+      }
+    }
+
+    // Step 5 — Sample patient so the OPD flow has someone to triage on.
+    const patientId = `PAT-${stamp}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+    let patient = await this.prisma.patient.findFirst({
+      where: { tenantId, email: `patient@${slug}.demo` },
+    });
+    if (!patient) {
+      patient = await this.prisma.patient.create({
+        data: {
+          tenantId,
+          locationId,
+          patientId,
+          registrationType: 'WALKIN',
+          firstName: 'Demo',
+          lastName: 'Patient',
+          dateOfBirth: new Date('1990-04-12'),
+          gender: 'MALE',
+          bloodGroup: 'O+',
+          mobile: '9988776655',
+          email: `patient@${slug}.demo`,
+          address: { line1: '12 Patient Lane', city: 'Chennai', state: 'TN' },
+          allergies: ['Penicillin'],
+        } as any,
+      });
+    }
+
+    // Also create a PatientAccount so the patient portal login works.
+    const patientAccountEmail = `patient@${slug}.demo`;
+    let patientAccount = await this.prisma.patientAccount.findUnique({ where: { email: patientAccountEmail } });
+    if (!patientAccount) {
+      patientAccount = await this.prisma.patientAccount.create({
+        data: {
+          email: patientAccountEmail,
+          passwordHash,
+          firstName: 'Demo',
+          lastName: 'Patient',
+          phone: '9988776655',
+          dateOfBirth: new Date('1990-04-12'),
+          gender: 'MALE',
+          bloodGroup: 'O+',
+        } as any,
+      });
+    } else {
+      // Reset password if the account already existed
+      await this.prisma.patientAccount.update({
+        where: { id: patientAccount.id },
+        data: { passwordHash },
+      });
+    }
+
+    // Step 6 — A handful of drugs so the doctor's Rx can pick from a real list.
+    const drugDefs = [
+      { brandName: 'Calpol 500', genericName: 'Paracetamol', dosageForm: 'TABLET', strength: '500mg', category: 'ANALGESICS' },
+      { brandName: 'Augmentin 625', genericName: 'Amoxicillin + Clavulanate', dosageForm: 'TABLET', strength: '625mg', category: 'ANTIBIOTICS' },
+      { brandName: 'Pan 40', genericName: 'Pantoprazole', dosageForm: 'TABLET', strength: '40mg', category: 'OTC' },
+      { brandName: 'Crocin Cold & Flu', genericName: 'Paracetamol + Phenylephrine', dosageForm: 'TABLET', strength: '500mg', category: 'ANALGESICS' },
+      { brandName: 'ORS Powder', genericName: 'Oral Rehydration Salts', dosageForm: 'POWDER', strength: '21g', category: 'OTC' },
+    ];
+    for (const d of drugDefs) {
+      const ex = await this.prisma.drug.findFirst({ where: { tenantId, brandName: d.brandName } });
+      if (!ex) {
+        const drug = await this.prisma.drug.create({
+          data: {
+            tenantId,
+            brandName: d.brandName,
+            genericName: d.genericName,
+            dosageForm: d.dosageForm,
+            strength: d.strength,
+            category: d.category,
+            gstPct: 12,
+            reorderLevel: 20,
+            maxStockLevel: 500,
+            storageCondition: 'ROOM_TEMPERATURE',
+            isControlled: false,
+          } as any,
+        });
+        // Stock with one batch so dispense actually has inventory
+        const exp = new Date(); exp.setFullYear(exp.getFullYear() + 1);
+        await this.prisma.drugBatch.create({
+          data: {
+            tenantId,
+            drugId: drug.id,
+            locationId,
+            batchNumber: `B-${Date.now().toString().slice(-6)}`,
+            expiryDate: exp,
+            quantityInStock: 200,
+            unitCost: 5,
+            status: 'ACTIVE',
+            receivedDate: new Date(),
+          } as any,
+        });
+      }
+    }
+
+    await this.logPlatformEvent('TENANT_DEMO_SEEDED', platformAdminId, 'TENANT', tenantId, name, `Demo organization seeded with full staff + sample data`);
+
+    return {
+      tenant: { id: tenantId, name, slug },
+      credentials: {
+        password: sharedPassword,
+        platformAdminNote: 'All staff and patient accounts share this password',
+        staff: [
+          { role: 'Organization Admin', email: `admin@${slug}.demo` },
+          ...createdStaff.map(s => ({ role: s.role.replace('SYS_', '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()), email: s.email })),
+        ],
+        doctor: { email: doctorEmail, loginUrl: '/doctor/login' },
+        patient: { email: patientAccountEmail, loginUrl: '/patient/login' },
+      },
+      tip: 'Log in as reception → register a walk-in (or use Demo Patient), nurse triages, doctor sees triage card on consult page, writes Rx (auto-routes to pharmacy), orders lab, completes (auto invoice). Pharmacist dispenses, lab tech enters result, reception finalises bill. Then log in as patient (patient@<slug>.demo) → Timeline shows the whole journey.',
+    };
+  }
+
   async logPlatformEvent(eventType: string, actorId: string, targetType: string, targetId: string, targetName: string, description: string) {
     const prev = await this.prisma.platformAuditLog.findFirst({ orderBy: { createdAt: 'desc' } });
     const prevHash = prev?.hash || '0';

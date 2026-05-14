@@ -33,6 +33,13 @@ export class PlatformController {
   @Post('organizations/:id/seed-role-permissions')
   seedRolePerms(@Param('id') id: string) { return this.platformService.seedRolePermissionsForOrg(id); }
 
+  // One-click demo provisioning. Optional body { name, slug } — if omitted
+  // a date-stamped slug is generated.
+  @Post('organizations/seed-demo')
+  seedDemo(@Body() body: { name?: string; slug?: string }, @CurrentUser('sub') adminId: string) {
+    return this.platformService.seedDemoOrganization(body || {}, adminId);
+  }
+
   @Delete('organizations/:id')
   deleteOrg(@Param('id') id: string, @Body() body: { confirmSlug: string }, @CurrentUser('sub') adminId: string) {
     return this.platformService.deleteOrganization(id, body?.confirmSlug, adminId);

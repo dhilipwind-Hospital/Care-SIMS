@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
-import { Building2, Shield, Plus, Search, CheckCircle, Clock, XCircle, TrendingUp, Globe, Layers, Trash2 } from 'lucide-react';
+import { Building2, Shield, Plus, Search, CheckCircle, Clock, XCircle, TrendingUp, Globe, Layers, Trash2, Sparkles, Copy } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import api from '../../lib/api';
@@ -44,6 +44,30 @@ export default function PlatformDashboard() {
   const [deletingOrg, setDeletingOrg] = useState<any>(null);
   const [confirmSlugInput, setConfirmSlugInput] = useState('');
   const [deletePending, setDeletePending] = useState(false);
+
+  // Demo-seed state
+  const [seedingDemo, setSeedingDemo] = useState(false);
+  const [demoResult, setDemoResult] = useState<any>(null);
+
+  const handleSeedDemo = async () => {
+    if (seedingDemo) return;
+    setSeedingDemo(true);
+    try {
+      const { data } = await api.post('/platform/organizations/seed-demo', {});
+      setDemoResult(data);
+      toast.success(`Demo hospital "${data?.tenant?.name}" created`);
+      fetchTenants();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to seed demo hospital');
+    } finally { setSeedingDemo(false); }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard?.writeText(text).then(
+      () => toast.success('Copied'),
+      () => toast.error('Copy failed'),
+    );
+  };
 
   const handleDelete = async () => {
     if (!deletingOrg) return;
@@ -120,11 +144,17 @@ export default function PlatformDashboard() {
         title="Platform Dashboard"
         subtitle="Ayphen HMS — Multi-tenant SaaS administration"
         actions={
-          <button onClick={() => setShowRegister(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-semibold shadow-md"
-            style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
-            <Plus size={15} /> Register Organization
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={handleSeedDemo} disabled={seedingDemo}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-purple-700 text-sm font-semibold border border-purple-200 bg-purple-50 hover:bg-purple-100 disabled:opacity-60">
+              <Sparkles size={15} /> {seedingDemo ? 'Creating…' : 'Create Demo Hospital'}
+            </button>
+            <button onClick={() => setShowRegister(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-semibold shadow-md"
+              style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
+              <Plus size={15} /> Register Organization
+            </button>
+          </div>
         }
       />
 
@@ -409,6 +439,100 @@ export default function PlatformDashboard() {
                 disabled={deletePending || confirmSlugInput !== deletingOrg.slug}
                 className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed">
                 {deletePending ? 'Deleting…' : 'Delete Permanently'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Demo seed result — shows the freshly-created hospital's credentials */}
+      {demoResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDemoResult(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles size={18} className="text-purple-600" />
+                <h3 className="font-bold text-gray-900">Demo Hospital Ready</h3>
+              </div>
+              <button onClick={() => setDemoResult(null)} className="text-gray-400 hover:text-red-500"><XCircle size={18} /></button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 p-6 space-y-5">
+              <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+                <div className="text-xs text-purple-600 font-bold uppercase tracking-wider">Hospital</div>
+                <div className="text-base font-bold text-gray-900 mt-1">{demoResult.tenant?.name}</div>
+                <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-2">
+                  <span>slug: <code className="font-mono bg-white px-1.5 py-0.5 rounded border border-purple-200">{demoResult.tenant?.slug}</code></span>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <div className="text-xs text-amber-700 font-bold uppercase tracking-wider mb-1">Shared password (all accounts)</div>
+                <div className="flex items-center gap-2">
+                  <code className="font-mono text-lg font-bold text-gray-900 bg-white px-3 py-1 rounded border border-amber-200">{demoResult.credentials?.password}</code>
+                  <button onClick={() => copyToClipboard(demoResult.credentials.password)} className="p-1.5 rounded hover:bg-amber-100 text-amber-700">
+                    <Copy size={13} />
+                  </button>
+                </div>
+                <div className="text-[11px] text-amber-700 mt-1.5">{demoResult.credentials?.platformAdminNote}</div>
+              </div>
+
+              <div>
+                <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Staff Logins · use /login</div>
+                <div className="space-y-1">
+                  {(demoResult.credentials?.staff || []).map((s: any) => (
+                    <div key={s.email} className="flex items-center gap-2 p-2 rounded-lg border border-gray-100 hover:bg-gray-50">
+                      <span className="text-xs font-semibold text-gray-700 w-44 truncate">{s.role}</span>
+                      <code className="font-mono text-xs text-teal-700 flex-1 truncate">{s.email}</code>
+                      <button onClick={() => copyToClipboard(s.email)} className="p-1 rounded hover:bg-gray-200 text-gray-400">
+                        <Copy size={11} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {demoResult.credentials?.doctor && (
+                <div>
+                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                    Doctor · use {demoResult.credentials.doctor.loginUrl}
+                  </div>
+                  <div className="flex items-center gap-2 p-2 rounded-lg border border-gray-100 hover:bg-gray-50">
+                    <span className="text-xs font-semibold text-gray-700 w-44">Dr. Rahul Sharma</span>
+                    <code className="font-mono text-xs text-teal-700 flex-1 truncate">{demoResult.credentials.doctor.email}</code>
+                    <button onClick={() => copyToClipboard(demoResult.credentials.doctor.email)} className="p-1 rounded hover:bg-gray-200 text-gray-400">
+                      <Copy size={11} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {demoResult.credentials?.patient && (
+                <div>
+                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                    Patient · use {demoResult.credentials.patient.loginUrl}
+                  </div>
+                  <div className="flex items-center gap-2 p-2 rounded-lg border border-gray-100 hover:bg-gray-50">
+                    <span className="text-xs font-semibold text-gray-700 w-44">Demo Patient</span>
+                    <code className="font-mono text-xs text-teal-700 flex-1 truncate">{demoResult.credentials.patient.email}</code>
+                    <button onClick={() => copyToClipboard(demoResult.credentials.patient.email)} className="p-1 rounded hover:bg-gray-200 text-gray-400">
+                      <Copy size={11} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {demoResult.tip && (
+                <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 text-xs text-teal-800 leading-relaxed">
+                  <span className="font-bold">Demo flow:</span> {demoResult.tip}
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+              <button onClick={() => setDemoResult(null)}
+                className="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800">
+                Got it
               </button>
             </div>
           </div>
