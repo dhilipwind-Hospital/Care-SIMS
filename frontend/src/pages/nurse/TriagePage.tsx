@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Search, X, ChevronRight, Printer } from 'lucide-react';
+import { Search, X, ChevronRight, Printer, UserCheck, FlaskConical, SkipForward, Plus, Trash2 } from 'lucide-react';
 import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
 import api from '../../lib/api';
+import { getUser } from '../../lib/auth';
 
 const PRIORITY_LEVELS = [
   { key: 'RED',    label: 'Emergency',   sub: 'Life-threatening & immediate care', border: 'border-red-400',    bg: 'bg-red-50',    dot: 'bg-red-500',    text: 'text-red-700'    },
@@ -42,6 +43,41 @@ export default function TriagePage() {
   const [patientLookup, setPatientLookup] = useState('');
   const [patientResults, setPatientResults] = useState<any[]>([]);
   const [patientLookupLoading, setPatientLookupLoading] = useState(false);
+
+  // Doctor assignment
+  const user = getUser();
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const [showAssignDoctor, setShowAssignDoctor] = useState(false);
+  const [assignDoctorSearch, setAssignDoctorSearch] = useState('');
+  const [selectedDoctor, setSelectedDoctor] = useState<any>(null);
+
+  // Lab order modal
+  const [showLabOrder, setShowLabOrder] = useState(false);
+  const [labTests, setLabTests] = useState<Array<{ testCode: string; testName: string; category: string; urgency: string }>>([
+    { testCode: '', testName: '', category: 'HEMATOLOGY', urgency: 'ROUTINE' },
+  ]);
+  const [labPriority, setLabPriority] = useState('ROUTINE');
+  const [labNotes, setLabNotes] = useState('');
+  const [labSubmitting, setLabSubmitting] = useState(false);
+
+  // Skip patient modal
+  const [showSkip, setShowSkip] = useState(false);
+  const [skipReason, setSkipReason] = useState('');
+  const [skipping, setSkipping] = useState(false);
+
+  // Load doctors at this nurse's location for the Assign Doctor picker
+  useEffect(() => {
+    if (!user?.locationId) return;
+    api.get(`/doctors/by-location/${user.locationId}`)
+      .then(r => setDoctors(r.data?.data || r.data || []))
+      .catch(() => setDoctors([]));
+  }, [user?.locationId]);
+
+  const filteredDoctors = doctors.filter(d => {
+    if (!assignDoctorSearch.trim()) return true;
+    const n = `${d.firstName || ''} ${d.lastName || ''} ${(d.specialties || []).join(' ')}`.toLowerCase();
+    return n.includes(assignDoctorSearch.toLowerCase());
+  });
 
   useEffect(() => {
     if (!patSearch.trim()) { setPatResults([]); return; }
@@ -157,6 +193,7 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
         knownAllergies: form.knownAllergies || undefined,
         currentMedications: form.currentMedications || undefined,
         nurseNotes: nurseNotes || undefined,
+        assignedDoctorId: selectedDoctor?.id || undefined,
         systolicBp:     form.systolicBp     ? Number(form.systolicBp)     : undefined,
         diastolicBp:    form.diastolicBp    ? Number(form.diastolicBp)    : undefined,
         heartRate:      form.heartRate      ? Number(form.heartRate)      : undefined,
@@ -167,14 +204,74 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
         heightCm:       form.heightCm       ? Number(form.heightCm)       : undefined,
         painScore:      form.painScore !== '' ? Number(form.painScore)    : undefined,
       });
-      toast.success('Triage saved');
+      toast.success(selectedDoctor ? `Triage saved and assigned to Dr. ${selectedDoctor.firstName} ${selectedDoctor.lastName}` : 'Triage saved');
       setSaved(true);
       fetchTriages();
       // Reset after a beat so the success state is visible
-      setTimeout(resetForm, 1200);
+      setTimeout(() => { resetForm(); setSelectedDoctor(null); }, 1200);
     } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to save triage'); }
     finally { setSaving(false); }
   };
+
+  // Order lab tests from triage — requires an assigned doctor (lab DTO needs doctorId).
+  const submitLabOrder = async () => {
+    if (!form.patientId) { toast.error('Select a patient first'); return; }
+    if (!selectedDoctor) { toast.error('Assign a doctor before ordering labs'); setShowAssignDoctor(true); return; }
+    const valid = labTests.filter(t => t.testName.trim());
+    if (!valid.length) { toast.error('Add at least one lab test'); return; }
+    setLabSubmitting(true);
+    try {
+      await api.post('/lab/orders', {
+        patientId: form.patientId,
+        doctorId: selectedDoctor.id,
+        priority: labPriority,
+        clinicalNotes: labNotes || form.chiefComplaint || undefined,
+        tests: valid.map(t => ({
+          testCode: t.testCode || t.testName.toUpperCase().replace(/\s+/g, '_'),
+          testName: t.testName,
+          category: t.category,
+          urgency: t.urgency,
+        })),
+      });
+      toast.success(`${valid.length} lab test(s) ordered`);
+      setShowLabOrder(false);
+      setLabTests([{ testCode: '', testName: '', category: 'HEMATOLOGY', urgency: 'ROUTINE' }]);
+      setLabNotes('');
+      setLabPriority('ROUTINE');
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to order labs'); }
+    finally { setLabSubmitting(false); }
+  };
+
+  // Skip the current patient — mark their queue token SKIPPED if we have one,
+  // otherwise just clear the form so the nurse can move to the next.
+  const handleSkipPatient = async () => {
+    if (!form.patientId && !currentToken) { setShowSkip(false); return; }
+    setSkipping(true);
+    try {
+      // Find the patient's active queue token to update its status. fetchTriages
+      // already returned the latest token; if currentToken is set, use that.
+      if (currentToken && form.patientId) {
+        // The queue endpoint takes the token id, not number. Look it up.
+        const { data: queue } = await api.get('/queue', { params: { date: new Date().toISOString().slice(0, 10) } });
+        const tokens = queue?.tokens || queue?.data || queue || [];
+        const match = tokens.find((t: any) => t.patientId === form.patientId);
+        if (match) {
+          await api.patch(`/queue/${match.id}/status`, { status: 'SKIPPED', notes: skipReason || 'Skipped at triage' });
+        }
+      }
+      toast.success('Patient skipped — moving to next');
+      resetForm();
+      setSelectedDoctor(null);
+      setShowSkip(false);
+      setSkipReason('');
+      fetchTriages();
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to skip patient'); }
+    finally { setSkipping(false); }
+  };
+
+  const addLabTestRow = () => setLabTests(t => [...t, { testCode: '', testName: '', category: 'HEMATOLOGY', urgency: 'ROUTINE' }]);
+  const removeLabTestRow = (i: number) => setLabTests(t => t.length > 1 ? t.filter((_, idx) => idx !== i) : t);
+  const updateLabTest = (i: number, k: string, v: string) => setLabTests(t => t.map((row, idx) => idx === i ? { ...row, [k]: v } : row));
 
   const vitalsFields = [
     ['systolicBp',      'BP Systolic (mmHg)'],
@@ -395,6 +492,17 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
             <div className="flex items-center gap-2 mb-3">
               <span className="text-sm font-bold text-gray-800">Quick Actions</span>
             </div>
+            {selectedDoctor && (
+              <div className="bg-teal-50 border border-teal-200 rounded-lg px-3 py-2 mb-2 flex items-center gap-2">
+                <UserCheck size={13} className="text-teal-700" />
+                <span className="text-xs text-teal-800 font-medium truncate flex-1">
+                  Dr. {selectedDoctor.firstName} {selectedDoctor.lastName}
+                </span>
+                <button onClick={() => setSelectedDoctor(null)} className="text-teal-700 hover:text-red-500">
+                  <X size={12} />
+                </button>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2 mb-2">
               <button
                 onClick={handleSaveVitals}
@@ -405,19 +513,28 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
                 {saving ? 'Saving…' : 'Save Vitals'}
               </button>
               <button
+                onClick={() => setShowAssignDoctor(true)}
                 className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-gray-700 text-xs font-semibold hover:bg-gray-50 transition-all"
               >
-                Assign Doctor
+                <UserCheck size={12} /> {selectedDoctor ? 'Change Doctor' : 'Assign Doctor'}
               </button>
               <button
+                onClick={() => {
+                  if (!form.patientId) { toast.error('Select a patient first'); return; }
+                  setShowLabOrder(true);
+                }}
                 className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-gray-700 text-xs font-semibold hover:bg-gray-50 transition-all"
               >
-                Order Lab Tests
+                <FlaskConical size={12} /> Order Lab Tests
               </button>
               <button
+                onClick={() => {
+                  if (!form.patientId) { toast.error('Select a patient first'); return; }
+                  setShowSkip(true);
+                }}
                 className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-gray-700 text-xs font-semibold hover:bg-gray-50 transition-all"
               >
-                Skip Patient
+                <SkipForward size={12} /> Skip Patient
               </button>
             </div>
             {/* Complete Triage CTA */}
@@ -533,6 +650,175 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
 
         </div>
       </div>
+
+      {/* ── Assign Doctor Modal ───────────────────────────── */}
+      {showAssignDoctor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowAssignDoctor(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-bold text-gray-900">Assign Doctor</h3>
+              <button onClick={() => setShowAssignDoctor(false)} className="text-gray-400 hover:text-red-500"><X size={16} /></button>
+            </div>
+            <div className="p-4 border-b border-gray-100">
+              <div className="relative">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  autoFocus
+                  value={assignDoctorSearch}
+                  onChange={e => setAssignDoctorSearch(e.target.value)}
+                  placeholder="Search doctor by name or specialty…"
+                  className="w-full pl-8 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4">
+              {filteredDoctors.length === 0 ? (
+                <EmptyState title="No doctors available" description="No doctors are affiliated with this location." />
+              ) : (
+                <div className="space-y-2">
+                  {filteredDoctors.map(d => (
+                    <button
+                      key={d.id}
+                      onClick={() => { setSelectedDoctor(d); setShowAssignDoctor(false); setAssignDoctorSearch(''); toast.success(`Assigned to Dr. ${d.firstName} ${d.lastName}`); }}
+                      className={`w-full text-left p-3 rounded-xl border transition-all ${
+                        selectedDoctor?.id === d.id
+                          ? 'border-teal-500 bg-teal-50'
+                          : 'border-gray-200 hover:border-teal-300 hover:bg-gray-50'
+                      }`}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
+                          {(d.firstName?.[0] || '') + (d.lastName?.[0] || '')}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold text-gray-900">Dr. {d.firstName} {d.lastName}</div>
+                          <div className="text-xs text-gray-500 truncate">
+                            {(d.specialties || []).join(', ') || '—'}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Order Lab Tests Modal ───────────────────────────── */}
+      {showLabOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowLabOrder(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-bold text-gray-900">Order Lab Tests</h3>
+              <button onClick={() => setShowLabOrder(false)} className="text-gray-400 hover:text-red-500"><X size={16} /></button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-6 space-y-4">
+              {!selectedDoctor && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                  ⚠️ Lab orders need an attending doctor. Assign one first using the "Assign Doctor" button.
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Priority</label>
+                  <select value={labPriority} onChange={e => setLabPriority(e.target.value)} className={inp}>
+                    <option value="ROUTINE">Routine</option>
+                    <option value="URGENT">Urgent</option>
+                    <option value="STAT">STAT</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Clinical Notes</label>
+                  <input value={labNotes} onChange={e => setLabNotes(e.target.value)} placeholder="Reason for order…" className={inp} />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs text-gray-500">Tests</label>
+                  <button onClick={addLabTestRow} className="text-xs text-teal-700 hover:underline flex items-center gap-1">
+                    <Plus size={12} /> Add Test
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {labTests.map((t, i) => (
+                    <div key={i} className="grid grid-cols-[1fr_140px_120px_28px] gap-2 items-center">
+                      <input value={t.testName} onChange={e => updateLabTest(i, 'testName', e.target.value)} placeholder="Test name (e.g. CBC)" className={inp} />
+                      <select value={t.category} onChange={e => updateLabTest(i, 'category', e.target.value)} className={inp}>
+                        <option value="HEMATOLOGY">Hematology</option>
+                        <option value="BIOCHEMISTRY">Biochemistry</option>
+                        <option value="MICROBIOLOGY">Microbiology</option>
+                        <option value="SEROLOGY">Serology</option>
+                        <option value="URINE">Urine</option>
+                        <option value="RADIOLOGY">Radiology</option>
+                        <option value="OTHER">Other</option>
+                      </select>
+                      <select value={t.urgency} onChange={e => updateLabTest(i, 'urgency', e.target.value)} className={inp}>
+                        <option value="ROUTINE">Routine</option>
+                        <option value="URGENT">Urgent</option>
+                        <option value="STAT">STAT</option>
+                      </select>
+                      <button onClick={() => removeLabTestRow(i)} disabled={labTests.length <= 1}
+                        className="text-gray-400 hover:text-red-500 disabled:opacity-30">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+              <button onClick={() => setShowLabOrder(false)} disabled={labSubmitting}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                Cancel
+              </button>
+              <button onClick={submitLabOrder} disabled={labSubmitting}
+                className="px-4 py-2 rounded-lg text-white text-sm font-semibold disabled:opacity-60"
+                style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
+                {labSubmitting ? 'Ordering…' : 'Submit Order'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Skip Patient Modal ───────────────────────────── */}
+      {showSkip && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowSkip(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-bold text-gray-900">Skip Patient</h3>
+              <button onClick={() => setShowSkip(false)} className="text-gray-400 hover:text-red-500"><X size={16} /></button>
+            </div>
+            <div className="p-6 space-y-3">
+              <p className="text-sm text-gray-600">
+                This patient will be marked as <strong>SKIPPED</strong> in the queue. They can be re-called later but won't be the next in line.
+              </p>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Reason (optional)</label>
+                <textarea
+                  autoFocus
+                  value={skipReason}
+                  onChange={e => setSkipReason(e.target.value)}
+                  rows={3}
+                  placeholder="e.g. Patient stepped away, will return in 15 min"
+                  className={`${inp} resize-none`}
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+              <button onClick={() => { setShowSkip(false); setSkipReason(''); }} disabled={skipping}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                Cancel
+              </button>
+              <button onClick={handleSkipPatient} disabled={skipping}
+                className="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-50">
+                {skipping ? 'Skipping…' : 'Skip Patient'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
