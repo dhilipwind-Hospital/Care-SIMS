@@ -131,14 +131,32 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
 
   const inp = 'w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 transition-all';
 
+  const resetForm = () => {
+    setForm({
+      patientId: '', chiefComplaint: '', briefHistory: '', knownAllergies: '', currentMedications: '',
+      triageLevel: 'GREEN',
+      systolicBp: '', diastolicBp: '', heartRate: '', temperatureC: '', spo2: '',
+      respiratoryRate: '', weightKg: '', heightCm: '', painScore: '',
+    });
+    setNurseNotes('');
+    setSelectedPat(null);
+    setPatSearch('');
+    setSaved(false);
+  };
+
   const handleSaveVitals = async () => {
     if (!form.patientId) { toast.error('Please select a patient first'); return; }
+    if (!form.chiefComplaint.trim()) { toast.error('Chief complaint is required'); return; }
     setSaving(true);
     try {
       await api.post('/triage', {
         patientId: form.patientId,
         chiefComplaint: form.chiefComplaint,
         triageLevel: form.triageLevel,
+        briefHistory: form.briefHistory || undefined,
+        knownAllergies: form.knownAllergies || undefined,
+        currentMedications: form.currentMedications || undefined,
+        nurseNotes: nurseNotes || undefined,
         systolicBp:     form.systolicBp     ? Number(form.systolicBp)     : undefined,
         diastolicBp:    form.diastolicBp    ? Number(form.diastolicBp)    : undefined,
         heartRate:      form.heartRate      ? Number(form.heartRate)      : undefined,
@@ -147,11 +165,13 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
         respiratoryRate:form.respiratoryRate? Number(form.respiratoryRate): undefined,
         weightKg:       form.weightKg       ? Number(form.weightKg)       : undefined,
         heightCm:       form.heightCm       ? Number(form.heightCm)       : undefined,
-        painScore:      form.painScore      ? Number(form.painScore)      : undefined,
+        painScore:      form.painScore !== '' ? Number(form.painScore)    : undefined,
       });
       toast.success('Triage saved');
       setSaved(true);
       fetchTriages();
+      // Reset after a beat so the success state is visible
+      setTimeout(resetForm, 1200);
     } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to save triage'); }
     finally { setSaving(false); }
   };
@@ -160,7 +180,7 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
     ['systolicBp',      'BP Systolic (mmHg)'],
     ['diastolicBp',     'BP Diastolic (mmHg)'],
     ['heartRate',       'Heart Rate (bpm)'],
-    ['temperatureC',    'Temp (°F)'],
+    ['temperatureC',    'Temp (°C)'],
     ['spo2',            'SpO₂ (%)'],
     ['respiratoryRate', 'Resp. Rate (/min)'],
     ['weightKg',        'Weight (kg)'],

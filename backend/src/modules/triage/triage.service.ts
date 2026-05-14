@@ -9,11 +9,23 @@ export class TriageService {
     const where: any = { tenantId };
     if (query.triageLevel) where.triageLevel = query.triageLevel;
     if (query.patientId) where.patientId = query.patientId;
-    return this.prisma.triageRecord.findMany({
-      where,
-      orderBy: { triageTime: 'desc' },
-      take: query.limit ? parseInt(query.limit) : 50,
-    });
+    const page = Math.max(1, parseInt(query.page || '1', 10));
+    const limit = Math.min(100, parseInt(query.limit || '20', 10));
+    const skip = (page - 1) * limit;
+    const [data, total] = await Promise.all([
+      this.prisma.triageRecord.findMany({
+        where,
+        orderBy: { triageTime: 'desc' },
+        skip,
+        take: limit,
+        include: { patient: { select: { id: true, patientId: true, firstName: true, lastName: true } } },
+      }),
+      this.prisma.triageRecord.count({ where }),
+    ]);
+    // Flatten vitalsOnArrival back into top-level fields so the lookup panels
+    // and print card can keep reading r.systolicBp / r.heartRate / etc.
+    const flat = data.map(r => ({ ...r, ...((r.vitalsOnArrival as any) || {}) }));
+    return { data: flat, meta: { total, page, limit } };
   }
 
   async create(tenantId: string, dto: any, triagedById: string) {
@@ -23,33 +35,63 @@ export class TriageService {
       const user = await this.prisma.tenantUser.findUnique({ where: { id: triagedById }, select: { primaryLocationId: true } });
       locationId = user?.primaryLocationId;
     }
+
+    // Frontend sends vitals as flat top-level fields. Pack them into the JSON
+    // column the schema expects, so nothing gets dropped silently.
+    const vitalsOnArrival = dto.vitalsOnArrival ?? {
+      systolicBp: dto.systolicBp,
+      diastolicBp: dto.diastolicBp,
+      heartRate: dto.heartRate,
+      temperatureC: dto.temperatureC,
+      spo2: dto.spo2,
+      respiratoryRate: dto.respiratoryRate,
+      weightKg: dto.weightKg,
+      heightCm: dto.heightCm,
+    };
+
+    // Frontend collects briefHistory / knownAllergies / currentMedications /
+    // nurseNotes in separate fields but the schema only has `notes`. Stitch
+    // them into a single labelled blob so nothing is lost.
+    const notesParts: string[] = [];
+    if (dto.briefHistory) notesParts.push(`History: ${dto.briefHistory}`);
+    if (dto.knownAllergies) notesParts.push(`Allergies: ${dto.knownAllergies}`);
+    if (dto.currentMedications) notesParts.push(`Current meds: ${dto.currentMedications}`);
+    if (dto.nurseNotes) notesParts.push(`Nurse notes: ${dto.nurseNotes}`);
+    if (dto.notes) notesParts.push(dto.notes);
+    const notes = notesParts.length ? notesParts.join('\n') : undefined;
+
     return this.prisma.triageRecord.create({
       data: {
         tenantId, locationId, patientId: dto.patientId,
         queueTokenId: dto.queueTokenId, chiefComplaint: dto.chiefComplaint,
         triageLevel: dto.triageLevel,
         symptoms: dto.symptoms || [],
-        vitalsOnArrival: dto.vitalsOnArrival,
-        painScore: dto.painScore, gcs: dto.gcs,
+        vitalsOnArrival,
+        painScore: dto.painScore !== undefined && dto.painScore !== null ? Number(dto.painScore) : undefined,
+        gcs: dto.gcs,
         assignedDoctorId: dto.assignedDoctorId,
         assignedDeptId: dto.assignedDeptId,
-        notes: dto.notes, triagedById,
+        notes, triagedById,
       },
     });
   }
 
   async getByToken(tenantId: string, tokenId: string) {
-    return this.prisma.triageRecord.findFirst({
+    const r = await this.prisma.triageRecord.findFirst({
       where: { tenantId, queueTokenId: tokenId },
+      include: { patient: { select: { id: true, patientId: true, firstName: true, lastName: true } } },
     });
+    return r ? { ...r, ...((r.vitalsOnArrival as any) || {}) } : null;
   }
 
   async getByPatient(tenantId: string, patientId: string) {
-    return this.prisma.triageRecord.findMany({
+    const rows = await this.prisma.triageRecord.findMany({
       where: { tenantId, patientId },
       orderBy: { triageTime: 'desc' },
       take: 10,
+      include: { patient: { select: { id: true, patientId: true, firstName: true, lastName: true } } },
     });
+    return rows.map(r => ({ ...r, ...((r.vitalsOnArrival as any) || {}) }));
   }
 
   async update(tenantId: string, id: string, dto: any) {
