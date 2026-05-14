@@ -171,4 +171,84 @@ export class BillingService {
       return item;
     });
   }
+
+  // Append a charge to the patient's current OPD visit invoice. Used by lab
+  // (charges for ordered tests) and pharmacy (charges for dispensed drugs)
+  // to roll their fees into the same draft bill the consultation created.
+  //
+  // - Idempotent: if a line item with this referenceId already exists for
+  //   any of the patient's open invoices, the call is a no-op (so dispensing
+  //   the same Rx twice or re-ordering the same lab won't double-bill).
+  // - If no draft invoice exists yet (rare — patient was lab/pharma-charged
+  //   before a consult was opened), creates a fresh OPD draft.
+  // - Failures throw so the caller can decide whether to swallow; both
+  //   integrations call this with try/catch to avoid blocking the primary
+  //   workflow on a billing hiccup.
+  async addChargeToOpenVisit(
+    tenantId: string,
+    patientId: string,
+    lineItem: { description: string; category: string; quantity: number; unitPrice: number; referenceId: string },
+    opts?: { locationId?: string; doctorId?: string; consultationId?: string },
+  ) {
+    // Idempotency: skip if any line item with this referenceId already exists
+    // for this patient at this tenant.
+    const existing = await this.prisma.invoiceLineItem.findFirst({
+      where: {
+        referenceId: lineItem.referenceId,
+        invoice: { tenantId, patientId },
+      },
+      select: { id: true, invoiceId: true },
+    });
+    if (existing) return { skipped: true, invoiceId: existing.invoiceId, itemId: existing.id };
+
+    // Find the most recent open invoice (DRAFT/PENDING) for this patient.
+    // Prefer one already tied to the same consultation via a referenceId on
+    // any of its line items.
+    let invoice: { id: string; locationId: string } | null = null;
+    if (opts?.consultationId) {
+      const byConsult = await this.prisma.invoice.findFirst({
+        where: {
+          tenantId,
+          patientId,
+          status: { in: ['DRAFT', 'PENDING'] },
+          lineItems: { some: { referenceId: opts.consultationId } },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, locationId: true },
+      });
+      invoice = byConsult;
+    }
+    if (!invoice) {
+      invoice = await this.prisma.invoice.findFirst({
+        where: { tenantId, patientId, status: { in: ['DRAFT', 'PENDING'] } },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, locationId: true },
+      });
+    }
+
+    // No open invoice — create one with just this line item.
+    if (!invoice) {
+      const created = await this.createInvoice(
+        tenantId,
+        {
+          patientId,
+          locationId: opts?.locationId,
+          doctorId: opts?.doctorId,
+          invoiceType: 'OPD',
+          lineItems: [{
+            description: lineItem.description,
+            category: lineItem.category,
+            quantity: lineItem.quantity,
+            unitPrice: lineItem.unitPrice,
+            referenceId: lineItem.referenceId,
+          }],
+        },
+        opts?.doctorId || 'system',
+      );
+      return { created: true, invoiceId: (created as any).id };
+    }
+
+    // Append the line item to the existing invoice and recompute totals.
+    return this.addLineItem(tenantId, invoice.id, lineItem);
+  }
 }

@@ -2,6 +2,11 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { generateSequentialId } from '../../common/utils/id-generator';
 import { sendEmail } from '../../common/utils/mailer';
+import { BillingService } from '../billing/billing.service';
+
+// Default unit price per lab test until per-test pricing is configurable
+// in the lab catalog. Reception/billing can edit the line item.
+const DEFAULT_LAB_TEST_PRICE = 200;
 
 function emailTemplate(title: string, body: string, orgName?: string): string {
   return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
@@ -20,10 +25,10 @@ function emailTemplate(title: string, body: string, orgName?: string): string {
 
 @Injectable()
 export class LabService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private billing: BillingService) {}
 
   async createOrder(tenantId: string, dto: any) {
-    return generateSequentialId(this.prisma, {
+    const order = await generateSequentialId(this.prisma, {
       table: 'LabOrder',
       idColumn: 'orderNumber',
       prefix: `LAB-${Date.now()}-`,
@@ -36,6 +41,37 @@ export class LabService {
         });
       },
     });
+
+    // Roll lab charges into the patient's open OPD invoice (one line per
+    // test). Idempotent via the test-item id. Billing failure must never
+    // block the order itself — reception can fix billing later.
+    try {
+      const o = order as any;
+      const testCount = (o.items || []).length;
+      for (const item of (o.items || [])) {
+        await this.billing.addChargeToOpenVisit(
+          tenantId,
+          o.patientId,
+          {
+            description: `Lab — ${item.testName}`,
+            category: 'LAB',
+            quantity: 1,
+            unitPrice: DEFAULT_LAB_TEST_PRICE,
+            referenceId: item.id,
+          },
+          { locationId: o.locationId, doctorId: o.doctorId, consultationId: o.consultationId },
+        );
+      }
+      if (testCount > 0) {
+        // eslint-disable-next-line no-console
+        console.log(`[lab→billing] order ${o.orderNumber}: billed ${testCount} test(s)`);
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[lab→billing] Failed to add lab charges to invoice:', err);
+    }
+
+    return order;
   }
 
   async getOrders(tenantId: string, query: any) {

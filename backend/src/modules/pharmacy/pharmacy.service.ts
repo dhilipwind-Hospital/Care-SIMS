@@ -1,10 +1,17 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { generateSequentialId } from '../../common/utils/id-generator';
+import { BillingService } from '../billing/billing.service';
+
+// Markup applied to DrugBatch.unitCost when generating a sale price. When
+// unitCost is null on the batch, fall back to DEFAULT_DRUG_PRICE per unit.
+// Reception/billing can edit the line item before finalizing.
+const DRUG_MARKUP_FACTOR = 1.3;
+const DEFAULT_DRUG_PRICE = 50;
 
 @Injectable()
 export class PharmacyService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private billing: BillingService) {}
 
   async getDrugs(tenantId: string, query: any) {
     const { q, category, page = 1, limit = 20 } = query;
@@ -71,15 +78,66 @@ export class PharmacyService {
     if (!rx) throw new NotFoundException('Prescription not found');
     if (rx.status === 'DISPENSED') throw new BadRequestException('Already dispensed');
 
-    return this.prisma.$transaction(async (tx) => {
+    // Track what was dispensed so we can bill outside the transaction.
+    type Dispensed = { batchId: string; quantity: number; drugId: string; drugName: string; unitCost: number | null };
+    const dispensedDetails: Dispensed[] = [];
+
+    await this.prisma.$transaction(async (tx) => {
       for (const item of dto.dispensedItems || []) {
-        const batch = await tx.drugBatch.findFirst({ where: { id: item.batchId, tenantId, quantityInStock: { gte: item.quantity } } });
+        const batch = await tx.drugBatch.findFirst({
+          where: { id: item.batchId, tenantId, quantityInStock: { gte: item.quantity } },
+          include: { drug: { select: { brandName: true } } },
+        });
         if (!batch) throw new BadRequestException(`Insufficient stock for batch ${item.batchId}`);
         await tx.drugBatch.update({ where: { id: item.batchId }, data: { quantityInStock: { decrement: item.quantity } } });
+        dispensedDetails.push({
+          batchId: batch.id,
+          quantity: Number(item.quantity),
+          drugId: batch.drugId,
+          drugName: (batch as any).drug?.brandName || 'Medication',
+          unitCost: batch.unitCost != null ? Number(batch.unitCost) : null,
+        });
       }
       await tx.prescription.update({ where: { id: prescriptionId }, data: { status: 'DISPENSED' } });
-      return { message: 'Prescription dispensed successfully' };
     });
+
+    // Roll pharmacy charges into the patient's open OPD invoice — one line
+    // per dispensed batch. Idempotent via batchId. Failure must not block
+    // the dispense itself.
+    try {
+      for (const d of dispensedDetails) {
+        const unitPrice = d.unitCost != null
+          ? Math.round(d.unitCost * DRUG_MARKUP_FACTOR * 100) / 100
+          : DEFAULT_DRUG_PRICE;
+        await this.billing.addChargeToOpenVisit(
+          tenantId,
+          (rx as any).patientId,
+          {
+            description: `Pharmacy — ${d.drugName}`,
+            category: 'PHARMACY',
+            quantity: d.quantity,
+            unitPrice,
+            // referenceId = rx id + batch id keeps it idempotent and tied
+            // back to both the prescription and the specific dispense lot.
+            referenceId: `${prescriptionId}:${d.batchId}`,
+          },
+          {
+            locationId: (rx as any).locationId,
+            doctorId: (rx as any).doctorId,
+            consultationId: (rx as any).consultationId,
+          },
+        );
+      }
+      if (dispensedDetails.length > 0) {
+        // eslint-disable-next-line no-console
+        console.log(`[pharmacy→billing] Rx ${(rx as any).rxNumber}: billed ${dispensedDetails.length} item(s)`);
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[pharmacy→billing] Failed to add pharmacy charges to invoice:', err);
+    }
+
+    return { message: 'Prescription dispensed successfully' };
   }
 
   async getLowStockAlerts(tenantId: string, locationId: string) {
