@@ -34,6 +34,7 @@ export default function ConsultationPage() {
 
   const [patient,        setPatient]        = useState<any>(null);
   const [vitals,         setVitals]         = useState<any>(null);
+  const [triage,         setTriage]         = useState<any>(null);
   const [consultationId, setConsultationId] = useState<string | null>(null);
   const [activeTab,      setActiveTab]      = useState<Tab>('Overview');
   const [saving,         setSaving]         = useState(false);
@@ -57,6 +58,21 @@ export default function ConsultationPage() {
     if (!patientId) return;
     api.get(`/patients/${patientId}`).then(r => setPatient(r.data)).catch(() => {});
     api.get('/vitals/patient/' + patientId, { params: { limit: 1 } }).then(r => setVitals(r.data?.[0])).catch(() => {});
+    // Pull the most recent triage for this patient — gives the doctor the
+    // nurse's assessment (priority, complaint, history, allergies, vitals
+    // on arrival, nurse notes) before they start the consult.
+    api.get(`/triage/by-patient/${patientId}`)
+      .then(r => {
+        const rows = Array.isArray(r.data) ? r.data : r.data?.data || [];
+        const latest = rows[0] || null;
+        setTriage(latest);
+        // Pre-fill chief complaint only when the form hasn't been touched —
+        // doctor can still edit/clear afterwards.
+        if (latest?.chiefComplaint) {
+          setForm(f => f.chiefComplaint ? f : { ...f, chiefComplaint: latest.chiefComplaint });
+        }
+      })
+      .catch(() => setTriage(null));
   }, [patientId]);
 
   useEffect(() => {
@@ -221,6 +237,64 @@ export default function ConsultationPage() {
 
           {(activeTab === 'Overview' || activeTab === 'SOAP Notes') && (
             <>
+              {/* TRIAGE ASSESSMENT — nurse's pre-consult snapshot */}
+              {triage && (() => {
+                const lvl = triage.triageLevel || 'GREEN';
+                const badge: Record<string, { bg: string; text: string; label: string }> = {
+                  RED:    { bg: 'bg-red-100',    text: 'text-red-700',    label: 'Emergency' },
+                  ORANGE: { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Critical' },
+                  YELLOW: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Urgent' },
+                  GREEN:  { bg: 'bg-green-100',  text: 'text-green-700',  label: 'Semi-Urgent' },
+                  BLACK:  { bg: 'bg-gray-200',   text: 'text-gray-700',   label: 'Routine' },
+                };
+                const b = badge[lvl] || badge.GREEN;
+                const v = triage.vitalsOnArrival || {};
+                const sys = triage.systolicBp ?? v.systolicBp;
+                const dia = triage.diastolicBp ?? v.diastolicBp;
+                const hr  = triage.heartRate   ?? v.heartRate;
+                const temp = triage.temperatureC ?? v.temperatureC;
+                const spo2 = triage.spo2 ?? v.spo2;
+                const rr  = triage.respiratoryRate ?? v.respiratoryRate;
+                const wt  = triage.weightKg ?? v.weightKg;
+                return (
+                  <div className="hms-card p-5 border-l-4 border-orange-400">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-orange-600 uppercase tracking-wider">Triage Assessment</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${b.bg} ${b.text}`}>{lvl} · {b.label}</span>
+                        {triage.painScore != null && triage.painScore !== '' && (
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">Pain {triage.painScore}/10</span>
+                        )}
+                      </div>
+                      <span className="text-xs text-gray-400">
+                        {triage.triageTime ? new Date(triage.triageTime).toLocaleString('en-IN') : ''}
+                      </span>
+                    </div>
+                    {triage.chiefComplaint && (
+                      <div className="mb-3">
+                        <div className="text-[11px] text-gray-500 uppercase tracking-wide">Chief Complaint</div>
+                        <div className="text-sm text-gray-900 mt-0.5">{triage.chiefComplaint}</div>
+                      </div>
+                    )}
+                    {(sys || hr || temp || spo2 || rr || wt) && (
+                      <div className="flex flex-wrap gap-x-6 gap-y-2 bg-orange-50/40 rounded-lg p-3 mb-3 text-sm">
+                        {sys && <div><div className="text-[10px] text-gray-400 uppercase">BP</div><div className="font-bold text-gray-900">{sys}/{dia || '—'} mmHg</div></div>}
+                        {hr && <div><div className="text-[10px] text-gray-400 uppercase">HR</div><div className="font-bold text-gray-900">{hr} bpm</div></div>}
+                        {temp && <div><div className="text-[10px] text-gray-400 uppercase">Temp</div><div className="font-bold text-gray-900">{temp} °C</div></div>}
+                        {spo2 && <div><div className="text-[10px] text-gray-400 uppercase">SpO₂</div><div className="font-bold text-gray-900">{spo2}%</div></div>}
+                        {rr && <div><div className="text-[10px] text-gray-400 uppercase">RR</div><div className="font-bold text-gray-900">{rr}/min</div></div>}
+                        {wt && <div><div className="text-[10px] text-gray-400 uppercase">Wt</div><div className="font-bold text-gray-900">{wt} kg</div></div>}
+                      </div>
+                    )}
+                    {triage.notes && (
+                      <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-700 whitespace-pre-line">
+                        {triage.notes}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* SUBJECTIVE */}
               <div className="hms-card p-5">
                 <div className="flex items-center gap-2 mb-3">
