@@ -281,6 +281,17 @@ export default function OrgDetailPanel({ org, onClose, onRefresh }: Props) {
                       className="text-xs px-3 py-1.5 bg-teal-50 text-teal-700 rounded-lg hover:bg-teal-100 font-medium">
                       Seed Default Permissions
                     </button>
+                    <button
+                      onClick={async () => {
+                        if (!confirm('Reset every user in this org (staff + patient accounts) to password "Demo@1234"?')) return;
+                        try {
+                          const { data } = await api.post(`/platform/organizations/${org.id}/reset-demo-passwords`);
+                          toast.success(`Reset passwords for ${data.staff?.length || 0} staff + ${data.patientAccounts?.length || 0} patient(s) — password: ${data.password}`);
+                        } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to reset passwords'); }
+                      }}
+                      className="text-xs px-3 py-1.5 bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 font-medium">
+                      Reset Demo Passwords
+                    </button>
                   </div>
                 </div>
               </div>

@@ -786,6 +786,37 @@ export class PlatformService {
     return { rolesUpdated: sysRoles.length, permissionsInserted: inserted };
   }
 
+  // Reset every tenant user's password (and clear MFA) to Demo@1234. Used
+  // to salvage an already-seeded demo org where the admin password got
+  // baked in incorrectly. Platform-admin only.
+  async resetDemoPasswords(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) throw new NotFoundException('Organization not found');
+    const password = 'Demo@1234';
+    const passwordHash = await bcrypt.hash(password, 10);
+    const users = await this.prisma.tenantUser.findMany({ where: { tenantId }, select: { id: true, email: true } });
+    for (const u of users) {
+      await this.prisma.tenantUser.update({
+        where: { id: u.id },
+        data: { passwordHash, forcePasswordChange: false, mfaEnabled: false, mfaSecret: null, isActive: true },
+      });
+    }
+    // Also reset associated PatientAccounts (matched by email domain on slug).
+    const patientAccounts = await this.prisma.patientAccount.findMany({
+      where: { email: { endsWith: `@${tenant.slug}.demo` } },
+      select: { id: true, email: true },
+    });
+    for (const pa of patientAccounts) {
+      await this.prisma.patientAccount.update({ where: { id: pa.id }, data: { passwordHash } });
+    }
+    return {
+      message: 'Passwords reset',
+      password,
+      staff: users.map(u => u.email),
+      patientAccounts: patientAccounts.map(p => p.email),
+    };
+  }
+
   // One-shot demo provisioning. Creates a complete hospital with one user
   // per system role, an affiliated doctor, sample departments, drugs, and
   // a sample patient — everything the OPD demo flow needs. Returns the
@@ -803,8 +834,11 @@ export class PlatformService {
     const sharedPassword = 'Demo@1234';
     const passwordHash = await bcrypt.hash(sharedPassword, 10);
 
-    // Step 1 — Tenant + location via the existing createOrganization path so
-    // it also gets default features + system roles + role permissions seeded.
+    // Step 1 — Tenant + location + features + system roles via the existing
+    // createOrganization path. We DON'T pass adminUser here — createOrganization
+    // would create the admin with an auto-generated random password and
+    // re-overriding that hash is racy. We create the admin ourselves below
+    // alongside the rest of the staff, with the known shared password.
     const tenant = await this.createOrganization({
       legalName: name,
       tradeName: name,
@@ -824,12 +858,8 @@ export class PlatformService {
         phone: '9999999999',
         email: `info@${slug}.demo`,
       },
-      adminUser: {
-        firstName: 'Admin',
-        lastName: 'Demo',
-        email: `admin@${slug}.demo`,
-        phone: '9999999999',
-      },
+      // intentionally no adminUser — we'll create all staff (including admin)
+      // ourselves in step 2 with deterministic passwords.
     }, platformAdminId);
 
     const tenantId = tenant.id as string;
@@ -837,15 +867,9 @@ export class PlatformService {
     if (!location) throw new BadRequestException('Demo seed: primary location creation failed');
     const locationId = location.id;
 
-    // Override the auto-generated admin password with the shared demo password
-    // so the credentials we hand out actually work.
-    await this.prisma.tenantUser.updateMany({
-      where: { tenantId, email: `admin@${slug}.demo` },
-      data: { passwordHash, forcePasswordChange: false },
-    });
-
-    // Step 2 — One staff user per clinical role we need for the demo.
+    // Step 2 — One staff user per role we need for the demo, plus the org admin.
     const staffUsers = [
+      { firstName: 'Admin',    lastName: 'Demo',      role: 'SYS_ORG_ADMIN',        emailLocal: 'admin' },
       { firstName: 'Nikhil',   lastName: 'Reception', role: 'SYS_RECEPTIONIST',     emailLocal: 'reception' },
       { firstName: 'Priya',    lastName: 'Nurse',     role: 'SYS_NURSE',            emailLocal: 'nurse' },
       { firstName: 'Vikram',   lastName: 'Pharma',    role: 'SYS_PHARMACIST',       emailLocal: 'pharmacy' },
@@ -863,40 +887,39 @@ export class PlatformService {
     for (const s of staffUsers) {
       const email = `${s.emailLocal}@${slug}.demo`;
       const roleId = roleByName[s.role];
-      if (!roleId) continue;
-      // upsert in case the seed is re-run for the same org accidentally
-      await this.prisma.tenantUser.upsert({
-        where: { tenantId_email: { tenantId, email } as any },
-        update: { passwordHash, roleId, primaryLocationId: locationId, isActive: true, forcePasswordChange: false },
-        create: {
-          tenantId, email, passwordHash,
-          firstName: s.firstName, lastName: s.lastName,
-          phone: '9000000000',
-          roleId, primaryLocationId: locationId,
-          locationScope: 'ALL',
-          forcePasswordChange: false, isActive: true,
-        },
-      } as any).catch(async () => {
-        // Fallback when the (tenantId, email) compound isn't a Prisma named
-        // unique — find/create manually.
-        const ex = await this.prisma.tenantUser.findFirst({ where: { tenantId, email } });
-        if (ex) {
-          await this.prisma.tenantUser.update({ where: { id: ex.id }, data: { passwordHash, roleId, primaryLocationId: locationId, isActive: true, forcePasswordChange: false } });
-        } else {
-          await this.prisma.tenantUser.create({
-            data: {
-              tenantId, email, passwordHash,
-              firstName: s.firstName, lastName: s.lastName,
-              phone: '9000000000',
-              roleId, primaryLocationId: locationId,
-              locationScope: 'ALL',
-              forcePasswordChange: false, isActive: true,
-            },
-          });
-        }
-      });
+      if (!roleId) {
+        // eslint-disable-next-line no-console
+        console.warn(`[seed-demo] No role row for ${s.role}, skipping ${email}`);
+        continue;
+      }
+      // find-then-update-or-create. Simpler than upsert and easier to debug:
+      // we always end up with a single user record whose passwordHash matches
+      // the bcrypt(sharedPassword) we generated above.
+      const existing = await this.prisma.tenantUser.findFirst({ where: { tenantId, email } });
+      if (existing) {
+        await this.prisma.tenantUser.update({
+          where: { id: existing.id },
+          data: {
+            passwordHash, roleId, primaryLocationId: locationId,
+            isActive: true, forcePasswordChange: false, mfaEnabled: false, mfaSecret: null,
+          },
+        });
+      } else {
+        await this.prisma.tenantUser.create({
+          data: {
+            tenantId, email, passwordHash,
+            firstName: s.firstName, lastName: s.lastName,
+            phone: '9000000000',
+            roleId, primaryLocationId: locationId,
+            locationScope: 'ALL',
+            forcePasswordChange: false, isActive: true, mfaEnabled: false,
+          },
+        });
+      }
       createdStaff.push({ role: s.role, email });
     }
+    // eslint-disable-next-line no-console
+    console.log(`[seed-demo] ${name} (${slug}): created/updated ${createdStaff.length} staff users with password '${sharedPassword}'`);
 
     // Step 3 — Sample doctor (DoctorRegistry is global, email unique).
     const doctorEmail = `doctor@${slug}.demo`;
@@ -1063,15 +1086,16 @@ export class PlatformService {
 
     await this.logPlatformEvent('TENANT_DEMO_SEEDED', platformAdminId, 'TENANT', tenantId, name, `Demo organization seeded with full staff + sample data`);
 
+    const prettyRole = (sysRole: string) =>
+      sysRole.replace('SYS_', '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+
     return {
       tenant: { id: tenantId, name, slug },
       credentials: {
         password: sharedPassword,
-        platformAdminNote: 'All staff and patient accounts share this password',
-        staff: [
-          { role: 'Organization Admin', email: `admin@${slug}.demo` },
-          ...createdStaff.map(s => ({ role: s.role.replace('SYS_', '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()), email: s.email })),
-        ],
+        loginUrl: '/login',
+        platformAdminNote: 'All staff and patient accounts share this password. Use /login for staff (incl. admin).',
+        staff: createdStaff.map(s => ({ role: prettyRole(s.role), email: s.email })),
         doctor: { email: doctorEmail, loginUrl: '/doctor/login' },
         patient: { email: patientAccountEmail, loginUrl: '/patient/login' },
       },
