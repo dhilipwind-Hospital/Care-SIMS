@@ -215,7 +215,7 @@ export default function UsersPage() {
 
       {/* ── TAB SWITCHER ── */}
       <div className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl w-fit">
-        <button className={tabClass('staff')} onClick={() => setActiveTab('staff')}>
+        <button className={tabClass('staff')} onClick={() => { setActiveTab('staff'); fetchUsers(); }}>
           <span className="flex items-center gap-2"><Users size={14} /> Staff Members</span>
         </button>
         <button className={tabClass('pending')} onClick={() => { setActiveTab('pending'); fetchPending(); }}>
