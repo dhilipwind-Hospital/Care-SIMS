@@ -49,6 +49,14 @@ export class PlatformController {
   @Post('organizations/:id/reset-demo-passwords')
   resetDemoPasswords(@Param('id') id: string) { return this.platformService.resetDemoPasswords(id); }
 
+  // Turn ON every applicable feature module for this org. Useful when an
+  // older org is missing recently-added modules (e.g. MOD_TRIAGE) and
+  // FeatureFlagGuard is throwing 403s.
+  @Post('organizations/:id/enable-all-features')
+  enableAllFeatures(@Param('id') id: string, @CurrentUser('sub') adminId: string) {
+    return this.platformService.enableAllFeaturesForOrg(id, adminId);
+  }
+
   // One-click demo provisioning. Optional body { name, slug } — if omitted
   // a date-stamped slug is generated.
   @Post('organizations/seed-demo')

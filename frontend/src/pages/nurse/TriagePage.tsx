@@ -65,11 +65,32 @@ export default function TriagePage() {
   const [skipReason, setSkipReason] = useState('');
   const [skipping, setSkipping] = useState(false);
 
-  // Load doctors at this nurse's location for the Assign Doctor picker
+  // Load doctors at this nurse's location for the Assign Doctor picker.
+  // The endpoint returns DoctorOrgAffiliation rows with `doctor` nested,
+  // so flatten them into a uniform { id, firstName, lastName, specialties }
+  // shape that the rest of this page expects.
   useEffect(() => {
     if (!user?.locationId) return;
     api.get(`/doctors/by-location/${user.locationId}`)
-      .then(r => setDoctors(r.data?.data || r.data || []))
+      .then(r => {
+        const rows = r.data?.data || r.data || [];
+        const flat = (Array.isArray(rows) ? rows : []).map((a: any) => {
+          // Affiliation row → flatten
+          if (a?.doctor) {
+            return {
+              id: a.doctor.id,
+              firstName: a.doctor.firstName,
+              lastName: a.doctor.lastName,
+              specialties: a.doctor.specialties || [],
+              affiliationId: a.id,
+              designation: a.designation,
+            };
+          }
+          // Already-flat row (defensive)
+          return a;
+        }).filter((d: any) => d?.id && d?.firstName);
+        setDoctors(flat);
+      })
       .catch(() => setDoctors([]));
   }, [user?.locationId]);
 

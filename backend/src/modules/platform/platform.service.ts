@@ -817,6 +817,56 @@ export class PlatformService {
     };
   }
 
+  // Turn ON every applicable feature module for this tenant. Used when an
+  // older org is missing recently-added modules (e.g. MOD_TRIAGE) and
+  // FeatureFlagGuard is throwing 403s on the demo. Idempotent.
+  async enableAllFeaturesForOrg(tenantId: string, adminId: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) throw new NotFoundException('Organization not found');
+
+    // What's already on the tenant
+    const existing = await this.prisma.organizationFeature.findMany({
+      where: { tenantId },
+      select: { moduleId: true, isEnabled: true },
+    });
+    const existingMap = new Map(existing.map(f => [f.moduleId, f.isEnabled]));
+
+    // All applicable feature modules (everything for HOSPITAL+MULTISPECIALTY,
+    // which covers the demo flows).
+    const allModules = Array.from(new Set([
+      ...(DEFAULT_FEATURES['HOSPITAL'] || []),
+      ...(DEFAULT_FEATURES['MULTISPECIALTY'] || []),
+    ]));
+    const validModules = await this.prisma.featureModule.findMany({
+      where: { moduleId: { in: allModules } },
+      select: { moduleId: true },
+    });
+
+    let inserted = 0;
+    let enabledNowOn = 0;
+    const now = new Date();
+    for (const m of validModules) {
+      if (!existingMap.has(m.moduleId)) {
+        await this.prisma.organizationFeature.create({
+          data: { tenantId, moduleId: m.moduleId, isEnabled: true, enabledAt: now, enabledById: adminId },
+        });
+        inserted++;
+      } else if (existingMap.get(m.moduleId) === false) {
+        await this.prisma.organizationFeature.updateMany({
+          where: { tenantId, moduleId: m.moduleId },
+          data: { isEnabled: true, enabledAt: now, enabledById: adminId },
+        });
+        enabledNowOn++;
+      }
+    }
+    return {
+      message: 'All applicable features are now enabled',
+      featuresInserted: inserted,
+      featuresTurnedOn: enabledNowOn,
+      totalApplicable: validModules.length,
+    };
+  }
+
   // Backfill an existing org with starter master data so its OPD/IPD
   // workflows have something to operate on out of the box: departments,
   // wards + beds, drug catalog + opening stock, and a sample doctor with

@@ -332,6 +332,20 @@ export default function OrgDetailPanel({ org, onClose, onRefresh }: Props) {
                     </button>
                     <button
                       onClick={async () => {
+                        try {
+                          const { data } = await api.post(`/platform/organizations/${org.id}/enable-all-features`);
+                          toast.success(
+                            `Enabled ${data.featuresInserted + data.featuresTurnedOn} feature(s) — ${data.totalApplicable} now applicable`,
+                            { duration: 5000 },
+                          );
+                          onRefresh?.();
+                        } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to enable features'); }
+                      }}
+                      className="text-xs px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 font-medium">
+                      Enable All Features
+                    </button>
+                    <button
+                      onClick={async () => {
                         if (!confirm('Reset every user in this org (staff + patient accounts) to password "Demo@1234"?')) return;
                         try {
                           const { data } = await api.post(`/platform/organizations/${org.id}/reset-demo-passwords`);
