@@ -829,11 +829,20 @@ export class PlatformService {
     if (!location) throw new BadRequestException('Organization has no active location — add one first');
     const locationId = location.id;
 
-    const summary = { staffUsers: 0, departments: 0, drugs: 0, drugBatches: 0, wards: 0, beds: 0, doctorAffiliated: false };
+    const summary: any = { staffUsers: 0, departments: 0, drugs: 0, drugBatches: 0, wards: 0, beds: 0, doctorAffiliated: false, patients: 0, queueTokens: 0, vitals: 0, appointments: 0, errors: [] as string[] };
+
+    // Each subsystem runs in its own try block so a partial failure doesn't
+    // wipe out everything. The errors array is returned so the platform admin
+    // can see which step misbehaved.
+    const safe = async (label: string, fn: () => Promise<void>) => {
+      try { await fn(); } catch (err: any) {
+        // eslint-disable-next-line no-console
+        console.error(`[seed-starter] ${label} failed:`, err?.message || err);
+        summary.errors.push(`${label}: ${err?.message || 'unknown'}`);
+      }
+    };
 
     // ── Staff users (one per role) ───────────────────────────────────────
-    // Use a host derived from the tenant slug so emails are unique per org
-    // and obviously demo-y. Shared password Demo@1234.
     const host = `${tenant.slug}.local`;
     const sharedPassword = 'Demo@1234';
     const passwordHash = await bcrypt.hash(sharedPassword, 10);
@@ -848,195 +857,305 @@ export class PlatformService {
       { firstName: 'Anjali',   lastName: 'Lab',          role: 'SYS_LAB_TECH',          emailLocal: 'lab' },
       { firstName: 'Suresh',   lastName: 'Billing',      role: 'SYS_BILLING',           emailLocal: 'billing' },
     ];
-    const roleRows = await this.prisma.tenantRole.findMany({
-      where: { tenantId, isSystemRole: true },
-      select: { id: true, systemRoleId: true },
-    });
-    const roleByName: Record<string, string> = {};
-    for (const r of roleRows) if (r.systemRoleId) roleByName[r.systemRoleId] = r.id;
-
     const createdStaff: Array<{ role: string; email: string }> = [];
-    for (const s of staffDefs) {
-      const email = `${s.emailLocal}@${host}`;
-      const roleId = roleByName[s.role];
-      if (!roleId) {
-        // eslint-disable-next-line no-console
-        console.warn(`[seed-starter] No role row for ${s.role}, skipping ${email}`);
-        continue;
+
+    await safe('staff users', async () => {
+      const roleRows = await this.prisma.tenantRole.findMany({
+        where: { tenantId, isSystemRole: true },
+        select: { id: true, systemRoleId: true },
+      });
+      const roleByName: Record<string, string> = {};
+      for (const r of roleRows) if (r.systemRoleId) roleByName[r.systemRoleId] = r.id;
+
+      for (const s of staffDefs) {
+        const email = `${s.emailLocal}@${host}`;
+        const roleId = roleByName[s.role];
+        if (!roleId) {
+          // eslint-disable-next-line no-console
+          console.warn(`[seed-starter] No role row for ${s.role}, skipping ${email}`);
+          continue;
+        }
+        const existing = await this.prisma.tenantUser.findFirst({ where: { tenantId, email } });
+        if (existing) {
+          await this.prisma.tenantUser.update({
+            where: { id: existing.id },
+            data: { roleId, primaryLocationId: locationId, isActive: true },
+          });
+        } else {
+          await this.prisma.tenantUser.create({
+            data: {
+              tenantId, email, passwordHash,
+              firstName: s.firstName, lastName: s.lastName,
+              phone: '9000000000',
+              roleId, primaryLocationId: locationId,
+              locationScope: 'ALL',
+              forcePasswordChange: false, isActive: true, mfaEnabled: false,
+            },
+          });
+          summary.staffUsers++;
+        }
+        createdStaff.push({ role: s.role, email });
       }
-      const existing = await this.prisma.tenantUser.findFirst({ where: { tenantId, email } });
-      if (existing) {
-        // Existing rows: leave password alone (admin may have changed it),
-        // but ensure the user is active and has the right role/location.
-        await this.prisma.tenantUser.update({
-          where: { id: existing.id },
-          data: { roleId, primaryLocationId: locationId, isActive: true },
-        });
-      } else {
-        await this.prisma.tenantUser.create({
-          data: {
-            tenantId, email, passwordHash,
-            firstName: s.firstName, lastName: s.lastName,
-            phone: '9000000000',
-            roleId, primaryLocationId: locationId,
-            locationScope: 'ALL',
-            forcePasswordChange: false, isActive: true, mfaEnabled: false,
-          },
-        });
-        summary.staffUsers++;
-      }
-      createdStaff.push({ role: s.role, email });
-    }
+    });
 
     // ── Departments ──────────────────────────────────────────────────────
-    const deptDefs = [
-      { name: 'General Medicine', code: 'GMED' },
-      { name: 'Pediatrics',       code: 'PEDS' },
-      { name: 'Pharmacy',         code: 'PHARM' },
-      { name: 'Laboratory',       code: 'LAB' },
-      { name: 'Emergency',        code: 'EMRG' },
-    ];
-    for (const d of deptDefs) {
-      const ex = await this.prisma.department.findFirst({ where: { tenantId, code: d.code } });
-      if (!ex) {
-        await this.prisma.department.create({
-          data: { tenantId, locationId, name: d.name, code: d.code, isActive: true } as any,
-        });
-        summary.departments++;
+    await safe('departments', async () => {
+      const deptDefs = [
+        { name: 'General Medicine', code: 'GMED' },
+        { name: 'Pediatrics',       code: 'PEDS' },
+        { name: 'Pharmacy',         code: 'PHARM' },
+        { name: 'Laboratory',       code: 'LAB' },
+        { name: 'Emergency',        code: 'EMRG' },
+      ];
+      for (const d of deptDefs) {
+        const ex = await this.prisma.department.findFirst({ where: { tenantId, code: d.code } });
+        if (!ex) {
+          await this.prisma.department.create({
+            data: { tenantId, locationId, name: d.name, code: d.code, isActive: true } as any,
+          });
+          summary.departments++;
+        }
       }
-    }
+    });
 
     // ── Wards + Beds ─────────────────────────────────────────────────────
-    const wardDefs: Array<{ name: string; code: string; type: string; floor: number; bedCount: number; bedPrefix: string }> = [
-      { name: 'General Ward',  code: 'GW',  type: 'GENERAL', floor: 1, bedCount: 6, bedPrefix: 'GW' },
-      { name: 'ICU',           code: 'ICU', type: 'ICU',     floor: 2, bedCount: 4, bedPrefix: 'ICU' },
-      { name: 'Private Rooms', code: 'PVT', type: 'PRIVATE', floor: 3, bedCount: 4, bedPrefix: 'PVT' },
-    ];
-    for (const w of wardDefs) {
-      let ward = await this.prisma.ward.findFirst({ where: { tenantId, locationId, code: w.code } });
-      if (!ward) {
-        ward = await this.prisma.ward.create({
-          data: {
-            tenantId, locationId, name: w.name, code: w.code, type: w.type,
-            floor: w.floor, totalBeds: w.bedCount, isActive: true,
-          } as any,
-        });
-        summary.wards++;
+    await safe('wards + beds', async () => {
+      const wardDefs: Array<{ name: string; code: string; type: string; floor: number; bedCount: number; bedPrefix: string }> = [
+        { name: 'General Ward',  code: 'GW',  type: 'GENERAL', floor: 1, bedCount: 6, bedPrefix: 'GW' },
+        { name: 'ICU',           code: 'ICU', type: 'ICU',     floor: 2, bedCount: 4, bedPrefix: 'ICU' },
+        { name: 'Private Rooms', code: 'PVT', type: 'PRIVATE', floor: 3, bedCount: 4, bedPrefix: 'PVT' },
+      ];
+      for (const w of wardDefs) {
+        let ward = await this.prisma.ward.findFirst({ where: { tenantId, locationId, code: w.code } });
+        if (!ward) {
+          ward = await this.prisma.ward.create({
+            data: {
+              tenantId, locationId, name: w.name, code: w.code, type: w.type,
+              floor: w.floor, totalBeds: w.bedCount, isActive: true,
+            } as any,
+          });
+          summary.wards++;
+        }
+        const existingBeds = await this.prisma.bed.count({ where: { wardId: ward.id } });
+        const needed = w.bedCount - existingBeds;
+        if (needed > 0) {
+          const bedRows = Array.from({ length: needed }, (_, i) => ({
+            tenantId, wardId: ward!.id,
+            bedNumber: `${w.bedPrefix}-${String(existingBeds + i + 1).padStart(2, '0')}`,
+            type: w.type === 'ICU' ? 'ICU' : (w.type === 'PRIVATE' ? 'PRIVATE' : 'GENERAL'),
+            status: 'AVAILABLE',
+          }));
+          const result = await this.prisma.bed.createMany({ data: bedRows as any, skipDuplicates: true });
+          summary.beds += result.count;
+        }
       }
-      // Top up beds to bedCount
-      const existingBeds = await this.prisma.bed.count({ where: { wardId: ward.id } });
-      const needed = w.bedCount - existingBeds;
-      if (needed > 0) {
-        const bedRows = Array.from({ length: needed }, (_, i) => ({
-          tenantId, wardId: ward!.id,
-          bedNumber: `${w.bedPrefix}-${String(existingBeds + i + 1).padStart(2, '0')}`,
-          type: w.type === 'ICU' ? 'ICU' : (w.type === 'PRIVATE' ? 'PRIVATE' : 'GENERAL'),
-          status: 'AVAILABLE',
-        }));
-        const result = await this.prisma.bed.createMany({ data: bedRows as any, skipDuplicates: true });
-        summary.beds += result.count;
-      }
-    }
+    });
 
     // ── Drug catalog + opening stock ─────────────────────────────────────
-    const drugDefs = [
-      { brandName: 'Calpol 500',        genericName: 'Paracetamol',                   dosageForm: 'TABLET',    strength: '500mg', category: 'ANALGESICS' },
-      { brandName: 'Augmentin 625',     genericName: 'Amoxicillin + Clavulanate',     dosageForm: 'TABLET',    strength: '625mg', category: 'ANTIBIOTICS' },
-      { brandName: 'Pan 40',            genericName: 'Pantoprazole',                  dosageForm: 'TABLET',    strength: '40mg',  category: 'OTC' },
-      { brandName: 'Crocin Cold & Flu', genericName: 'Paracetamol + Phenylephrine',   dosageForm: 'TABLET',    strength: '500mg', category: 'ANALGESICS' },
-      { brandName: 'ORS Powder',        genericName: 'Oral Rehydration Salts',        dosageForm: 'POWDER',    strength: '21g',   category: 'OTC' },
-      { brandName: 'Asthalin Inhaler',  genericName: 'Salbutamol',                    dosageForm: 'INHALER',   strength: '100mcg',category: 'OTC' },
-      { brandName: 'Cetzine',           genericName: 'Cetirizine',                    dosageForm: 'TABLET',    strength: '10mg',  category: 'OTC' },
-      { brandName: 'Saline IV',         genericName: 'Sodium Chloride 0.9%',          dosageForm: 'INJECTION', strength: '500ml', category: 'IV_FLUIDS' },
-    ];
-    for (const d of drugDefs) {
-      const ex = await this.prisma.drug.findFirst({ where: { tenantId, brandName: d.brandName } });
-      if (!ex) {
-        const drug = await this.prisma.drug.create({
-          data: {
-            tenantId,
-            brandName: d.brandName,
-            genericName: d.genericName,
-            dosageForm: d.dosageForm,
-            strength: d.strength,
-            category: d.category,
-            gstPct: 12,
-            reorderLevel: 20,
-            maxStockLevel: 500,
-            storageCondition: 'ROOM_TEMPERATURE',
-            isControlled: false,
-          } as any,
-        });
-        summary.drugs++;
-        const exp = new Date(); exp.setFullYear(exp.getFullYear() + 1);
-        await this.prisma.drugBatch.create({
-          data: {
-            tenantId,
-            drugId: drug.id,
-            locationId,
-            batchNumber: `B-${Date.now().toString().slice(-6)}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
-            expiryDate: exp,
-            quantityInStock: 200,
-            unitCost: 5,
-            status: 'ACTIVE',
-            receivedDate: new Date(),
-          } as any,
-        });
-        summary.drugBatches++;
+    await safe('drugs + batches', async () => {
+      const drugDefs = [
+        { brandName: 'Calpol 500',        genericName: 'Paracetamol',                   dosageForm: 'TABLET',    strength: '500mg', category: 'ANALGESICS' },
+        { brandName: 'Augmentin 625',     genericName: 'Amoxicillin + Clavulanate',     dosageForm: 'TABLET',    strength: '625mg', category: 'ANTIBIOTICS' },
+        { brandName: 'Pan 40',            genericName: 'Pantoprazole',                  dosageForm: 'TABLET',    strength: '40mg',  category: 'OTC' },
+        { brandName: 'Crocin Cold & Flu', genericName: 'Paracetamol + Phenylephrine',   dosageForm: 'TABLET',    strength: '500mg', category: 'ANALGESICS' },
+        { brandName: 'ORS Powder',        genericName: 'Oral Rehydration Salts',        dosageForm: 'POWDER',    strength: '21g',   category: 'OTC' },
+        { brandName: 'Asthalin Inhaler',  genericName: 'Salbutamol',                    dosageForm: 'INHALER',   strength: '100mcg',category: 'OTC' },
+        { brandName: 'Cetzine',           genericName: 'Cetirizine',                    dosageForm: 'TABLET',    strength: '10mg',  category: 'OTC' },
+        { brandName: 'Saline IV',         genericName: 'Sodium Chloride 0.9%',          dosageForm: 'INJECTION', strength: '500ml', category: 'IV_FLUIDS' },
+      ];
+      for (const d of drugDefs) {
+        const ex = await this.prisma.drug.findFirst({ where: { tenantId, brandName: d.brandName } });
+        if (!ex) {
+          const drug = await this.prisma.drug.create({
+            data: {
+              tenantId,
+              brandName: d.brandName,
+              genericName: d.genericName,
+              dosageForm: d.dosageForm,
+              strength: d.strength,
+              category: d.category,
+              gstPct: 12,
+              reorderLevel: 20,
+              maxStockLevel: 500,
+              storageCondition: 'ROOM_TEMPERATURE',
+              isControlled: false,
+            } as any,
+          });
+          summary.drugs++;
+          const exp = new Date(); exp.setFullYear(exp.getFullYear() + 1);
+          await this.prisma.drugBatch.create({
+            data: {
+              tenantId,
+              drugId: drug.id,
+              locationId,
+              batchNumber: `B-${Date.now().toString().slice(-6)}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
+              expiryDate: exp,
+              quantityInStock: 200,
+              unitCost: 5,
+              status: 'ACTIVE',
+              receivedDate: new Date(),
+            } as any,
+          });
+          summary.drugBatches++;
+        }
       }
-    }
+    });
 
     // ── Sample doctor + affiliation ──────────────────────────────────────
     const doctorEmail = `doctor.demo@${tenant.slug}.local`;
-    let doctor = await this.prisma.doctorRegistry.findUnique({ where: { email: doctorEmail } });
-    if (!doctor) {
-      doctor = await this.prisma.doctorRegistry.create({
+    let doctor: { id: string } | null = null;
+    await safe('sample doctor', async () => {
+      let d = await this.prisma.doctorRegistry.findUnique({ where: { email: doctorEmail } });
+      if (!d) {
+        d = await this.prisma.doctorRegistry.create({
+          data: {
+            email: doctorEmail,
+            passwordHash,
+            firstName: 'Rahul',
+            lastName: 'Sharma',
+            phone: `+91${Math.floor(7000000000 + Math.random() * 999999999)}`,
+            gender: 'MALE',
+            dateOfBirth: new Date('1985-06-15'),
+            primaryDegree: 'MBBS',
+            pgDegree: 'MD',
+            pgSpecialization: 'General Medicine',
+            experienceYears: 12,
+            specialties: ['General Medicine', 'Internal Medicine'],
+            subspecialties: [],
+            languages: ['English', 'Hindi', 'Tamil'],
+            medicalCouncil: 'TNMC',
+            registrationNo: `TN-${Math.floor(10000 + Math.random() * 89999)}`,
+            registrationDate: new Date('2010-01-01'),
+            ayphenStatus: 'VERIFIED',
+            mfaEnabled: false,
+          } as any,
+        });
+      }
+      doctor = { id: d.id };
+      const existingAff = await this.prisma.doctorOrgAffiliation.findFirst({
+        where: { doctorId: d.id, tenantId },
+      });
+      if (!existingAff) {
+        await this.prisma.doctorOrgAffiliation.create({
+          data: {
+            doctorId: d.id,
+            tenantId,
+            locationId,
+            designation: 'Consultant',
+            employmentType: 'FULL_TIME',
+            departmentName: 'General Medicine',
+            availableDays: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'],
+            slotDurationMinutes: 15,
+            consultationFee: 500,
+            status: 'ACTIVE',
+            isActive: true,
+            acceptedAt: new Date(),
+            joinedAt: new Date(),
+          },
+        });
+        summary.doctorAffiliated = true;
+      }
+    });
+
+    // ── Sample patients (3) — so reception/queue/triage have records ─────
+    const patientDefs = [
+      { firstName: 'Ravi',   lastName: 'Kumar',  gender: 'MALE',   bloodGroup: 'O+',  mobile: '9988776601', dob: '1988-04-12', email: `patient1@${tenant.slug}.local` },
+      { firstName: 'Sneha',  lastName: 'Patel',  gender: 'FEMALE', bloodGroup: 'A+',  mobile: '9988776602', dob: '1995-11-22', email: `patient2@${tenant.slug}.local` },
+      { firstName: 'Arjun',  lastName: 'Mehta',  gender: 'MALE',   bloodGroup: 'B+',  mobile: '9988776603', dob: '1972-03-30', email: `patient3@${tenant.slug}.local` },
+    ];
+    const createdPatients: Array<{ id: string; patientId: string; firstName: string; lastName: string }> = [];
+    await safe('sample patients', async () => {
+      for (let i = 0; i < patientDefs.length; i++) {
+        const p = patientDefs[i];
+        let pat = await this.prisma.patient.findFirst({ where: { tenantId, email: p.email } });
+        if (!pat) {
+          const pid = `P${Date.now().toString().slice(-6)}${i}`;
+          pat = await this.prisma.patient.create({
+            data: {
+              tenantId, locationId, patientId: pid,
+              registrationType: 'WALKIN',
+              firstName: p.firstName, lastName: p.lastName,
+              dateOfBirth: new Date(p.dob),
+              gender: p.gender, bloodGroup: p.bloodGroup,
+              mobile: p.mobile, email: p.email,
+              address: { line1: '1 Demo Street', city: 'Chennai', state: 'TN' },
+            } as any,
+          });
+          summary.patients++;
+        }
+        createdPatients.push({ id: pat.id, patientId: pat.patientId, firstName: pat.firstName, lastName: pat.lastName });
+      }
+    });
+
+    // ── Today's queue tokens — gives reception + nurse + doctor screens content
+    await safe('queue tokens', async () => {
+      if (!doctor || !createdPatients.length) return;
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const existingToday = await this.prisma.queueToken.count({
+        where: { tenantId, queueDate: today },
+      });
+      if (existingToday >= 2) return; // already seeded today
+      for (let i = 0; i < Math.min(2, createdPatients.length); i++) {
+        const pat = createdPatients[i];
+        const tokenNumber = `T${String(existingToday + i + 1).padStart(3, '0')}`;
+        await this.prisma.queueToken.create({
+          data: {
+            tenantId, locationId,
+            tokenNumber,
+            patientId: pat.id,
+            doctorId: doctor!.id,
+            visitType: 'OPD',
+            priority: 'NORMAL',
+            status: 'WAITING',
+            queueDate: today,
+            issuedAt: new Date(),
+          } as any,
+        });
+        summary.queueTokens++;
+      }
+    });
+
+    // ── A vitals record on the first patient — so nurse sees historic data ──
+    await safe('vitals', async () => {
+      if (!createdPatients.length) return;
+      const pat = createdPatients[0];
+      const existing = await this.prisma.vital.count({ where: { tenantId, patientId: pat.id } });
+      if (existing > 0) return;
+      await this.prisma.vital.create({
         data: {
-          email: doctorEmail,
-          passwordHash,
-          firstName: 'Rahul',
-          lastName: 'Sharma',
-          phone: `+91${Math.floor(7000000000 + Math.random() * 999999999)}`,
-          gender: 'MALE',
-          dateOfBirth: new Date('1985-06-15'),
-          primaryDegree: 'MBBS',
-          pgDegree: 'MD',
-          pgSpecialization: 'General Medicine',
-          experienceYears: 12,
-          specialties: ['General Medicine', 'Internal Medicine'],
-          subspecialties: [],
-          languages: ['English', 'Hindi', 'Tamil'],
-          medicalCouncil: 'TNMC',
-          registrationNo: `TN-${Math.floor(10000 + Math.random() * 89999)}`,
-          registrationDate: new Date('2010-01-01'),
-          ayphenStatus: 'VERIFIED',
-          mfaEnabled: false,
+          tenantId, locationId, patientId: pat.id,
+          systolicBp: 130, diastolicBp: 85,
+          heartRate: 78, temperatureC: 37.1, spo2: 98,
+          respiratoryRate: 16, weightKg: 72, heightCm: 175,
+          recordedAt: new Date(),
         } as any,
       });
-    }
-    const existingAff = await this.prisma.doctorOrgAffiliation.findFirst({
-      where: { doctorId: doctor.id, tenantId },
+      summary.vitals++;
     });
-    if (!existingAff) {
-      await this.prisma.doctorOrgAffiliation.create({
+
+    // ── A future appointment on patient 2 — populates appointments screen ──
+    await safe('sample appointment', async () => {
+      if (!doctor || createdPatients.length < 2) return;
+      const pat = createdPatients[1];
+      const existing = await this.prisma.appointment.count({ where: { tenantId, patientId: pat.id } });
+      if (existing > 0) return;
+      const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(0, 0, 0, 0);
+      await this.prisma.appointment.create({
         data: {
-          doctorId: doctor.id,
-          tenantId,
-          locationId,
-          designation: 'Consultant',
-          employmentType: 'FULL_TIME',
-          departmentName: 'General Medicine',
-          availableDays: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'],
-          slotDurationMinutes: 15,
-          consultationFee: 500,
-          status: 'ACTIVE',
-          isActive: true,
-          acceptedAt: new Date(),
-          joinedAt: new Date(),
-        },
+          tenantId, locationId,
+          patientId: pat.id,
+          doctorId: doctor!.id,
+          appointmentDate: tomorrow,
+          appointmentTime: '10:30',
+          durationMinutes: 15,
+          type: 'CONSULTATION',
+          source: 'WALK_IN',
+          status: 'SCHEDULED',
+          chiefComplaint: 'Routine follow-up',
+        } as any,
       });
-      summary.doctorAffiliated = true;
-    }
+      summary.appointments++;
+    });
 
     const prettyRole = (sysRole: string) =>
       sysRole.replace('SYS_', '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());

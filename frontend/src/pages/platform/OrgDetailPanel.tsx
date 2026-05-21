@@ -627,9 +627,25 @@ export default function OrgDetailPanel({ org, onClose, onRefresh }: Props) {
                 <span className="font-bold">What was created:</span>{' '}
                 {starterResult.created?.staffUsers ?? 0} staff, {starterResult.created?.departments ?? 0} departments,{' '}
                 {starterResult.created?.wards ?? 0} wards, {starterResult.created?.beds ?? 0} beds,{' '}
-                {starterResult.created?.drugs ?? 0} drugs{starterResult.created?.doctorAffiliated ? ', sample doctor' : ''}.{' '}
+                {starterResult.created?.drugs ?? 0} drugs,{' '}
+                {starterResult.created?.patients ?? 0} patients,{' '}
+                {starterResult.created?.queueTokens ?? 0} queue tokens,{' '}
+                {starterResult.created?.vitals ?? 0} vitals,{' '}
+                {starterResult.created?.appointments ?? 0} appointments
+                {starterResult.created?.doctorAffiliated ? ', sample doctor' : ''}.{' '}
                 <span className="text-blue-600">Existing rows were left alone.</span>
               </div>
+
+              {(starterResult.created?.errors || []).length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-800">
+                  <div className="font-bold mb-1">Some steps failed (others may have succeeded):</div>
+                  <ul className="list-disc pl-5 space-y-0.5 font-mono">
+                    {(starterResult.created.errors || []).map((e: string, i: number) => (
+                      <li key={i}>{e}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {(starterResult.staff || []).length > 0 && (
                 <div>
