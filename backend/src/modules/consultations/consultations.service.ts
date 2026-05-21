@@ -38,7 +38,19 @@ export class ConsultationsService {
       locationId = loc?.id;
     }
     return this.prisma.consultation.create({
-      data: { tenantId, locationId, patientId: dto.patientId, doctorId: dto.doctorId, queueTokenId: dto.queueTokenId, appointmentId: dto.appointmentId, chiefComplaint: dto.chiefComplaint, status: 'DRAFT', isCrossLocation: dto.isCrossLocation || false, accessReason: dto.accessReason },
+      data: {
+        tenantId, locationId,
+        patientId: dto.patientId,
+        doctorId: dto.doctorId,
+        queueTokenId: dto.queueTokenId,
+        appointmentId: dto.appointmentId,
+        // schema column is NOT NULL; default to a placeholder when the
+        // doctor opens the consult before typing — they can edit on PUT.
+        chiefComplaint: dto.chiefComplaint || 'Pending',
+        status: 'DRAFT',
+        isCrossLocation: dto.isCrossLocation || false,
+        accessReason: dto.accessReason,
+      },
       include: { patient: true, diagnoses: true },
     });
   }

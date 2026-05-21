@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { UserCheck, Bed, LogOut, Activity, Plus, X, Search, ArrowRightLeft, Eye, Printer } from 'lucide-react';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
@@ -20,6 +21,7 @@ const EMPTY_ADMIT = {
 const EMPTY_TRANSFER = { newBedId: '', newWardId: '', reason: '' };
 
 export default function AdmissionsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [admissions, setAdmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -30,6 +32,28 @@ export default function AdmissionsPage() {
   const [admitForm, setAdmitForm] = useState(EMPTY_ADMIT);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+
+  // Deep-link: ?admit=1&patientId=... opens the Admit modal pre-filled.
+  // Used by the doctor's "Admit" quick action on the consultation page.
+  useEffect(() => {
+    if (searchParams.get('admit') === '1') {
+      const pid = searchParams.get('patientId') || '';
+      setShowAdmit(true);
+      if (pid) {
+        setAdmitForm(f => ({ ...f, patientId: pid }));
+        // Resolve the patient name for the chip
+        api.get(`/patients/${pid}`)
+          .then(r => setSelectedPatientLabel(`${r.data?.firstName || ''} ${r.data?.lastName || ''} — ${r.data?.patientId || ''}`.trim()))
+          .catch(() => { /* silent */ });
+      }
+      // Clear the params so reopening from sidebar doesn't re-trigger.
+      const next = new URLSearchParams(searchParams);
+      next.delete('admit');
+      next.delete('patientId');
+      setSearchParams(next, { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Patient search
   const [patientSearch, setPatientSearch] = useState('');

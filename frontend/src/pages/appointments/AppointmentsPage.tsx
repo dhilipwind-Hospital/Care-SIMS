@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Calendar, Clock, Users, CheckCircle, Plus, X, Search, XCircle, Edit3, Loader2, Printer } from 'lucide-react';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
@@ -128,6 +129,7 @@ function AvailabilityTab() {
 }
 
 export default function AppointmentsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabKey>('list');
 
   const [appts, setAppts]     = useState<any[]>([]);
@@ -142,6 +144,33 @@ export default function AppointmentsPage() {
   const [form, setForm]               = useState(EMPTY_FORM);
   const [submitting, setSubmitting]   = useState(false);
   const [formError, setFormError]     = useState('');
+
+  // Deep-link: ?book=1&patientId=...&doctorId=... opens the Book modal
+  // pre-filled. Used by the doctor's "Follow-up" quick action.
+  useEffect(() => {
+    if (searchParams.get('book') === '1') {
+      const pid = searchParams.get('patientId') || '';
+      const did = searchParams.get('doctorId') || '';
+      setForm(f => ({
+        ...f,
+        patientId: pid || f.patientId,
+        doctorId: did || f.doctorId,
+        appointmentDate: f.appointmentDate || new Date().toISOString().split('T')[0],
+      }));
+      if (pid) {
+        api.get(`/patients/${pid}`)
+          .then(r => setSelectedPat(r.data))
+          .catch(() => { /* silent */ });
+      }
+      setShowBook(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete('book');
+      next.delete('patientId');
+      next.delete('doctorId');
+      setSearchParams(next, { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Patient search
   const [patSearch, setPatSearch]     = useState('');

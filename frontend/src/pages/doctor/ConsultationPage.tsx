@@ -175,8 +175,11 @@ export default function ConsultationPage() {
   };
 
   const goToRx = () => navigate(`/app/doctor/prescriptions?patientId=${patientId}&consultationId=${consultationId || ''}`);
-  const goToAdmit = () => navigate(`/app/nurse/wards?admit=1&patientId=${patientId || ''}`);
-  const goToFollowUp = () => navigate(`/app/appointments?followUp=1&patientId=${patientId || ''}`);
+  // Admit: AdmissionsPage has the actual admit form; passing patientId in the
+  // URL lets it pre-fill (wire-up added in same change-set as this comment).
+  const goToAdmit = () => navigate(`/app/nurse/admissions?admit=1&patientId=${patientId || ''}`);
+  // Follow-up: AppointmentsPage opens its Book modal; patientId prefill.
+  const goToFollowUp = () => navigate(`/app/appointments?book=1&patientId=${patientId || ''}&doctorId=${user?.sub || ''}`);
 
   const inp = 'w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 transition-all';
   const ta  = `${inp} resize-none`;
