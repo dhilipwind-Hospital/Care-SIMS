@@ -18,14 +18,28 @@ export default function AdminDashboard() {
   const [lowStock, setLowStock] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
+  const [locations, setLocations] = useState<any[]>([]);
+  // '' means "all locations" (tenant-wide aggregate)
+  const [locationFilter, setLocationFilter] = useState<string>('');
   const user = getUser();
   const navigate = useNavigate();
 
-  const fetchAll = () => {
+  // Load locations once so the dropdown has options.
+  useEffect(() => {
+    api.get('/org/locations')
+      .then(r => {
+        const rows = r.data?.data || r.data || [];
+        setLocations(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => setLocations([]));
+  }, []);
+
+  const fetchAll = (lid: string = locationFilter) => {
     setLoading(true);
+    const params = lid ? { locationId: lid } : {};
     Promise.all([
-      api.get('/reports/dashboard').catch(() => ({ data: {} })),
-      api.get('/visitors/active-count').catch(() => ({ data: { activeVisitors: 0 } })),
+      api.get('/reports/dashboard', { params }).catch(() => ({ data: {} })),
+      api.get('/visitors/active-count', { params }).catch(() => ({ data: { activeVisitors: 0 } })),
       api.get('/inventory/low-stock').catch(() => ({ data: [] })),
     ]).then(([statsRes, visitorsRes, lowStockRes]) => {
       setStats(statsRes.data);
@@ -38,7 +52,8 @@ export default function AdminDashboard() {
     });
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  // Refetch whenever the location filter changes (and on first mount).
+  useEffect(() => { fetchAll(locationFilter); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [locationFilter]);
 
   const fmt = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
 
@@ -70,9 +85,27 @@ export default function AdminDashboard() {
           title={`Welcome back, ${user?.firstName || 'Admin'}`}
           subtitle={`${user?.tenantName || 'Hospital'} · ${new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`}
         />
-        <button onClick={fetchAll} className="p-2 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-400 hover:text-teal-600 transition-colors" title="Refresh">
-          <RefreshCw size={15} />
-        </button>
+        <div className="flex items-center gap-2">
+          {locations.length > 1 && (
+            <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-2.5 py-1.5">
+              <MapPin size={13} className="text-teal-600" />
+              <select
+                value={locationFilter}
+                onChange={e => setLocationFilter(e.target.value)}
+                className="text-xs font-medium text-gray-700 bg-transparent focus:outline-none cursor-pointer"
+                title="Filter dashboard by location"
+              >
+                <option value="">All Locations</option>
+                {locations.map((l: any) => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <button onClick={() => fetchAll()} className="p-2 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-400 hover:text-teal-600 transition-colors" title="Refresh">
+            <RefreshCw size={15} />
+          </button>
+        </div>
       </div>
 
       {/* KPI Row 1 — Operations */}
