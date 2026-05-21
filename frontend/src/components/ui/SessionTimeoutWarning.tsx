@@ -22,12 +22,23 @@ export default function SessionTimeoutWarning() {
 
   const refreshToken = useCallback(async () => {
     try {
-      const currentToken = localStorage.getItem('hms_token');
-      if (!currentToken) return;
-      const { data } = await axios.post('/api/auth/refresh', {}, {
-        headers: { Authorization: `Bearer ${currentToken}` },
-      });
+      const storedRefresh = localStorage.getItem('hms_refresh_token');
+      if (!storedRefresh) {
+        // No refresh token stored — force a re-login instead of hanging
+        // on a 400. Happens for sessions that pre-date the refresh-token
+        // flow or after a Clear Site Data.
+        console.warn('No refresh token in storage — redirecting to login');
+        localStorage.removeItem('hms_token');
+        localStorage.removeItem('hms_user');
+        window.location.href = '/login';
+        return;
+      }
+      // /auth/refresh is @Public and expects { refreshToken } in the body;
+      // it validates against JWT_REFRESH_SECRET and returns a fresh
+      // accessToken (and optionally a rotated refreshToken).
+      const { data } = await axios.post('/api/auth/refresh', { refreshToken: storedRefresh });
       localStorage.setItem('hms_token', data.accessToken);
+      if (data.refreshToken) localStorage.setItem('hms_refresh_token', data.refreshToken);
       setShowWarning(false);
     } catch (err) {
       console.error('Token refresh failed:', err);
