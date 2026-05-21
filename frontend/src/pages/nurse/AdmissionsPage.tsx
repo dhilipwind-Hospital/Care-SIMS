@@ -35,18 +35,25 @@ export default function AdmissionsPage() {
 
   // Deep-link: ?admit=1&patientId=... opens the Admit modal pre-filled.
   // Used by the doctor's "Admit" quick action on the consultation page.
+  // Also pulls wards + doctors so the dropdowns aren't empty.
   useEffect(() => {
     if (searchParams.get('admit') === '1') {
       const pid = searchParams.get('patientId') || '';
       setShowAdmit(true);
+      // Fetch the master data the modal needs (same as openAdmitModal does).
+      Promise.all([
+        api.get('/wards').catch(() => ({ data: [] })),
+        api.get('/doctors/affiliations/tenant').catch(() => ({ data: [] })),
+      ]).then(([wRes, dRes]) => {
+        setWards(wRes.data?.data || wRes.data || []);
+        setDoctors(dRes.data?.data || dRes.data || []);
+      });
       if (pid) {
         setAdmitForm(f => ({ ...f, patientId: pid }));
-        // Resolve the patient name for the chip
         api.get(`/patients/${pid}`)
           .then(r => setSelectedPatientLabel(`${r.data?.firstName || ''} ${r.data?.lastName || ''} — ${r.data?.patientId || ''}`.trim()))
           .catch(() => { /* silent */ });
       }
-      // Clear the params so reopening from sidebar doesn't re-trigger.
       const next = new URLSearchParams(searchParams);
       next.delete('admit');
       next.delete('patientId');
@@ -421,11 +428,19 @@ ${(r.nextOfKin || r.emergencyContact || r.patient?.emergencyContact) ? `<div sty
                 <select value={admitForm.admittingDoctorId} onChange={e => setAdmitForm(f => ({ ...f, admittingDoctorId: e.target.value }))}
                   className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                   <option value="">Select doctor</option>
-                  {doctors.map((d: any) => (
-                    <option key={d.id || d.doctorId} value={d.id || d.doctorId}>
-                      Dr. {d.firstName || d.doctor?.firstName} {d.lastName || d.doctor?.lastName}
-                    </option>
-                  ))}
+                  {doctors.map((d: any) => {
+                    // /doctors/affiliations/tenant returns affiliation rows with
+                    // doctor nested. Use the doctor id (FK target on Admission),
+                    // not the affiliation id.
+                    const doctorId = d.doctor?.id || d.doctorId || d.id;
+                    const fn = d.doctor?.firstName || d.firstName || '';
+                    const ln = d.doctor?.lastName || d.lastName || '';
+                    return (
+                      <option key={doctorId} value={doctorId}>
+                        Dr. {fn} {ln}{d.designation ? ` · ${d.designation}` : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
