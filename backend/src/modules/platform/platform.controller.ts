@@ -36,7 +36,9 @@ export class PlatformController {
   // Backfill departments, wards/beds, drug catalog + stock, sample doctor
   // affiliation into an existing org. Idempotent.
   @Post('organizations/:id/seed-starter-data')
-  seedStarterData(@Param('id') id: string) { return this.platformService.seedStarterDataForOrg(id); }
+  seedStarterData(@Param('id') id: string, @CurrentUser('sub') adminId: string) {
+    return this.platformService.seedStarterDataForOrg(id, adminId);
+  }
 
   // Lightweight read of current row counts for an org. Used by the UI to
   // show "Current totals" panel without making the heavy seed call also

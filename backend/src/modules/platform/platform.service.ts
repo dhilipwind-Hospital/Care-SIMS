@@ -872,7 +872,7 @@ export class PlatformService {
   // wards + beds, drug catalog + opening stock, and a sample doctor with
   // an affiliation. Idempotent — safe to click multiple times; existing
   // rows are left alone.
-  async seedStarterDataForOrg(tenantId: string) {
+  async seedStarterDataForOrg(tenantId: string, adminId?: string) {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) throw new NotFoundException('Organization not found');
     const location = await this.prisma.tenantLocation.findFirst({ where: { tenantId, isActive: true }, orderBy: { createdAt: 'asc' } });
@@ -892,15 +892,33 @@ export class PlatformService {
     ]);
     const alreadySeeded = hasStaff >= 5 && hasDept >= 3 && hasWard >= 2 && hasDrug >= 5 && hasPat >= 2;
     if (alreadySeeded) {
+      // Even on the skip path we still want to enable all features —
+      // older orgs that were seeded before recent modules existed (e.g.
+      // MOD_TRIAGE) need this to dodge the 403 from FeatureFlagGuard.
+      let featuresInserted = 0;
+      let featuresTurnedOn = 0;
+      try {
+        if (adminId) {
+          const r = await this.enableAllFeaturesForOrg(tenantId, adminId);
+          featuresInserted = r.featuresInserted;
+          featuresTurnedOn = r.featuresTurnedOn;
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[seed-starter] enable-all-features failed:', err);
+      }
       return {
-        message: 'Starter data already present — nothing to do',
+        message: 'Starter data already present — features synced',
         tenant: { id: tenantId, slug: tenant.slug, name: tenant.legalName },
         created: { staffUsers: 0, departments: 0, drugs: 0, drugBatches: 0, wards: 0, beds: 0, doctorAffiliated: false, patients: 0, queueTokens: 0, vitals: 0, appointments: 0, errors: [] },
         sharedPassword: 'Demo@1234',
-        note: 'This org already has staff, departments, wards, drugs and patients. To see what is actually in the org, click Refresh Data Counts.',
+        note: featuresInserted + featuresTurnedOn > 0
+          ? `Enabled ${featuresInserted + featuresTurnedOn} feature module(s) that were missing or off. Existing data was left alone.`
+          : 'This org already has staff, departments, wards, drugs and patients. Click Refresh Data Counts to see totals.',
         staff: [],
         sampleDoctor: null,
         skipped: true,
+        featuresEnabled: featuresInserted + featuresTurnedOn,
       };
     }
 
@@ -1242,6 +1260,14 @@ export class PlatformService {
         } as any,
       });
       summary.appointments++;
+    });
+
+    // Also turn on every applicable feature module — covers the
+    // FeatureFlagGuard 403 trap on older orgs that were created before a
+    // module (e.g. MOD_TRIAGE) was added to defaults. Best-effort.
+    await safe('enable all features', async () => {
+      if (!adminId) return;
+      await this.enableAllFeaturesForOrg(tenantId, adminId);
     });
 
     const prettyRole = (sysRole: string) =>
