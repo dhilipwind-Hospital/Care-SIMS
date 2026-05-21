@@ -89,6 +89,7 @@ export default function OrgDetailPanel({ org, onClose, onRefresh }: Props) {
   const [newPlan, setNewPlan] = useState('');
   const [showExportConfirm, setShowExportConfirm] = useState(false);
   const [exportSlug, setExportSlug] = useState('');
+  const [starterResult, setStarterResult] = useState<any>(null);
 
   const fetchDetail = async () => {
     setLoading(true);
@@ -285,10 +286,11 @@ export default function OrgDetailPanel({ org, onClose, onRefresh }: Props) {
                       onClick={async () => {
                         try {
                           const { data } = await api.post(`/platform/organizations/${org.id}/seed-starter-data`);
+                          setStarterResult(data);
                           const c = data.created || {};
                           toast.success(
-                            `Starter data ready: ${c.departments || 0} departments, ${c.wards || 0} wards, ${c.beds || 0} beds, ${c.drugs || 0} drugs${c.doctorAffiliated ? ', sample doctor' : ''}`,
-                            { duration: 6000 },
+                            `Starter data ready: ${c.staffUsers || 0} staff users, ${c.departments || 0} departments, ${c.wards || 0} wards, ${c.beds || 0} beds, ${c.drugs || 0} drugs`,
+                            { duration: 5000 },
                           );
                         } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to seed starter data'); }
                       }}
@@ -595,6 +597,76 @@ export default function OrgDetailPanel({ org, onClose, onRefresh }: Props) {
                 await api.post(`/platform/organizations/${org.id}/export`).catch((err) => { console.error('Export failed:', err); toast.error('Export failed'); });
                 setShowExportConfirm(false);
               }} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm font-medium disabled:opacity-50">Export Data</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Starter data result — shows the staff credentials that were created */}
+      {starterResult && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={() => setStarterResult(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-bold text-gray-900">Starter Data Ready</h3>
+              <button onClick={() => setStarterResult(null)} className="text-gray-400 hover:text-red-500"><XCircle size={16} /></button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 p-6 space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <div className="text-xs text-amber-700 font-bold uppercase tracking-wider mb-1">Shared password (all newly-created accounts)</div>
+                <div className="flex items-center gap-2">
+                  <code className="font-mono text-lg font-bold text-gray-900 bg-white px-3 py-1 rounded border border-amber-200">{starterResult.sharedPassword}</code>
+                  <button
+                    onClick={() => { navigator.clipboard?.writeText(starterResult.sharedPassword); toast.success('Copied'); }}
+                    className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200">Copy</button>
+                </div>
+                <div className="text-[11px] text-amber-700 mt-1.5">{starterResult.note}</div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-800">
+                <span className="font-bold">What was created:</span>{' '}
+                {starterResult.created?.staffUsers ?? 0} staff, {starterResult.created?.departments ?? 0} departments,{' '}
+                {starterResult.created?.wards ?? 0} wards, {starterResult.created?.beds ?? 0} beds,{' '}
+                {starterResult.created?.drugs ?? 0} drugs{starterResult.created?.doctorAffiliated ? ', sample doctor' : ''}.{' '}
+                <span className="text-blue-600">Existing rows were left alone.</span>
+              </div>
+
+              {(starterResult.staff || []).length > 0 && (
+                <div>
+                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Staff Logins · use /login</div>
+                  <div className="space-y-1">
+                    {(starterResult.staff || []).map((s: any) => (
+                      <div key={s.email} className="flex items-center gap-2 p-2 rounded-lg border border-gray-100 hover:bg-gray-50">
+                        <span className="text-xs font-semibold text-gray-700 w-40 truncate">{s.role}</span>
+                        <code className="font-mono text-xs text-teal-700 flex-1 truncate">{s.email}</code>
+                        <button
+                          onClick={() => { navigator.clipboard?.writeText(s.email); toast.success('Copied'); }}
+                          className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200">Copy</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {starterResult.sampleDoctor && (
+                <div>
+                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Sample Doctor · use {starterResult.sampleDoctor.loginUrl}</div>
+                  <div className="flex items-center gap-2 p-2 rounded-lg border border-gray-100 hover:bg-gray-50">
+                    <span className="text-xs font-semibold text-gray-700 w-40">{starterResult.sampleDoctor.name}</span>
+                    <code className="font-mono text-xs text-teal-700 flex-1 truncate">{starterResult.sampleDoctor.email}</code>
+                    <button
+                      onClick={() => { navigator.clipboard?.writeText(starterResult.sampleDoctor.email); toast.success('Copied'); }}
+                      className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200">Copy</button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+              <button onClick={() => setStarterResult(null)}
+                className="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800">
+                Got it
+              </button>
             </div>
           </div>
         </div>

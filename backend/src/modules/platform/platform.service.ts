@@ -829,7 +829,64 @@ export class PlatformService {
     if (!location) throw new BadRequestException('Organization has no active location — add one first');
     const locationId = location.id;
 
-    const summary = { departments: 0, drugs: 0, drugBatches: 0, wards: 0, beds: 0, doctorAffiliated: false };
+    const summary = { staffUsers: 0, departments: 0, drugs: 0, drugBatches: 0, wards: 0, beds: 0, doctorAffiliated: false };
+
+    // ── Staff users (one per role) ───────────────────────────────────────
+    // Use a host derived from the tenant slug so emails are unique per org
+    // and obviously demo-y. Shared password Demo@1234.
+    const host = `${tenant.slug}.local`;
+    const sharedPassword = 'Demo@1234';
+    const passwordHash = await bcrypt.hash(sharedPassword, 10);
+
+    const staffDefs = [
+      { firstName: 'Org',      lastName: 'Admin',        role: 'SYS_ORG_ADMIN',         emailLocal: 'admin' },
+      { firstName: 'Nikhil',   lastName: 'Reception',    role: 'SYS_RECEPTIONIST',      emailLocal: 'reception' },
+      { firstName: 'Priya',    lastName: 'Nurse',        role: 'SYS_NURSE',             emailLocal: 'nurse' },
+      { firstName: 'Meena',    lastName: 'Ward',         role: 'SYS_WARD_NURSE',        emailLocal: 'wardnurse' },
+      { firstName: 'Kavya',    lastName: 'Charge',       role: 'SYS_CHARGE_NURSE',      emailLocal: 'chargenurse' },
+      { firstName: 'Vikram',   lastName: 'Pharma',       role: 'SYS_PHARMACIST',        emailLocal: 'pharmacy' },
+      { firstName: 'Anjali',   lastName: 'Lab',          role: 'SYS_LAB_TECH',          emailLocal: 'lab' },
+      { firstName: 'Suresh',   lastName: 'Billing',      role: 'SYS_BILLING',           emailLocal: 'billing' },
+    ];
+    const roleRows = await this.prisma.tenantRole.findMany({
+      where: { tenantId, isSystemRole: true },
+      select: { id: true, systemRoleId: true },
+    });
+    const roleByName: Record<string, string> = {};
+    for (const r of roleRows) if (r.systemRoleId) roleByName[r.systemRoleId] = r.id;
+
+    const createdStaff: Array<{ role: string; email: string }> = [];
+    for (const s of staffDefs) {
+      const email = `${s.emailLocal}@${host}`;
+      const roleId = roleByName[s.role];
+      if (!roleId) {
+        // eslint-disable-next-line no-console
+        console.warn(`[seed-starter] No role row for ${s.role}, skipping ${email}`);
+        continue;
+      }
+      const existing = await this.prisma.tenantUser.findFirst({ where: { tenantId, email } });
+      if (existing) {
+        // Existing rows: leave password alone (admin may have changed it),
+        // but ensure the user is active and has the right role/location.
+        await this.prisma.tenantUser.update({
+          where: { id: existing.id },
+          data: { roleId, primaryLocationId: locationId, isActive: true },
+        });
+      } else {
+        await this.prisma.tenantUser.create({
+          data: {
+            tenantId, email, passwordHash,
+            firstName: s.firstName, lastName: s.lastName,
+            phone: '9000000000',
+            roleId, primaryLocationId: locationId,
+            locationScope: 'ALL',
+            forcePasswordChange: false, isActive: true, mfaEnabled: false,
+          },
+        });
+        summary.staffUsers++;
+      }
+      createdStaff.push({ role: s.role, email });
+    }
 
     // ── Departments ──────────────────────────────────────────────────────
     const deptDefs = [
@@ -933,7 +990,6 @@ export class PlatformService {
     const doctorEmail = `doctor.demo@${tenant.slug}.local`;
     let doctor = await this.prisma.doctorRegistry.findUnique({ where: { email: doctorEmail } });
     if (!doctor) {
-      const passwordHash = await bcrypt.hash('Demo@1234', 10);
       doctor = await this.prisma.doctorRegistry.create({
         data: {
           email: doctorEmail,
@@ -982,11 +1038,17 @@ export class PlatformService {
       summary.doctorAffiliated = true;
     }
 
+    const prettyRole = (sysRole: string) =>
+      sysRole.replace('SYS_', '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+
     return {
       message: 'Starter data provisioned',
       tenant: { id: tenantId, slug: tenant.slug, name: tenant.legalName },
       created: summary,
-      sampleDoctor: { email: doctorEmail, password: 'Demo@1234', name: 'Dr. Rahul Sharma' },
+      sharedPassword,
+      note: 'All staff and the sample doctor share the password. Passwords are NOT reset for users that already existed.',
+      staff: createdStaff.map(s => ({ role: prettyRole(s.role), email: s.email })),
+      sampleDoctor: { email: doctorEmail, password: sharedPassword, name: 'Dr. Rahul Sharma', loginUrl: '/doctor/login' },
     };
   }
 
