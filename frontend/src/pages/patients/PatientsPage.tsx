@@ -484,7 +484,7 @@ export default function PatientsPage() {
                 {[
                   ['Gender', selectedPatient.gender],
                   ['Blood Group', selectedPatient.bloodGroup || '—'],
-                  ['Phone', selectedPatient.phone || '—'],
+                  ['Phone', selectedPatient.mobile || selectedPatient.phone || '—'],
                   ['Email', selectedPatient.email || '—'],
                   ['Date of Birth', selectedPatient.dateOfBirth ? new Date(selectedPatient.dateOfBirth).toLocaleDateString() : '—'],
                   ['Age', selectedPatient.dateOfBirth ? `${new Date().getFullYear() - new Date(selectedPatient.dateOfBirth).getFullYear()} yrs` : '—'],
@@ -500,7 +500,12 @@ export default function PatientsPage() {
               {selectedPatient.address && (
                 <div className="bg-gray-50 rounded-xl p-3">
                   <p className="text-xs text-gray-400 mb-0.5">Address</p>
-                  <p className="text-sm text-gray-900">{selectedPatient.address}</p>
+                  <p className="text-sm text-gray-900">
+                    {typeof selectedPatient.address === 'string'
+                      ? selectedPatient.address
+                      : [selectedPatient.address.line1, selectedPatient.address.line2, selectedPatient.address.city, selectedPatient.address.state, selectedPatient.address.pinCode, selectedPatient.address.country]
+                          .filter(Boolean).join(', ') || '—'}
+                  </p>
                 </div>
               )}
               {selectedPatient.emergencyContactName && (
