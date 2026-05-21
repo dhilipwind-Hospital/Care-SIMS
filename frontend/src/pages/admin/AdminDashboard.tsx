@@ -40,7 +40,7 @@ export default function AdminDashboard() {
     Promise.all([
       api.get('/reports/dashboard', { params }).catch(() => ({ data: {} })),
       api.get('/visitors/active-count', { params }).catch(() => ({ data: { activeVisitors: 0 } })),
-      api.get('/inventory/low-stock').catch(() => ({ data: [] })),
+      api.get('/inventory/low-stock', { params }).catch(() => ({ data: [] })),
     ]).then(([statsRes, visitorsRes, lowStockRes]) => {
       setStats(statsRes.data);
       setActiveVisitors(visitorsRes.data.activeVisitors ?? 0);

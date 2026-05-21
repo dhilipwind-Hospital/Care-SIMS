@@ -57,8 +57,8 @@ export class InventoryController {
   }
 
   @Get('low-stock')
-  lowStock(@CurrentUser('tenantId') tid: string) {
-    return this.svc.lowStockItems(tid);
+  lowStock(@CurrentUser('tenantId') tid: string, @Query('locationId') lid?: string) {
+    return this.svc.lowStockItems(tid, lid);
   }
 
   @Get('batches')

@@ -189,8 +189,10 @@ export class InventoryService {
     return this.prisma.inventoryTransaction.findMany({ where, include: { item: true }, orderBy: { createdAt: 'desc' }, take: 100 });
   }
 
-  async lowStockItems(tenantId: string) {
-    const items = await this.prisma.inventoryItem.findMany({ where: { tenantId, isActive: true } });
+  async lowStockItems(tenantId: string, locationId?: string) {
+    const where: any = { tenantId, isActive: true };
+    if (locationId) where.locationId = locationId;
+    const items = await this.prisma.inventoryItem.findMany({ where });
     return items.filter(i => i.currentStock <= i.reorderLevel);
   }
 }
