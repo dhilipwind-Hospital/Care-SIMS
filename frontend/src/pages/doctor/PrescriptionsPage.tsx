@@ -26,7 +26,25 @@ export default function PrescriptionsPage() {
   const [patLoading, setPatLoading]   = useState(false);
 
   useEffect(() => {
-    if (!patSearch.trim()) { setPatResults([]); return; }
+    // When the search box is empty, default to today's queue for this doctor —
+    // saves typing when the doctor is just writing an Rx for the next patient
+    // in their queue.
+    if (!patSearch.trim()) {
+      if (!user?.sub) { setPatResults([]); return; }
+      setPatLoading(true);
+      api.get(`/queue/doctor/${user.sub}`, { params: { limit: 10 } })
+        .then(r => {
+          const tokens = r.data?.tokens || r.data?.data || r.data || [];
+          // Flatten {patient} so the picker can read p.id / p.firstName / etc.
+          const patients = (Array.isArray(tokens) ? tokens : [])
+            .map((t: any) => t.patient ? { ...t.patient, _tokenNumber: t.tokenNumber, _status: t.status } : null)
+            .filter(Boolean);
+          setPatResults(patients);
+        })
+        .catch(() => setPatResults([]))
+        .finally(() => setPatLoading(false));
+      return;
+    }
     const t = setTimeout(async () => {
       setPatLoading(true);
       try {
@@ -35,7 +53,7 @@ export default function PrescriptionsPage() {
       } catch (err) { toast.error('Failed to search patients'); } finally { setPatLoading(false); }
     }, 300);
     return () => clearTimeout(t);
-  }, [patSearch]);
+  }, [patSearch, user?.sub]);
 
   const fetchRx = async () => {
     setLoading(true);
@@ -230,13 +248,25 @@ export default function PrescriptionsPage() {
                         placeholder="Search patient by name or ID…"
                         className="w-full pl-8 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                       {patResults.length > 0 && (
-                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-40 overflow-y-auto">
-                          {patLoading ? <div className="p-2 text-xs text-gray-400">Searching…</div> : patResults.map(p => (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto">
+                          {!patSearch.trim() && (
+                            <div className="px-3 py-1.5 text-[10px] font-bold text-teal-700 uppercase tracking-wider bg-teal-50/60 sticky top-0 border-b border-teal-100">
+                              Your queue today
+                            </div>
+                          )}
+                          {patLoading ? <div className="p-2 text-xs text-gray-400">Loading…</div> : patResults.map(p => (
                             <button key={p.id} type="button"
                               onClick={() => { setSelectedPat(p); setForm(f => ({ ...f, patientId: p.id })); setPatSearch(''); setPatResults([]); }}
-                              className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm">
-                              <span className="font-medium">{p.firstName} {p.lastName}</span>
-                              <span className="text-gray-400 ml-2 text-xs">{p.patientId}</span>
+                              className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm flex items-center justify-between">
+                              <span>
+                                <span className="font-medium">{p.firstName} {p.lastName}</span>
+                                <span className="text-gray-400 ml-2 text-xs">{p.patientId}</span>
+                              </span>
+                              {p._tokenNumber && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                                  Token {p._tokenNumber}
+                                </span>
+                              )}
                             </button>
                           ))}
                         </div>

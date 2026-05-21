@@ -22,7 +22,21 @@ export default function ConsultationPage() {
   const [patResults,     setPatResults]     = useState<any[]>([]);
 
   useEffect(() => {
-    if (!patSearch.trim()) { setPatResults([]); return; }
+    // Empty search → show this doctor's queue for today, so the doctor
+    // can pick the next waiting patient without typing.
+    if (!patSearch.trim()) {
+      if (!user?.sub || patientId) { setPatResults([]); return; }
+      api.get(`/queue/doctor/${user.sub}`, { params: { limit: 10 } })
+        .then(r => {
+          const tokens = r.data?.tokens || r.data?.data || r.data || [];
+          const patients = (Array.isArray(tokens) ? tokens : [])
+            .map((t: any) => t.patient ? { ...t.patient, _tokenNumber: t.tokenNumber, _status: t.status } : null)
+            .filter(Boolean);
+          setPatResults(patients);
+        })
+        .catch(() => setPatResults([]));
+      return;
+    }
     const t = setTimeout(async () => {
       try {
         const { data } = await api.get('/patients', { params: { q: patSearch, limit: 8 } });
@@ -30,7 +44,7 @@ export default function ConsultationPage() {
       } catch { /* silent */ }
     }, 300);
     return () => clearTimeout(t);
-  }, [patSearch]);
+  }, [patSearch, user?.sub, patientId]);
 
   const [patient,        setPatient]        = useState<any>(null);
   const [vitals,         setVitals]         = useState<any>(null);
@@ -187,14 +201,26 @@ export default function ConsultationPage() {
                   className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
                 {patResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 max-h-52 overflow-y-auto">
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 max-h-64 overflow-y-auto">
+                    {!patSearch.trim() && (
+                      <div className="px-4 py-1.5 text-[10px] font-bold text-teal-700 uppercase tracking-wider bg-teal-50/60 sticky top-0 border-b border-teal-100">
+                        Your queue today
+                      </div>
+                    )}
                     {patResults.map(p => (
                       <button key={p.id} type="button"
                         onClick={() => { setPatientId(p.id); setPatient(p); setPatSearch(''); setPatResults([]); }}
-                        className="w-full text-left px-4 py-2.5 hover:bg-teal-50 text-sm border-b border-gray-50 last:border-0">
-                        <span className="font-medium text-gray-900">{p.firstName} {p.lastName}</span>
-                        <span className="text-gray-400 ml-2 text-xs font-mono">{p.patientId}</span>
-                        {p.phone && <span className="text-gray-400 ml-2 text-xs">· {p.phone}</span>}
+                        className="w-full text-left px-4 py-2.5 hover:bg-teal-50 text-sm border-b border-gray-50 last:border-0 flex items-center justify-between gap-3">
+                        <span className="min-w-0 truncate">
+                          <span className="font-medium text-gray-900">{p.firstName} {p.lastName}</span>
+                          <span className="text-gray-400 ml-2 text-xs font-mono">{p.patientId}</span>
+                          {(p.mobile || p.phone) && <span className="text-gray-400 ml-2 text-xs">· {p.mobile || p.phone}</span>}
+                        </span>
+                        {p._tokenNumber && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex-shrink-0">
+                            Token {p._tokenNumber}
+                          </span>
+                        )}
                       </button>
                     ))}
                   </div>
