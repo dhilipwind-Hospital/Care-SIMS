@@ -907,22 +907,64 @@ export class PlatformService {
         // eslint-disable-next-line no-console
         console.error('[seed-starter] enable-all-features failed:', err);
       }
+
+      // Also top up to a 2-location setup if the org is still single-site —
+      // makes the Locations tab and multi-location pitch demo-ready.
+      let secondaryLocationAdded = false;
+      try {
+        const locCount = await this.prisma.tenantLocation.count({ where: { tenantId } });
+        if (locCount < 2) {
+          const codeTaken = await this.prisma.tenantLocation.findFirst({
+            where: { tenantId, locationCode: 'BRANCH-01' },
+            select: { id: true },
+          });
+          if (!codeTaken) {
+            await this.prisma.tenantLocation.create({
+              data: {
+                tenantId,
+                locationCode: 'BRANCH-01',
+                name: `${tenant.legalName} — Branch Clinic`,
+                type: 'BRANCH',
+                addressLine1: '7 Branch Lane',
+                city: 'Coimbatore',
+                state: 'Tamil Nadu',
+                pinCode: '641001',
+                country: 'IN',
+                phone: '9888888888',
+                email: `branch@${tenant.slug}.local`,
+                isActive: true,
+              } as any,
+            });
+            secondaryLocationAdded = true;
+          }
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[seed-starter] secondary-location top-up failed:', err);
+      }
+
+      const noteParts: string[] = [];
+      if (featuresInserted + featuresTurnedOn > 0) noteParts.push(`Enabled ${featuresInserted + featuresTurnedOn} feature module(s)`);
+      if (secondaryLocationAdded) noteParts.push('Added a branch location');
+      const note = noteParts.length
+        ? `${noteParts.join('. ')}. Existing data was left alone.`
+        : 'This org already has staff, departments, wards, drugs and patients. Click Refresh Data Counts to see totals.';
+
       return {
-        message: 'Starter data already present — features synced',
+        message: 'Starter data already present — synced',
         tenant: { id: tenantId, slug: tenant.slug, name: tenant.legalName },
-        created: { staffUsers: 0, departments: 0, drugs: 0, drugBatches: 0, wards: 0, beds: 0, doctorAffiliated: false, patients: 0, queueTokens: 0, vitals: 0, appointments: 0, errors: [] },
+        created: { staffUsers: 0, departments: 0, drugs: 0, drugBatches: 0, wards: 0, beds: 0, doctorAffiliated: false, patients: 0, queueTokens: 0, vitals: 0, appointments: 0, locations: secondaryLocationAdded ? 1 : 0, errors: [] },
         sharedPassword: 'Demo@1234',
-        note: featuresInserted + featuresTurnedOn > 0
-          ? `Enabled ${featuresInserted + featuresTurnedOn} feature module(s) that were missing or off. Existing data was left alone.`
-          : 'This org already has staff, departments, wards, drugs and patients. Click Refresh Data Counts to see totals.',
+        note,
         staff: [],
         sampleDoctor: null,
         skipped: true,
         featuresEnabled: featuresInserted + featuresTurnedOn,
+        secondaryLocationAdded,
       };
     }
 
-    const summary: any = { staffUsers: 0, departments: 0, drugs: 0, drugBatches: 0, wards: 0, beds: 0, doctorAffiliated: false, patients: 0, queueTokens: 0, vitals: 0, appointments: 0, errors: [] as string[] };
+    const summary: any = { staffUsers: 0, departments: 0, drugs: 0, drugBatches: 0, wards: 0, beds: 0, doctorAffiliated: false, patients: 0, queueTokens: 0, vitals: 0, appointments: 0, locations: 0, errors: [] as string[] };
 
     // Each subsystem runs in its own try block so a partial failure doesn't
     // wipe out everything. The errors array is returned so the platform admin
@@ -989,6 +1031,38 @@ export class PlatformService {
         }
         createdStaff.push({ role: s.role, email });
       }
+    });
+
+    // ── Secondary branch location ────────────────────────────────────────
+    // Multi-location is a core platform pitch — give every org a BRANCH
+    // alongside its MAIN campus so the Locations tab + cross-location
+    // selectors have something real to show. Idempotent: skipped when
+    // a location with code 'BRANCH-01' already exists for this tenant.
+    await safe('secondary location', async () => {
+      const existingCount = await this.prisma.tenantLocation.count({ where: { tenantId } });
+      if (existingCount >= 2) return;
+      const codeTaken = await this.prisma.tenantLocation.findFirst({
+        where: { tenantId, locationCode: 'BRANCH-01' },
+        select: { id: true },
+      });
+      if (codeTaken) return;
+      await this.prisma.tenantLocation.create({
+        data: {
+          tenantId,
+          locationCode: 'BRANCH-01',
+          name: `${tenant.legalName} — Branch Clinic`,
+          type: 'BRANCH',
+          addressLine1: '7 Branch Lane',
+          city: 'Coimbatore',
+          state: 'Tamil Nadu',
+          pinCode: '641001',
+          country: 'IN',
+          phone: '9888888888',
+          email: `branch@${tenant.slug}.local`,
+          isActive: true,
+        } as any,
+      });
+      summary.locations++;
     });
 
     // ── Departments ──────────────────────────────────────────────────────
