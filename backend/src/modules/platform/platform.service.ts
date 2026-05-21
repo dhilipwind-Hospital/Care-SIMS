@@ -829,6 +829,31 @@ export class PlatformService {
     if (!location) throw new BadRequestException('Organization has no active location — add one first');
     const locationId = location.id;
 
+    // Early exit: if the org already has staff + departments + wards + drugs
+    // + patients, the seed has nothing meaningful to add. Skip the full
+    // pipeline so we don't hold the request open while every block does
+    // findFirst → no-op for ~50 rows. Saves the 30s proxy timeout window.
+    const [hasStaff, hasDept, hasWard, hasDrug, hasPat] = await Promise.all([
+      this.prisma.tenantUser.count({ where: { tenantId } }),
+      this.prisma.department.count({ where: { tenantId } }),
+      this.prisma.ward.count({ where: { tenantId } }),
+      this.prisma.drug.count({ where: { tenantId } }),
+      this.prisma.patient.count({ where: { tenantId } }),
+    ]);
+    const alreadySeeded = hasStaff >= 5 && hasDept >= 3 && hasWard >= 2 && hasDrug >= 5 && hasPat >= 2;
+    if (alreadySeeded) {
+      return {
+        message: 'Starter data already present — nothing to do',
+        tenant: { id: tenantId, slug: tenant.slug, name: tenant.legalName },
+        created: { staffUsers: 0, departments: 0, drugs: 0, drugBatches: 0, wards: 0, beds: 0, doctorAffiliated: false, patients: 0, queueTokens: 0, vitals: 0, appointments: 0, errors: [] },
+        sharedPassword: 'Demo@1234',
+        note: 'This org already has staff, departments, wards, drugs and patients. To see what is actually in the org, click Refresh Data Counts.',
+        staff: [],
+        sampleDoctor: null,
+        skipped: true,
+      };
+    }
+
     const summary: any = { staffUsers: 0, departments: 0, drugs: 0, drugBatches: 0, wards: 0, beds: 0, doctorAffiliated: false, patients: 0, queueTokens: 0, vitals: 0, appointments: 0, errors: [] as string[] };
 
     // Each subsystem runs in its own try block so a partial failure doesn't
@@ -1172,51 +1197,41 @@ export class PlatformService {
     const prettyRole = (sysRole: string) =>
       sysRole.replace('SYS_', '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 
-    // Post-seed totals — show the platform admin EXACTLY what exists in
-    // the tenant now (not just what was created on this click). When the
-    // seed is run a second time, `created` reads zeros but `totals` proves
-    // the data is there.
-    const totals = {
-      staffUsers: 0, departments: 0, drugs: 0, drugBatches: 0,
-      wards: 0, beds: 0, patients: 0, queueTokens: 0, vitals: 0, appointments: 0,
-      doctorAffiliations: 0,
-    };
-    await safe('totals snapshot', async () => {
-      const [staffN, deptN, drugN, batchN, wardN, bedN, patN, tokN, vitN, apptN, affN] = await Promise.all([
-        this.prisma.tenantUser.count({ where: { tenantId } }),
-        this.prisma.department.count({ where: { tenantId } }),
-        this.prisma.drug.count({ where: { tenantId } }),
-        this.prisma.drugBatch.count({ where: { tenantId } }),
-        this.prisma.ward.count({ where: { tenantId } }),
-        this.prisma.bed.count({ where: { tenantId } }),
-        this.prisma.patient.count({ where: { tenantId } }),
-        this.prisma.queueToken.count({ where: { tenantId } }),
-        this.prisma.vital.count({ where: { tenantId } }),
-        this.prisma.appointment.count({ where: { tenantId } }),
-        this.prisma.doctorOrgAffiliation.count({ where: { tenantId, isActive: true } }),
-      ]);
-      totals.staffUsers = staffN;
-      totals.departments = deptN;
-      totals.drugs = drugN;
-      totals.drugBatches = batchN;
-      totals.wards = wardN;
-      totals.beds = bedN;
-      totals.patients = patN;
-      totals.queueTokens = tokN;
-      totals.vitals = vitN;
-      totals.appointments = apptN;
-      totals.doctorAffiliations = affN;
-    });
-
     return {
       message: 'Starter data provisioned',
       tenant: { id: tenantId, slug: tenant.slug, name: tenant.legalName },
       created: summary,
-      totals,
       sharedPassword,
       note: 'All staff and the sample doctor share the password. Passwords are NOT reset for users that already existed.',
       staff: createdStaff.map(s => ({ role: prettyRole(s.role), email: s.email })),
       sampleDoctor: { email: doctorEmail, password: sharedPassword, name: 'Dr. Rahul Sharma', loginUrl: '/doctor/login' },
+    };
+  }
+
+  // Lightweight read-only endpoint: returns current row counts for every
+  // table the starter seed touches. UI calls this separately so the seed
+  // request itself stays fast (Vercel proxies time out at ~30s and seeding
+  // a slow remote DB doesn't leave budget for 11 extra count queries).
+  async getDataCountsForOrg(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) throw new NotFoundException('Organization not found');
+    const [staffN, deptN, drugN, batchN, wardN, bedN, patN, tokN, vitN, apptN, affN] = await Promise.all([
+      this.prisma.tenantUser.count({ where: { tenantId } }),
+      this.prisma.department.count({ where: { tenantId } }),
+      this.prisma.drug.count({ where: { tenantId } }),
+      this.prisma.drugBatch.count({ where: { tenantId } }),
+      this.prisma.ward.count({ where: { tenantId } }),
+      this.prisma.bed.count({ where: { tenantId } }),
+      this.prisma.patient.count({ where: { tenantId } }),
+      this.prisma.queueToken.count({ where: { tenantId } }),
+      this.prisma.vital.count({ where: { tenantId } }),
+      this.prisma.appointment.count({ where: { tenantId } }),
+      this.prisma.doctorOrgAffiliation.count({ where: { tenantId, isActive: true } }),
+    ]);
+    return {
+      staffUsers: staffN, departments: deptN, drugs: drugN, drugBatches: batchN,
+      wards: wardN, beds: bedN, patients: patN, queueTokens: tokN,
+      vitals: vitN, appointments: apptN, doctorAffiliations: affN,
     };
   }
 

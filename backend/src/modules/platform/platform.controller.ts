@@ -38,6 +38,12 @@ export class PlatformController {
   @Post('organizations/:id/seed-starter-data')
   seedStarterData(@Param('id') id: string) { return this.platformService.seedStarterDataForOrg(id); }
 
+  // Lightweight read of current row counts for an org. Used by the UI to
+  // show "Current totals" panel without making the heavy seed call also
+  // do count queries.
+  @Get('organizations/:id/data-counts')
+  getDataCounts(@Param('id') id: string) { return this.platformService.getDataCountsForOrg(id); }
+
   // Reset every user (staff + patient) for a demo org to password Demo@1234.
   // Use this when a previously-seeded demo org has stale/wrong credentials.
   @Post('organizations/:id/reset-demo-passwords')

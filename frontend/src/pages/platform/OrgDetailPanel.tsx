@@ -286,16 +286,49 @@ export default function OrgDetailPanel({ org, onClose, onRefresh }: Props) {
                       onClick={async () => {
                         try {
                           const { data } = await api.post(`/platform/organizations/${org.id}/seed-starter-data`);
-                          setStarterResult(data);
-                          const c = data.created || {};
-                          toast.success(
-                            `Starter data ready: ${c.staffUsers || 0} staff users, ${c.departments || 0} departments, ${c.wards || 0} wards, ${c.beds || 0} beds, ${c.drugs || 0} drugs`,
-                            { duration: 5000 },
-                          );
-                        } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to seed starter data'); }
+                          // The seed call no longer carries row counts (it
+                          // would have made the request slow enough to time
+                          // out on Vercel's 30s proxy). Fetch them in a
+                          // separate, fast call so the modal can show them.
+                          let totals: any = null;
+                          try {
+                            const r = await api.get(`/platform/organizations/${org.id}/data-counts`);
+                            totals = r.data;
+                          } catch { /* non-fatal */ }
+                          setStarterResult({ ...data, totals });
+                          if (data.skipped) {
+                            toast(`This org is already fully seeded — no new rows added`, { duration: 4500 });
+                          } else {
+                            const c = data.created || {};
+                            toast.success(
+                              `Starter data ready: ${c.staffUsers || 0} staff, ${c.departments || 0} depts, ${c.wards || 0} wards, ${c.beds || 0} beds, ${c.drugs || 0} drugs, ${c.patients || 0} patients`,
+                              { duration: 5000 },
+                            );
+                          }
+                        } catch (err: any) {
+                          toast.error(err.response?.data?.message || err.message || 'Failed to seed starter data — try again in a moment (Render may be cold-starting).');
+                        }
                       }}
                       className="text-xs px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium">
                       Seed Starter Data
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const { data } = await api.get(`/platform/organizations/${org.id}/data-counts`);
+                          setStarterResult({
+                            message: 'Current data counts',
+                            tenant: { name: detail.legalName, slug: detail.slug },
+                            created: { staffUsers: 0, departments: 0, drugs: 0, wards: 0, beds: 0, patients: 0, queueTokens: 0, vitals: 0, appointments: 0, doctorAffiliated: false, errors: [] },
+                            totals: data,
+                            sharedPassword: 'Demo@1234',
+                            note: 'Snapshot of what currently exists in this org.',
+                            staff: [],
+                          });
+                        } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to fetch counts'); }
+                      }}
+                      className="text-xs px-3 py-1.5 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 font-medium">
+                      Refresh Data Counts
                     </button>
                     <button
                       onClick={async () => {
