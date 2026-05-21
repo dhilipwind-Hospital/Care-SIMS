@@ -33,6 +33,11 @@ export class PlatformController {
   @Post('organizations/:id/seed-role-permissions')
   seedRolePerms(@Param('id') id: string) { return this.platformService.seedRolePermissionsForOrg(id); }
 
+  // Backfill departments, wards/beds, drug catalog + stock, sample doctor
+  // affiliation into an existing org. Idempotent.
+  @Post('organizations/:id/seed-starter-data')
+  seedStarterData(@Param('id') id: string) { return this.platformService.seedStarterDataForOrg(id); }
+
   // Reset every user (staff + patient) for a demo org to password Demo@1234.
   // Use this when a previously-seeded demo org has stale/wrong credentials.
   @Post('organizations/:id/reset-demo-passwords')

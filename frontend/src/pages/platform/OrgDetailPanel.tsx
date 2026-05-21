@@ -283,6 +283,20 @@ export default function OrgDetailPanel({ org, onClose, onRefresh }: Props) {
                     </button>
                     <button
                       onClick={async () => {
+                        try {
+                          const { data } = await api.post(`/platform/organizations/${org.id}/seed-starter-data`);
+                          const c = data.created || {};
+                          toast.success(
+                            `Starter data ready: ${c.departments || 0} departments, ${c.wards || 0} wards, ${c.beds || 0} beds, ${c.drugs || 0} drugs${c.doctorAffiliated ? ', sample doctor' : ''}`,
+                            { duration: 6000 },
+                          );
+                        } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to seed starter data'); }
+                      }}
+                      className="text-xs px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium">
+                      Seed Starter Data
+                    </button>
+                    <button
+                      onClick={async () => {
                         if (!confirm('Reset every user in this org (staff + patient accounts) to password "Demo@1234"?')) return;
                         try {
                           const { data } = await api.post(`/platform/organizations/${org.id}/reset-demo-passwords`);

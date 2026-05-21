@@ -817,6 +817,179 @@ export class PlatformService {
     };
   }
 
+  // Backfill an existing org with starter master data so its OPD/IPD
+  // workflows have something to operate on out of the box: departments,
+  // wards + beds, drug catalog + opening stock, and a sample doctor with
+  // an affiliation. Idempotent — safe to click multiple times; existing
+  // rows are left alone.
+  async seedStarterDataForOrg(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) throw new NotFoundException('Organization not found');
+    const location = await this.prisma.tenantLocation.findFirst({ where: { tenantId, isActive: true }, orderBy: { createdAt: 'asc' } });
+    if (!location) throw new BadRequestException('Organization has no active location — add one first');
+    const locationId = location.id;
+
+    const summary = { departments: 0, drugs: 0, drugBatches: 0, wards: 0, beds: 0, doctorAffiliated: false };
+
+    // ── Departments ──────────────────────────────────────────────────────
+    const deptDefs = [
+      { name: 'General Medicine', code: 'GMED' },
+      { name: 'Pediatrics',       code: 'PEDS' },
+      { name: 'Pharmacy',         code: 'PHARM' },
+      { name: 'Laboratory',       code: 'LAB' },
+      { name: 'Emergency',        code: 'EMRG' },
+    ];
+    for (const d of deptDefs) {
+      const ex = await this.prisma.department.findFirst({ where: { tenantId, code: d.code } });
+      if (!ex) {
+        await this.prisma.department.create({
+          data: { tenantId, locationId, name: d.name, code: d.code, isActive: true } as any,
+        });
+        summary.departments++;
+      }
+    }
+
+    // ── Wards + Beds ─────────────────────────────────────────────────────
+    const wardDefs: Array<{ name: string; code: string; type: string; floor: number; bedCount: number; bedPrefix: string }> = [
+      { name: 'General Ward',  code: 'GW',  type: 'GENERAL', floor: 1, bedCount: 6, bedPrefix: 'GW' },
+      { name: 'ICU',           code: 'ICU', type: 'ICU',     floor: 2, bedCount: 4, bedPrefix: 'ICU' },
+      { name: 'Private Rooms', code: 'PVT', type: 'PRIVATE', floor: 3, bedCount: 4, bedPrefix: 'PVT' },
+    ];
+    for (const w of wardDefs) {
+      let ward = await this.prisma.ward.findFirst({ where: { tenantId, locationId, code: w.code } });
+      if (!ward) {
+        ward = await this.prisma.ward.create({
+          data: {
+            tenantId, locationId, name: w.name, code: w.code, type: w.type,
+            floor: w.floor, totalBeds: w.bedCount, isActive: true,
+          } as any,
+        });
+        summary.wards++;
+      }
+      // Top up beds to bedCount
+      const existingBeds = await this.prisma.bed.count({ where: { wardId: ward.id } });
+      const needed = w.bedCount - existingBeds;
+      if (needed > 0) {
+        const bedRows = Array.from({ length: needed }, (_, i) => ({
+          tenantId, wardId: ward!.id,
+          bedNumber: `${w.bedPrefix}-${String(existingBeds + i + 1).padStart(2, '0')}`,
+          type: w.type === 'ICU' ? 'ICU' : (w.type === 'PRIVATE' ? 'PRIVATE' : 'GENERAL'),
+          status: 'AVAILABLE',
+        }));
+        const result = await this.prisma.bed.createMany({ data: bedRows as any, skipDuplicates: true });
+        summary.beds += result.count;
+      }
+    }
+
+    // ── Drug catalog + opening stock ─────────────────────────────────────
+    const drugDefs = [
+      { brandName: 'Calpol 500',        genericName: 'Paracetamol',                   dosageForm: 'TABLET',    strength: '500mg', category: 'ANALGESICS' },
+      { brandName: 'Augmentin 625',     genericName: 'Amoxicillin + Clavulanate',     dosageForm: 'TABLET',    strength: '625mg', category: 'ANTIBIOTICS' },
+      { brandName: 'Pan 40',            genericName: 'Pantoprazole',                  dosageForm: 'TABLET',    strength: '40mg',  category: 'OTC' },
+      { brandName: 'Crocin Cold & Flu', genericName: 'Paracetamol + Phenylephrine',   dosageForm: 'TABLET',    strength: '500mg', category: 'ANALGESICS' },
+      { brandName: 'ORS Powder',        genericName: 'Oral Rehydration Salts',        dosageForm: 'POWDER',    strength: '21g',   category: 'OTC' },
+      { brandName: 'Asthalin Inhaler',  genericName: 'Salbutamol',                    dosageForm: 'INHALER',   strength: '100mcg',category: 'OTC' },
+      { brandName: 'Cetzine',           genericName: 'Cetirizine',                    dosageForm: 'TABLET',    strength: '10mg',  category: 'OTC' },
+      { brandName: 'Saline IV',         genericName: 'Sodium Chloride 0.9%',          dosageForm: 'INJECTION', strength: '500ml', category: 'IV_FLUIDS' },
+    ];
+    for (const d of drugDefs) {
+      const ex = await this.prisma.drug.findFirst({ where: { tenantId, brandName: d.brandName } });
+      if (!ex) {
+        const drug = await this.prisma.drug.create({
+          data: {
+            tenantId,
+            brandName: d.brandName,
+            genericName: d.genericName,
+            dosageForm: d.dosageForm,
+            strength: d.strength,
+            category: d.category,
+            gstPct: 12,
+            reorderLevel: 20,
+            maxStockLevel: 500,
+            storageCondition: 'ROOM_TEMPERATURE',
+            isControlled: false,
+          } as any,
+        });
+        summary.drugs++;
+        const exp = new Date(); exp.setFullYear(exp.getFullYear() + 1);
+        await this.prisma.drugBatch.create({
+          data: {
+            tenantId,
+            drugId: drug.id,
+            locationId,
+            batchNumber: `B-${Date.now().toString().slice(-6)}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
+            expiryDate: exp,
+            quantityInStock: 200,
+            unitCost: 5,
+            status: 'ACTIVE',
+            receivedDate: new Date(),
+          } as any,
+        });
+        summary.drugBatches++;
+      }
+    }
+
+    // ── Sample doctor + affiliation ──────────────────────────────────────
+    const doctorEmail = `doctor.demo@${tenant.slug}.local`;
+    let doctor = await this.prisma.doctorRegistry.findUnique({ where: { email: doctorEmail } });
+    if (!doctor) {
+      const passwordHash = await bcrypt.hash('Demo@1234', 10);
+      doctor = await this.prisma.doctorRegistry.create({
+        data: {
+          email: doctorEmail,
+          passwordHash,
+          firstName: 'Rahul',
+          lastName: 'Sharma',
+          phone: `+91${Math.floor(7000000000 + Math.random() * 999999999)}`,
+          gender: 'MALE',
+          dateOfBirth: new Date('1985-06-15'),
+          primaryDegree: 'MBBS',
+          pgDegree: 'MD',
+          pgSpecialization: 'General Medicine',
+          experienceYears: 12,
+          specialties: ['General Medicine', 'Internal Medicine'],
+          subspecialties: [],
+          languages: ['English', 'Hindi', 'Tamil'],
+          medicalCouncil: 'TNMC',
+          registrationNo: `TN-${Math.floor(10000 + Math.random() * 89999)}`,
+          registrationDate: new Date('2010-01-01'),
+          ayphenStatus: 'VERIFIED',
+          mfaEnabled: false,
+        } as any,
+      });
+    }
+    const existingAff = await this.prisma.doctorOrgAffiliation.findFirst({
+      where: { doctorId: doctor.id, tenantId },
+    });
+    if (!existingAff) {
+      await this.prisma.doctorOrgAffiliation.create({
+        data: {
+          doctorId: doctor.id,
+          tenantId,
+          locationId,
+          designation: 'Consultant',
+          employmentType: 'FULL_TIME',
+          departmentName: 'General Medicine',
+          availableDays: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'],
+          slotDurationMinutes: 15,
+          consultationFee: 500,
+          status: 'ACTIVE',
+          isActive: true,
+          acceptedAt: new Date(),
+          joinedAt: new Date(),
+        },
+      });
+      summary.doctorAffiliated = true;
+    }
+
+    return {
+      message: 'Starter data provisioned',
+      tenant: { id: tenantId, slug: tenant.slug, name: tenant.legalName },
+      created: summary,
+      sampleDoctor: { email: doctorEmail, password: 'Demo@1234', name: 'Dr. Rahul Sharma' },
+    };
+  }
+
   // One-shot demo provisioning. Creates a complete hospital with one user
   // per system role, an affiliated doctor, sample departments, drugs, and
   // a sample patient — everything the OPD demo flow needs. Returns the
