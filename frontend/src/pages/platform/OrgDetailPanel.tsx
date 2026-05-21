@@ -624,17 +624,41 @@ export default function OrgDetailPanel({ org, onClose, onRefresh }: Props) {
               </div>
 
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-800">
-                <span className="font-bold">What was created:</span>{' '}
-                {starterResult.created?.staffUsers ?? 0} staff, {starterResult.created?.departments ?? 0} departments,{' '}
-                {starterResult.created?.wards ?? 0} wards, {starterResult.created?.beds ?? 0} beds,{' '}
-                {starterResult.created?.drugs ?? 0} drugs,{' '}
-                {starterResult.created?.patients ?? 0} patients,{' '}
-                {starterResult.created?.queueTokens ?? 0} queue tokens,{' '}
-                {starterResult.created?.vitals ?? 0} vitals,{' '}
-                {starterResult.created?.appointments ?? 0} appointments
-                {starterResult.created?.doctorAffiliated ? ', sample doctor' : ''}.{' '}
-                <span className="text-blue-600">Existing rows were left alone.</span>
+                <div className="font-bold mb-2">What was created on this click:</div>
+                <div className="font-mono leading-relaxed">
+                  {starterResult.created?.staffUsers ?? 0} staff · {starterResult.created?.departments ?? 0} departments ·{' '}
+                  {starterResult.created?.wards ?? 0} wards · {starterResult.created?.beds ?? 0} beds ·{' '}
+                  {starterResult.created?.drugs ?? 0} drugs · {starterResult.created?.patients ?? 0} patients ·{' '}
+                  {starterResult.created?.queueTokens ?? 0} queue tokens · {starterResult.created?.vitals ?? 0} vitals ·{' '}
+                  {starterResult.created?.appointments ?? 0} appointments
+                  {starterResult.created?.doctorAffiliated ? ' · sample doctor' : ''}
+                </div>
+                <div className="text-blue-600 mt-1">Existing rows were left alone (so this is safe to click multiple times).</div>
               </div>
+
+              {starterResult.totals && (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-xs text-green-800">
+                  <div className="font-bold mb-2">Current totals in this org (after seed):</div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono">
+                    <div>Staff users: <span className="font-bold">{starterResult.totals.staffUsers}</span></div>
+                    <div>Departments: <span className="font-bold">{starterResult.totals.departments}</span></div>
+                    <div>Wards: <span className="font-bold">{starterResult.totals.wards}</span></div>
+                    <div>Beds: <span className="font-bold">{starterResult.totals.beds}</span></div>
+                    <div>Drugs: <span className="font-bold">{starterResult.totals.drugs}</span></div>
+                    <div>Drug batches: <span className="font-bold">{starterResult.totals.drugBatches}</span></div>
+                    <div>Patients: <span className="font-bold">{starterResult.totals.patients}</span></div>
+                    <div>Queue tokens: <span className="font-bold">{starterResult.totals.queueTokens}</span></div>
+                    <div>Vitals records: <span className="font-bold">{starterResult.totals.vitals}</span></div>
+                    <div>Appointments: <span className="font-bold">{starterResult.totals.appointments}</span></div>
+                    <div>Doctor affiliations: <span className="font-bold">{starterResult.totals.doctorAffiliations}</span></div>
+                  </div>
+                  <div className="text-green-600 mt-2">
+                    {starterResult.totals.staffUsers > 0 && starterResult.totals.patients > 0
+                      ? 'Data is in place. Log in as any staff role to see it on their screens.'
+                      : 'Some categories are still at zero — check the errors panel if it appears below.'}
+                  </div>
+                </div>
+              )}
 
               {(starterResult.created?.errors || []).length > 0 && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-800">

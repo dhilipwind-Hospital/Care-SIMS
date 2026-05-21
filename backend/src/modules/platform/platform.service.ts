@@ -1160,10 +1160,47 @@ export class PlatformService {
     const prettyRole = (sysRole: string) =>
       sysRole.replace('SYS_', '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 
+    // Post-seed totals — show the platform admin EXACTLY what exists in
+    // the tenant now (not just what was created on this click). When the
+    // seed is run a second time, `created` reads zeros but `totals` proves
+    // the data is there.
+    const totals = {
+      staffUsers: 0, departments: 0, drugs: 0, drugBatches: 0,
+      wards: 0, beds: 0, patients: 0, queueTokens: 0, vitals: 0, appointments: 0,
+      doctorAffiliations: 0,
+    };
+    await safe('totals snapshot', async () => {
+      const [staffN, deptN, drugN, batchN, wardN, bedN, patN, tokN, vitN, apptN, affN] = await Promise.all([
+        this.prisma.tenantUser.count({ where: { tenantId } }),
+        this.prisma.department.count({ where: { tenantId } }),
+        this.prisma.drug.count({ where: { tenantId } }),
+        this.prisma.drugBatch.count({ where: { tenantId } }),
+        this.prisma.ward.count({ where: { tenantId } }),
+        this.prisma.bed.count({ where: { tenantId } }),
+        this.prisma.patient.count({ where: { tenantId } }),
+        this.prisma.queueToken.count({ where: { tenantId } }),
+        this.prisma.vital.count({ where: { tenantId } }),
+        this.prisma.appointment.count({ where: { tenantId } }),
+        this.prisma.doctorOrgAffiliation.count({ where: { tenantId, isActive: true } }),
+      ]);
+      totals.staffUsers = staffN;
+      totals.departments = deptN;
+      totals.drugs = drugN;
+      totals.drugBatches = batchN;
+      totals.wards = wardN;
+      totals.beds = bedN;
+      totals.patients = patN;
+      totals.queueTokens = tokN;
+      totals.vitals = vitN;
+      totals.appointments = apptN;
+      totals.doctorAffiliations = affN;
+    });
+
     return {
       message: 'Starter data provisioned',
       tenant: { id: tenantId, slug: tenant.slug, name: tenant.legalName },
       created: summary,
+      totals,
       sharedPassword,
       note: 'All staff and the sample doctor share the password. Passwords are NOT reset for users that already existed.',
       staff: createdStaff.map(s => ({ role: prettyRole(s.role), email: s.email })),
