@@ -1087,28 +1087,38 @@ export class PlatformService {
       }
     });
 
+    // Pull the seeded nurse user — needed for Vital.recordedById (required).
+    let nurseUserId: string | null = null;
+    await safe('nurse lookup', async () => {
+      const nurse = await this.prisma.tenantUser.findFirst({
+        where: { tenantId, email: `nurse@${host}` },
+        select: { id: true },
+      });
+      nurseUserId = nurse?.id || null;
+    });
+
     // ── Today's queue tokens — gives reception + nurse + doctor screens content
+    // QueueToken.tokenNumber is Int (not String) per schema.
     await safe('queue tokens', async () => {
       if (!doctor || !createdPatients.length) return;
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const existingToday = await this.prisma.queueToken.count({
         where: { tenantId, queueDate: today },
       });
-      if (existingToday >= 2) return; // already seeded today
+      if (existingToday >= 2) return;
       for (let i = 0; i < Math.min(2, createdPatients.length); i++) {
         const pat = createdPatients[i];
-        const tokenNumber = `T${String(existingToday + i + 1).padStart(3, '0')}`;
         await this.prisma.queueToken.create({
           data: {
             tenantId, locationId,
-            tokenNumber,
+            tokenNumber: existingToday + i + 1,
             patientId: pat.id,
             doctorId: doctor!.id,
             visitType: 'OPD',
             priority: 'NORMAL',
             status: 'WAITING',
             queueDate: today,
-            issuedAt: new Date(),
+            checkInTime: new Date(),
           } as any,
         });
         summary.queueTokens++;
@@ -1116,8 +1126,9 @@ export class PlatformService {
     });
 
     // ── A vitals record on the first patient — so nurse sees historic data ──
+    // Vital.recordedById is required; skip if we couldn't resolve a nurse.
     await safe('vitals', async () => {
-      if (!createdPatients.length) return;
+      if (!createdPatients.length || !nurseUserId) return;
       const pat = createdPatients[0];
       const existing = await this.prisma.vital.count({ where: { tenantId, patientId: pat.id } });
       if (existing > 0) return;
@@ -1127,6 +1138,7 @@ export class PlatformService {
           systolicBp: 130, diastolicBp: 85,
           heartRate: 78, temperatureC: 37.1, spo2: 98,
           respiratoryRate: 16, weightKg: 72, heightCm: 175,
+          recordedById: nurseUserId,
           recordedAt: new Date(),
         } as any,
       });
