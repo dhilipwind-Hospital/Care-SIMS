@@ -45,12 +45,13 @@ export default function DoctorQueuePage() {
         toast('New patient in queue', { icon: '🔔' });
       }
       prevCountRef.current = result.filter((t: any) => t.status === 'WAITING').length;
-      // Sort: EMERGENCY first, then URGENT, then by token number
+      // Sort: EMERGENCY first, then URGENT, then by token number.
+      // Backend column is `priority`; older code expected `priorityLevel`.
       result.sort((a, b) => {
-        const pa = PRIORITY_ORDER[a.priorityLevel] ?? 2;
-        const pb = PRIORITY_ORDER[b.priorityLevel] ?? 2;
+        const pa = PRIORITY_ORDER[a.priority || a.priorityLevel] ?? 2;
+        const pb = PRIORITY_ORDER[b.priority || b.priorityLevel] ?? 2;
         if (pa !== pb) return pa - pb;
-        return (a.tokenNumber || '').localeCompare(b.tokenNumber || '');
+        return (a.tokenNumber ?? 0) - (b.tokenNumber ?? 0);
       });
       setTokens(result);
     } catch { if (!silent) toast.error('Failed to load queue'); }
@@ -67,7 +68,8 @@ export default function DoctorQueuePage() {
   const startConsult = async (token: any) => {
     setActionId(token.id);
     try {
-      await api.patch(`/queue/${token.id}/status`, { status: 'IN_PROGRESS' });
+      // Backend uses 'IN_CONSULTATION' (sets consultStart automatically).
+      await api.patch(`/queue/${token.id}/status`, { status: 'IN_CONSULTATION' });
       navigate(`/app/doctor/consultation?patientId=${token.patientId}&tokenId=${token.id}`);
     } catch { toast.error('Failed to start consultation'); fetchQueue(); }
     finally { setActionId(null); }
@@ -93,9 +95,14 @@ export default function DoctorQueuePage() {
     finally { setActionId(null); }
   };
 
+  // Treat both legacy 'IN_PROGRESS' and the schema's 'IN_CONSULTATION'/'CALLED' as "in consult".
+  const isInConsult = (s: string) => s === 'IN_CONSULTATION' || s === 'IN_PROGRESS' || s === 'CALLED';
+  const getPriority = (t: any) => (t.priority || t.priorityLevel || 'NORMAL') as string;
+
   const callNext = async () => {
     try {
-      await api.post('/queue/call-next', { doctorId: user?.sub });
+      // locationId is required by the service's where clause; fall back to user.locationId.
+      await api.post('/queue/call-next', { doctorId: user?.sub, locationId: (user as any)?.locationId });
       toast.success('Next patient called');
       fetchQueue(true);
     } catch (err: any) {
@@ -106,12 +113,16 @@ export default function DoctorQueuePage() {
   };
 
   const waiting = tokens.filter(t => t.status === 'WAITING');
-  const inProgress = tokens.filter(t => t.status === 'IN_PROGRESS');
+  const inProgress = tokens.filter(t => isInConsult(t.status));
   const completed = tokens.filter(t => t.status === 'COMPLETED');
 
   const filteredTokens = tokens.filter(t => {
-    if (statusFilter && t.status !== statusFilter) return false;
-    if (priorityFilter && (t.priorityLevel || 'NORMAL') !== priorityFilter) return false;
+    if (statusFilter) {
+      if (statusFilter === 'IN_CONSULTATION') {
+        if (!isInConsult(t.status)) return false;
+      } else if (t.status !== statusFilter) return false;
+    }
+    if (priorityFilter && getPriority(t) !== priorityFilter) return false;
     if (search) {
       const s = search.toLowerCase();
       const name = `${t.patient?.firstName || ''} ${t.patient?.lastName || ''}`.toLowerCase();
@@ -162,7 +173,7 @@ export default function DoctorQueuePage() {
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search patient, complaint..." className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm w-52 focus:outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
         <div className="flex gap-2">
-          {[['', 'All Status'], ['WAITING', 'Waiting'], ['IN_PROGRESS', 'In Progress'], ['COMPLETED', 'Completed'], ['NO_SHOW', 'No Show']].map(([v, l]) => (
+          {[['', 'All Status'], ['WAITING', 'Waiting'], ['IN_CONSULTATION', 'In Progress'], ['COMPLETED', 'Completed'], ['NO_SHOW', 'No Show']].map(([v, l]) => (
             <button key={v} onClick={() => setStatusFilter(v)}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${statusFilter === v ? 'bg-teal-600 text-white border-teal-600' : 'border-gray-200 text-gray-600 hover:border-teal-300'}`}>{l}</button>
           ))}
@@ -196,8 +207,12 @@ export default function DoctorQueuePage() {
                 <tr><td colSpan={8} className="p-0">
                   <EmptyState title="No patients" description={search || statusFilter || priorityFilter ? 'No matches for current filters' : 'Queue is empty. Patients will appear when checked in.'} />
                 </td></tr>
-              ) : filteredTokens.map(t => (
-                <tr key={t.id} className={`hover:bg-gray-50 border-t border-gray-50 transition-colors ${t.priorityLevel === 'EMERGENCY' ? 'bg-red-50/60' : t.priorityLevel === 'URGENT' ? 'bg-amber-50/30' : ''}`}>
+              ) : filteredTokens.map(t => {
+                const pri = getPriority(t);
+                const inConsult = isInConsult(t.status);
+                const age = t.patient?.ageYears ?? t.patient?.age;
+                return (
+                <tr key={t.id} className={`hover:bg-gray-50 border-t border-gray-50 transition-colors ${pri === 'EMERGENCY' ? 'bg-red-50/60' : pri === 'URGENT' ? 'bg-amber-50/30' : ''}`}>
                   <td className="px-4 py-3">
                     <span className="text-sm font-bold text-teal-700">{t.tokenNumber}</span>
                   </td>
@@ -206,7 +221,7 @@ export default function DoctorQueuePage() {
                     <div className="text-xs text-gray-400 font-mono">{t.patient?.patientId}</div>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
-                    {t.patient?.age ? `${t.patient.age}y` : '—'} / {t.patient?.gender?.[0] || '—'}
+                    {age ? `${age}y` : '—'} / {t.patient?.gender?.[0] || '—'}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600 max-w-[160px]">
                     <span className="truncate block" title={t.chiefComplaint}>{t.chiefComplaint || '—'}</span>
@@ -215,14 +230,14 @@ export default function DoctorQueuePage() {
                     {t.status === 'WAITING' ? <span className={parseInt(waitMins(t)) > 30 ? 'text-red-600 font-semibold' : ''}>{waitMins(t)}</span> : '—'}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${PRIORITY_STYLES[t.priorityLevel || 'NORMAL']}`}>
-                      {t.priorityLevel || 'ROUTINE'}
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${PRIORITY_STYLES[pri]}`}>
+                      {pri === 'NORMAL' ? 'ROUTINE' : pri}
                     </span>
                   </td>
                   <td className="px-4 py-3"><StatusBadge status={t.status} /></td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1.5">
-                      {(t.status === 'WAITING' || t.status === 'IN_PROGRESS') && (
+                      {(t.status === 'WAITING' || inConsult) && (
                         <button onClick={() => startConsult(t)} disabled={actionId === t.id}
                           className="flex items-center gap-1 text-xs px-2 py-1 bg-teal-600 text-white rounded-md hover:bg-teal-700 font-medium disabled:opacity-50 whitespace-nowrap">
                           <Stethoscope size={11} /> {actionId === t.id ? '...' : 'Consult'}
@@ -234,7 +249,7 @@ export default function DoctorQueuePage() {
                           No-Show
                         </button>
                       )}
-                      {t.status === 'IN_PROGRESS' && (
+                      {inConsult && (
                         <button onClick={() => markComplete(t.id)} disabled={actionId === t.id}
                           className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium disabled:opacity-50 flex items-center gap-1">
                           <CheckCircle size={11} /> Done
@@ -243,7 +258,8 @@ export default function DoctorQueuePage() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
