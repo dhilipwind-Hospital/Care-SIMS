@@ -36,7 +36,10 @@ export default function DoctorQueuePage() {
     if (!silent) setLoading(true);
     try {
       const { data } = await api.get(`/queue/doctor/${user?.sub}`, { params: { limit: 100 } });
-      const result: any[] = Array.isArray(data?.data ?? data) ? (data?.data ?? data) : [];
+      // Backend returns { tokens, stats }; fall back to data.data / data array for older shapes.
+      const result: any[] = Array.isArray(data?.tokens)
+        ? data.tokens
+        : Array.isArray(data?.data ?? data) ? (data?.data ?? data) : [];
       // Alert if new patients joined since last fetch
       if (prevCountRef.current > 0 && result.filter(t => t.status === 'WAITING').length > prevCountRef.current) {
         toast('New patient in queue', { icon: '🔔' });
