@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import * as bcryptjs from 'bcryptjs';
 
@@ -103,7 +103,15 @@ export class DoctorRegistryService {
     });
   }
 
-  async updateAffiliation(tenantId: string, affiliationId: string, dto: any) {
+  async updateAffiliation(tenantId: string, affiliationId: string, dto: any, opts?: { actorDoctorId?: string }) {
+    // Tenant scoping: row must belong to this tenant.
+    const row = await this.prisma.doctorOrgAffiliation.findFirst({ where: { id: affiliationId, tenantId } });
+    if (!row) throw new NotFoundException('Affiliation not found');
+    // When a doctor edits their OWN row, they can only edit availability-related
+    // fields and only their own. Admin path (no actorDoctorId) skips this.
+    if (opts?.actorDoctorId && row.doctorId !== opts.actorDoctorId) {
+      throw new ForbiddenException('You can only edit your own availability');
+    }
     const data: any = {};
     if (dto.designation !== undefined) data.designation = dto.designation;
     if (dto.departmentName !== undefined) data.departmentName = dto.departmentName;
@@ -112,10 +120,23 @@ export class DoctorRegistryService {
     if (dto.availableSlots !== undefined) data.availableSlots = dto.availableSlots;
     if (dto.slotDurationMinutes !== undefined) data.slotDurationMinutes = dto.slotDurationMinutes;
     if (dto.maxPatientsPerDay !== undefined) data.maxPatientsPerDay = dto.maxPatientsPerDay;
-    if (dto.isActive !== undefined) data.isActive = dto.isActive;
-    if (dto.status !== undefined) data.status = dto.status;
-    if (dto.employmentType !== undefined) data.employmentType = dto.employmentType;
+    // Doctor self-edit cannot deactivate themselves or change employment type — admin-only.
+    if (!opts?.actorDoctorId) {
+      if (dto.isActive !== undefined) data.isActive = dto.isActive;
+      if (dto.status !== undefined) data.status = dto.status;
+      if (dto.employmentType !== undefined) data.employmentType = dto.employmentType;
+    }
     return this.prisma.doctorOrgAffiliation.update({ where: { id: affiliationId }, data });
+  }
+
+  async getMyAffiliations(tenantId: string, doctorId: string) {
+    return this.prisma.doctorOrgAffiliation.findMany({
+      where: { tenantId, doctorId },
+      include: {
+        doctor: { select: { id: true, firstName: true, lastName: true, specialties: true, ayphenStatus: true } },
+        location: { select: { id: true, locationCode: true, name: true } },
+      },
+    });
   }
 
   async getDoctorsByLocation(tenantId: string, locationId: string) {

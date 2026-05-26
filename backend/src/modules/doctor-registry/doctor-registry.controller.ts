@@ -26,13 +26,29 @@ export class DoctorRegistryController {
   @Roles('SYS_ORG_ADMIN', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_RECEPTIONIST')
   getAffiliations(@CurrentUser('tenantId') tid: string) { return this.svc.getAffiliations(tid); }
 
+  // Doctor self-service: only the rows for the logged-in doctor in this tenant.
+  @Get('affiliations/me')
+  @Roles('SYS_DOCTOR', 'SYS_SENIOR_DOCTOR')
+  getMyAffiliations(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') sub: string) {
+    return this.svc.getMyAffiliations(tid, sub);
+  }
+
   @Post('affiliations')
   @Roles('SYS_ORG_ADMIN')
   addAffiliation(@CurrentUser('tenantId') tid: string, @Body() body: any) { return this.svc.addAffiliation(tid, body); }
 
   @Patch('affiliations/:id')
-  @Roles('SYS_ORG_ADMIN')
-  updateAffiliation(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.updateAffiliation(tid, id, body); }
+  @Roles('SYS_ORG_ADMIN', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR')
+  updateAffiliation(
+    @CurrentUser('tenantId') tid: string,
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() body: any,
+  ) {
+    // Doctors pass actorDoctorId so the service enforces ownership and field-level limits.
+    const actorDoctorId = user?.isDoctor ? user.sub : undefined;
+    return this.svc.updateAffiliation(tid, id, body, { actorDoctorId });
+  }
 
   @Get('by-location/:locationId')
   @Roles('SYS_ORG_ADMIN', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_RECEPTIONIST', 'SYS_NURSE')

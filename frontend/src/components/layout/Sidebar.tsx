@@ -37,6 +37,7 @@ export const navByRole: Record<string, NavItem[]> = {
     { label: 'Patient Queue',      icon: ClipboardList,    path: '/app/doctor/queue',        module: 'MOD_QUEUE' },
     { label: 'Consultations',       icon: ClipboardList,    path: '/app/doctor/consultations',module: 'MOD_CONSULT' },
     { label: 'New Consultation',    icon: Stethoscope,      path: '/app/doctor/consultation', module: 'MOD_CONSULT' },
+    { label: 'My Availability',     icon: Calendar,         path: '/app/doctor/availability' },
     { label: 'Prescriptions',      icon: Pill,             path: '/app/doctor/prescriptions',module: 'MOD_RX' },
     { label: 'Lab Orders',         icon: FlaskConical,     path: '/app/doctor/lab-orders',   module: 'MOD_LAB_ORD' },
     { label: 'Radiology',          icon: ScanLine,         path: '/app/radiology',           module: 'MOD_RADIOLOGY' },

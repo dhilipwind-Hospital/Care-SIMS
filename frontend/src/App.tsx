@@ -71,6 +71,7 @@ const AdminDashboard             = lazy(() => import('./pages/admin/AdminDashboa
 const UsersPage                  = lazy(() => import('./pages/admin/UsersPage'));
 const DepartmentsPage            = lazy(() => import('./pages/admin/DepartmentsPage'));
 const DoctorAvailabilityPage     = lazy(() => import('./pages/admin/DoctorAvailabilityPage'));
+const MyAvailabilityPage         = lazy(() => import('./pages/doctor/MyAvailabilityPage'));
 const RolesPage                  = lazy(() => import('./pages/admin/RolesPage'));
 const LocationsPage              = lazy(() => import('./pages/admin/LocationsPage'));
 const OrgSettingsPage            = lazy(() => import('./pages/admin/OrgSettingsPage'));
@@ -220,6 +221,7 @@ function AppRoutes() {
           <Route path="doctor/consultation" element={<RoleRoute roles={['DOCTOR', 'ADMIN']}><ConsultationPage /></RoleRoute>} />
           <Route path="doctor/prescriptions" element={<RoleRoute roles={['DOCTOR', 'ADMIN']}><PrescriptionsPage /></RoleRoute>} />
           <Route path="doctor/lab-orders" element={<RoleRoute roles={['DOCTOR', 'ADMIN']}><LabPage /></RoleRoute>} />
+          <Route path="doctor/availability" element={<RoleRoute roles={['DOCTOR']}><MyAvailabilityPage /></RoleRoute>} />
 
           {/* ── Nurse ── */}
           <Route path="nurse/triage" element={<RoleRoute roles={['NURSE', 'DOCTOR', 'ADMIN']}><TriagePage /></RoleRoute>} />
