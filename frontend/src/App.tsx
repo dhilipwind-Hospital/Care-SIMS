@@ -70,6 +70,7 @@ const NotificationsPage          = lazy(() => import('./pages/notifications/Noti
 const AdminDashboard             = lazy(() => import('./pages/admin/AdminDashboard'));
 const UsersPage                  = lazy(() => import('./pages/admin/UsersPage'));
 const DepartmentsPage            = lazy(() => import('./pages/admin/DepartmentsPage'));
+const DoctorAvailabilityPage     = lazy(() => import('./pages/admin/DoctorAvailabilityPage'));
 const RolesPage                  = lazy(() => import('./pages/admin/RolesPage'));
 const LocationsPage              = lazy(() => import('./pages/admin/LocationsPage'));
 const OrgSettingsPage            = lazy(() => import('./pages/admin/OrgSettingsPage'));
@@ -252,6 +253,7 @@ function AppRoutes() {
           <Route path="admin/users" element={<RoleRoute roles={['ADMIN']}><UsersPage /></RoleRoute>} />
           <Route path="admin/roles" element={<RoleRoute roles={['ADMIN']}><RolesPage /></RoleRoute>} />
           <Route path="admin/departments" element={<RoleRoute roles={['ADMIN']}><DepartmentsPage /></RoleRoute>} />
+          <Route path="admin/doctor-availability" element={<RoleRoute roles={['ADMIN']}><DoctorAvailabilityPage /></RoleRoute>} />
           <Route path="admin/reports" element={<RoleRoute roles={['ADMIN', 'LAB', 'BILLING']}><ReportsPage /></RoleRoute>} />
           <Route path="admin/audit" element={<RoleRoute roles={['ADMIN']}><AuditPage /></RoleRoute>} />
           <Route path="admin/locations" element={<RoleRoute roles={['ADMIN']}><LocationsPage /></RoleRoute>} />

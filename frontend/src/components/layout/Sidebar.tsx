@@ -102,6 +102,7 @@ export const navByRole: Record<string, NavItem[]> = {
     { label: 'Users & Staff',       icon: Users,           path: '/app/admin/users' },
     { label: 'Roles & Permissions', icon: Shield,          path: '/app/admin/roles' },
     { label: 'Departments',         icon: ClipboardList,   path: '/app/admin/departments' },
+    { label: 'Doctor Availability', icon: Stethoscope,     path: '/app/admin/doctor-availability' },
     { label: 'Locations',           icon: MapPin,          path: '/app/admin/locations' },
     { label: 'Patients',            icon: UserCheck,       path: '/app/patients' },
     { label: 'Appointments',        icon: Calendar,        path: '/app/appointments',         module: 'MOD_APPT' },
