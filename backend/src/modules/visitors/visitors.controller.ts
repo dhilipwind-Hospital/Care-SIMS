@@ -29,7 +29,7 @@ export class VisitorsController {
   }
 
   @Post()
-  checkIn(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @CurrentUser('userId') uid: string, @Body() body: any) {
+  checkIn(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @CurrentUser('sub') uid: string, @Body() body: any) {
     return this.svc.checkIn(tid, uid, { ...body, locationId: body.locationId || lid });
   }
 

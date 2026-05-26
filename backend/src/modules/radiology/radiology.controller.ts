@@ -15,8 +15,8 @@ export class RadiologyController {
   @Post('orders') create(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any) { return this.svc.createOrder(tid, { ...body, locationId: body.locationId || lid, examType: body.examType || body.modality || 'GENERAL' }); }
   @Get('orders/:id') getOne(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getOrder(tid, id); }
   @Patch('orders/:id') updateOrder(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.updateOrder(tid, id, body); }
-  @Post('results') addResult(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @CurrentUser('userId') uid: string, @Body() body: any) { return this.svc.addResult(tid, uid, { ...body, locationId: body.locationId || lid }); }
-  @Patch('results/:id/validate') validate(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @Param('id') id: string) { return this.svc.validateResult(tid, id, uid); }
+  @Post('results') addResult(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @CurrentUser('sub') uid: string, @Body() body: any) { return this.svc.addResult(tid, uid, { ...body, locationId: body.locationId || lid }); }
+  @Patch('results/:id/validate') validate(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string, @Param('id') id: string) { return this.svc.validateResult(tid, id, uid); }
   @Delete('orders/:id') remove(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.remove(tid, id); }
   @Get('modalities') modalities() { return ['X-RAY','CT','MRI','ULTRASOUND','MAMMOGRAPHY','FLUOROSCOPY','DEXA','PET_CT']; }
 }

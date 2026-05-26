@@ -17,7 +17,7 @@ export class InsuranceController {
   @Patch('policies/:id') updatePolicy(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.updatePolicy(tid, id, body); }
   @Get('policies/patient/:patientId') patientPolicies(@CurrentUser('tenantId') tid: string, @Param('patientId') pid: string) { return this.svc.listPolicies(tid, pid); }
   @Get('claims') claims(@CurrentUser('tenantId') tid: string, @Query('status') s?: string) { return this.svc.listClaims(tid, s); }
-  @Post('claims') addClaim(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @Body() body: any) { return this.svc.addClaim(tid, uid, body); }
+  @Post('claims') addClaim(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string, @Body() body: any) { return this.svc.addClaim(tid, uid, body); }
   @Patch('claims/:id') updateClaim(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.updateClaim(tid, id, body); }
   @Patch('claims/:id/submit') submit(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.submitClaim(tid, id); }
   @Patch('claims/:id/approve') approve(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.approveClaim(tid, id, body); }

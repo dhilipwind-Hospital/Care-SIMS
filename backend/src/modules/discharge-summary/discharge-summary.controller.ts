@@ -28,7 +28,7 @@ export class DischargeSummaryController {
   }
 
   @Post()
-  create(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @CurrentUser('userId') uid: string, @Body() body: any) {
+  create(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @CurrentUser('sub') uid: string, @Body() body: any) {
     return this.svc.create(tid, uid, { ...body, locationId: body.locationId || lid });
   }
 
@@ -38,7 +38,7 @@ export class DischargeSummaryController {
   }
 
   @Patch(':id/approve')
-  approve(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @Param('id') id: string) {
+  approve(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string, @Param('id') id: string) {
     return this.svc.approve(tid, id, uid);
   }
 

@@ -30,7 +30,7 @@ export class AmbulanceController {
   trips(@CurrentUser('tenantId') tid: string, @Query('status') s?: string) { return this.svc.listTrips(tid, s); }
 
   @Post('trips')
-  dispatch(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @Body() body: any) { return this.svc.dispatch(tid, uid, body); }
+  dispatch(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string, @Body() body: any) { return this.svc.dispatch(tid, uid, body); }
 
   @Get('trips/:id')
   getTrip(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getTrip(tid, id); }

@@ -38,9 +38,11 @@ export default function VitalsPage() {
   const fetchQueue = async () => {
     setLoading(true);
     try {
+      // Backend returns { tokens, stats }; older callers expected data.data.
       const { data } = await api.get('/queue', { params: { limit: 50 } });
-      const tokens = (data.data || []).filter((t: any) =>
-        ['WAITING', 'CALLED', 'IN_PROGRESS'].includes(t.status)
+      const raw: any[] = Array.isArray(data?.tokens) ? data.tokens : (data?.data || []);
+      const tokens = raw.filter((t: any) =>
+        ['WAITING', 'CALLED', 'IN_CONSULTATION'].includes(t.status)
       );
       setQueueTokens(tokens);
     } catch (err) { console.error('Failed to load queue:', err); toast.error('Failed to load queue'); } finally { setLoading(false); }

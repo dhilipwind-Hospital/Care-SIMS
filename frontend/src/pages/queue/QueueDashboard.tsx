@@ -47,8 +47,9 @@ export default function QueueDashboard() {
   const fetchQueue = async () => {
     setLoading(true);
     try {
+      // Backend returns { tokens, stats }; older callers expected data.data.
       const { data } = await api.get('/queue', { params: { limit: 50 } });
-      setTokens(data.data || []);
+      setTokens(Array.isArray(data?.tokens) ? data.tokens : (data?.data || []));
     } catch (err) { console.error('Failed to load queue:', err); toast.error('Failed to load queue'); } finally { setLoading(false); }
   };
 
@@ -60,14 +61,16 @@ export default function QueueDashboard() {
     return unsub;
   }, [subscribe]);
 
+  const isInConsult = (s: string) => s === 'IN_CONSULTATION' || s === 'IN_PROGRESS' || s === 'CALLED';
   const waiting = useMemo(() => tokens.filter(t => t.status === 'WAITING').length, [tokens]);
-  const inProgress = useMemo(() => tokens.filter(t => t.status === 'IN_PROGRESS').length, [tokens]);
+  const inProgress = useMemo(() => tokens.filter(t => isInConsult(t.status)).length, [tokens]);
   const completed = useMemo(() => tokens.filter(t => t.status === 'COMPLETED').length, [tokens]);
 
+  // tokenNumber is Int per schema; coerce before string ops.
   const filtered = useMemo(() => tokens.filter(t =>
     (!search || t.patient?.firstName?.toLowerCase().includes(search.toLowerCase()) ||
-    t.tokenNumber?.toLowerCase().includes(search.toLowerCase())) &&
-    (!statusFilter || t.status === statusFilter)
+    String(t.tokenNumber ?? '').toLowerCase().includes(search.toLowerCase())) &&
+    (!statusFilter || (statusFilter === 'IN_CONSULTATION' ? isInConsult(t.status) : t.status === statusFilter))
   ), [tokens, search, statusFilter]);
 
   const [actionId, setActionId] = useState<string | null>(null);
@@ -137,7 +140,7 @@ export default function QueueDashboard() {
               <option value="">All Statuses</option>
               <option value="WAITING">Waiting</option>
               <option value="CALLED">Called</option>
-              <option value="IN_PROGRESS">In Progress</option>
+              <option value="IN_CONSULTATION">In Progress</option>
               <option value="COMPLETED">Completed</option>
             </select>
           </div>
@@ -177,7 +180,7 @@ export default function QueueDashboard() {
                     {t.doctor ? `Dr. ${t.doctor.firstName || ''} ${t.doctor.lastName || ''}`.trim() : '—'}
                   </td>
                   <td className="px-4 py-4">
-                    <StatusBadge status={t.priorityLevel || t.status} />
+                    <StatusBadge status={t.priority || t.priorityLevel || t.status} />
                   </td>
                   <td className="px-4 py-4 text-sm text-gray-600">{t.waitMins ? `${t.waitMins} min` : '—'}</td>
                   <td className="px-4 py-4">
@@ -188,7 +191,7 @@ export default function QueueDashboard() {
                           {actionId === t.id ? 'Calling...' : 'Call'}
                         </button>
                       )}
-                      {(t.status === 'CALLED' || t.status === 'IN_PROGRESS') && (
+                      {(t.status === 'CALLED' || t.status === 'IN_CONSULTATION' || t.status === 'IN_PROGRESS') && (
                         <button onClick={() => complete(t.id)} disabled={actionId === t.id}
                           className="text-xs px-3 py-1.5 rounded-full bg-teal-600 text-white hover:bg-teal-700 font-medium transition-all disabled:opacity-50">
                           {actionId === t.id ? 'Completing...' : 'View'}

@@ -30,7 +30,7 @@ export class GrievanceController {
   assign(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.assign(tid, id, body); }
 
   @Patch(':id/resolve')
-  resolve(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @CurrentUser('userId') uid: string, @Body() body: any) { return this.svc.resolve(tid, id, uid, body); }
+  resolve(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @CurrentUser('sub') uid: string, @Body() body: any) { return this.svc.resolve(tid, id, uid, body); }
 
   @Patch(':id/escalate')
   escalate(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.escalate(tid, id, body); }

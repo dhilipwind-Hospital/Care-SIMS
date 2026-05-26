@@ -36,7 +36,7 @@ export class DialysisController {
   getSession(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getSession(tid, id); }
 
   @Patch('sessions/:id/start')
-  startSession(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @CurrentUser('userId') uid: string) { return this.svc.startSession(tid, id, uid); }
+  startSession(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @CurrentUser('sub') uid: string) { return this.svc.startSession(tid, id, uid); }
 
   @Patch('sessions/:id/end')
   endSession(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.endSession(tid, id, body); }

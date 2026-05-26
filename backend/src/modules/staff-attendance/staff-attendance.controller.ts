@@ -22,18 +22,18 @@ export class StaffAttendanceController {
 
   @Post('clock-in')
   @Roles('SYS_ORG_ADMIN', 'SYS_HR', 'SYS_DOCTOR', 'SYS_NURSE', 'SYS_RECEPTIONIST', 'SYS_PHARMACIST', 'SYS_LAB_TECH')
-  clockIn(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @CurrentUser('userId') uid: string, @Body() body: any) { return this.svc.clockIn(tid, uid, { ...body, locationId: body.locationId || lid }); }
+  clockIn(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @CurrentUser('sub') uid: string, @Body() body: any) { return this.svc.clockIn(tid, uid, { ...body, locationId: body.locationId || lid }); }
 
   @Patch('clock-out')
   @Roles('SYS_ORG_ADMIN', 'SYS_HR', 'SYS_DOCTOR', 'SYS_NURSE', 'SYS_RECEPTIONIST', 'SYS_PHARMACIST', 'SYS_LAB_TECH')
-  clockOut(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string) { return this.svc.clockOut(tid, uid); }
+  clockOut(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string) { return this.svc.clockOut(tid, uid); }
 
   @Post('mark')
   mark(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any) { return this.svc.markAttendance(tid, { ...body, locationId: body.locationId || lid }); }
 
   @Get('my')
   @Roles('SYS_ORG_ADMIN', 'SYS_HR', 'SYS_DOCTOR', 'SYS_NURSE', 'SYS_RECEPTIONIST', 'SYS_PHARMACIST', 'SYS_LAB_TECH')
-  myAttendance(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @Query('month') month?: string) { return this.svc.myAttendance(tid, uid, month); }
+  myAttendance(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string, @Query('month') month?: string) { return this.svc.myAttendance(tid, uid, month); }
 
   @Get('summary')
   summary(@CurrentUser('tenantId') tid: string, @Query('month') month: string) { return this.svc.summary(tid, month); }

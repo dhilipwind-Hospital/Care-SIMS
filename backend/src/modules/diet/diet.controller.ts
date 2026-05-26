@@ -39,7 +39,7 @@ export class DietController {
   planMeal(@CurrentUser('tenantId') tid: string, @Body() body: any) { return this.svc.planMeal(tid, body); }
 
   @Patch('meals/:id/serve')
-  serveMeal(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @CurrentUser('userId') uid: string) { return this.svc.serveMeal(tid, id, uid); }
+  serveMeal(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @CurrentUser('sub') uid: string) { return this.svc.serveMeal(tid, id, uid); }
 
   @Patch('meals/:id/feedback')
   mealFeedback(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.mealFeedback(tid, id, body); }

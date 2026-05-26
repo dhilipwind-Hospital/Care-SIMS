@@ -42,12 +42,12 @@ export class InventoryController {
   }
 
   @Post('stock-in')
-  stockIn(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @Body() body: StockInDto) {
+  stockIn(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string, @Body() body: StockInDto) {
     return this.svc.stockIn(tid, uid, body);
   }
 
   @Post('stock-out')
-  stockOut(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @Body() body: StockOutDto) {
+  stockOut(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string, @Body() body: StockOutDto) {
     return this.svc.stockOut(tid, uid, body);
   }
 
@@ -77,7 +77,7 @@ export class InventoryController {
   }
 
   @Post('adjust')
-  adjust(@CurrentUser('tenantId') tid: string, @CurrentUser('userId') uid: string, @Body() body: any) {
+  adjust(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string, @Body() body: any) {
     return this.svc.stockAdjust(tid, uid, body);
   }
 }
