@@ -993,10 +993,52 @@ export class PlatformService {
         console.error('[seed-starter] queue-token top-up failed:', err);
       }
 
+      // Create PatientAccount login rows for any sample Patient that has
+      // an email but no global account yet. Idempotent; resets password on
+      // existing rows so demo password keeps working.
+      let patientAccountsCreated = 0;
+      let patientAccountsReset = 0;
+      try {
+        // Compute Demo@1234 hash inline since the outer passwordHash isn't
+        // in scope on the early-exit path.
+        const demoHash = await bcrypt.hash('Demo@1234', 10);
+        const samplePatients = await this.prisma.patient.findMany({
+          where: { tenantId, email: { not: null } },
+          select: { email: true, firstName: true, lastName: true, mobile: true, dateOfBirth: true, gender: true, bloodGroup: true },
+        });
+        for (const p of samplePatients) {
+          if (!p.email) continue;
+          const existing = await this.prisma.patientAccount.findUnique({ where: { email: p.email } });
+          if (!existing) {
+            await this.prisma.patientAccount.create({
+              data: {
+                email: p.email,
+                passwordHash: demoHash,
+                firstName: p.firstName,
+                lastName: p.lastName,
+                phone: p.mobile,
+                dateOfBirth: p.dateOfBirth,
+                gender: p.gender,
+                bloodGroup: p.bloodGroup,
+              } as any,
+            });
+            patientAccountsCreated++;
+          } else {
+            await this.prisma.patientAccount.update({ where: { id: existing.id }, data: { passwordHash: demoHash } });
+            patientAccountsReset++;
+          }
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[seed-starter] patient-account top-up failed:', err);
+      }
+
       const noteParts: string[] = [];
       if (featuresInserted + featuresTurnedOn > 0) noteParts.push(`Enabled ${featuresInserted + featuresTurnedOn} feature module(s)`);
       if (secondaryLocationAdded) noteParts.push('Added a branch location');
       if (queueTokensCreated > 0) noteParts.push(`Issued ${queueTokensCreated} queue token(s) for today`);
+      if (patientAccountsCreated > 0) noteParts.push(`Created ${patientAccountsCreated} patient portal account(s)`);
+      if (patientAccountsReset > 0) noteParts.push(`Reset password on ${patientAccountsReset} patient account(s)`);
       const note = noteParts.length
         ? `${noteParts.join('. ')}. Existing data was left alone.`
         : 'This org already has staff, departments, wards, drugs and patients. Click Refresh Data Counts to see totals.';
