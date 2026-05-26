@@ -38,17 +38,33 @@ export class AppointmentsService {
   }
 
   async create(tenantId: string, dto: any, createdById: string) {
-    // Auto-resolve locationId from user's primary location if not provided
+    // Auto-resolve locationId. createdById is the JWT sub — for tenant staff
+    // it's a TenantUser id, for doctors it's a DoctorRegistry id (no
+    // tenantUser row exists). Try staff first, then patient's home location,
+    // then any active tenant location. locationId is NOT NULL in the schema.
     let locationId = dto.locationId;
     if (!locationId) {
-      const user = await this.prisma.tenantUser.findUnique({ where: { id: createdById }, select: { primaryLocationId: true } });
+      const user = await this.prisma.tenantUser.findUnique({ where: { id: createdById }, select: { primaryLocationId: true } }).catch(() => null);
       locationId = user?.primaryLocationId;
     }
+    if (!locationId && dto.patientId) {
+      const pat = await this.prisma.patient.findFirst({ where: { id: dto.patientId, tenantId }, select: { locationId: true } });
+      locationId = pat?.locationId;
+    }
+    if (!locationId) {
+      const loc = await this.prisma.tenantLocation.findFirst({ where: { tenantId, isActive: true }, orderBy: { createdAt: 'asc' }, select: { id: true } });
+      locationId = loc?.id;
+    }
+    if (!locationId) throw new BadRequestException('No active location for this organization');
+    // Doctors log in with DoctorRegistry id as JWT sub — but Appointment.createdById
+    // FK points to TenantUser. Set to null when no matching staff row.
+    const staffCreator = await this.prisma.tenantUser.findUnique({ where: { id: createdById }, select: { id: true } }).catch(() => null);
+    const safeCreatedById = staffCreator?.id || null;
     const appointment = await this.prisma.$transaction(async (tx) => {
       const conflict = await tx.appointment.findFirst({ where: { tenantId, doctorId: dto.doctorId, appointmentDate: new Date(dto.appointmentDate), appointmentTime: dto.appointmentTime || dto.slotTime, status: { notIn: ['CANCELLED', 'NO_SHOW'] } } });
       if (conflict) throw new BadRequestException('Doctor already has an appointment at this time slot');
       return tx.appointment.create({
-        data: { tenantId, locationId, patientId: dto.patientId, doctorId: dto.doctorId, departmentId: dto.departmentId, appointmentDate: new Date(dto.appointmentDate), appointmentTime: dto.appointmentTime || dto.slotTime, durationMinutes: dto.durationMinutes || 15, type: dto.type || dto.appointmentType || 'NEW', source: dto.source || 'RECEPTION', chiefComplaint: dto.chiefComplaint, notes: dto.notes, status: 'SCHEDULED', createdById },
+        data: { tenantId, locationId, patientId: dto.patientId, doctorId: dto.doctorId, departmentId: dto.departmentId, appointmentDate: new Date(dto.appointmentDate), appointmentTime: dto.appointmentTime || dto.slotTime, durationMinutes: dto.durationMinutes || 15, type: dto.type || dto.appointmentType || 'NEW', source: dto.source || 'RECEPTION', chiefComplaint: dto.chiefComplaint, notes: dto.notes, status: 'SCHEDULED', createdById: safeCreatedById },
         include: { patient: { select: { patientId: true, firstName: true, lastName: true, mobile: true } } },
       });
     });

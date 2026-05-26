@@ -22,7 +22,11 @@ import { DispenseDto } from './dto/dispense.dto';
 @Controller('pharmacy')
 export class PharmacyController {
   constructor(private svc: PharmacyService) {}
-  @Get('drugs') getDrugs(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getDrugs(tid, q); }
+  // Doctors and nurses also need to read the drug catalog when writing
+  // prescriptions / verifying MAR — override the class-level restriction.
+  @Get('drugs')
+  @Roles('SYS_ORG_ADMIN', 'SYS_PHARMACIST', 'SYS_PHARMACY_INCHARGE', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_NURSE', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE')
+  getDrugs(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getDrugs(tid, q); }
 
   @Get('drugs/export')
   async exportCsv(@CurrentUser('tenantId') tid: string, @Query() q: any, @Res() res: Response) {

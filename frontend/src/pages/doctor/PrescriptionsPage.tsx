@@ -87,6 +87,9 @@ export default function PrescriptionsPage() {
   const [drugResults, setDrugResults]     = useState<Record<number, any[]>>({});
   const [drugSelected, setDrugSelected]   = useState<Record<number, boolean>>({});
   const drugTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  // Prevents the Save button being mashed twice while the POST is in flight,
+  // which previously created 5+ duplicate prescriptions.
+  const [submitting, setSubmitting] = useState(false);
 
   const searchDrugs = (idx: number, q: string) => {
     setDrugSearches(prev => { const a = [...prev]; a[idx] = q; return a; });
@@ -101,7 +104,9 @@ export default function PrescriptionsPage() {
   };
 
   const selectDrug = (idx: number, drug: any) => {
-    const name = [drug.name, drug.strength].filter(Boolean).join(' ');
+    // Backend Drug model has brandName / genericName — not "name".
+    const baseName = drug.brandName || drug.genericName || drug.name || '';
+    const name = [baseName, drug.strength, drug.dosageForm].filter(Boolean).join(' ');
     updateItem(idx, 'drugName', name);
     setDrugSearches(prev => { const a = [...prev]; a[idx] = name; return a; });
     setDrugResults(prev => ({ ...prev, [idx]: [] }));
@@ -128,7 +133,12 @@ export default function PrescriptionsPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return; // ignore mashing the button
     if (!form.patientId) { toast.error('Please select a patient'); return; }
+    if (!form.items.length || form.items.some(it => !it.drugName?.trim())) {
+      toast.error('Add at least one drug with a name'); return;
+    }
+    setSubmitting(true);
     try {
       const { data: created } = await api.post('/prescriptions', {
         patientId: form.patientId,
@@ -146,8 +156,13 @@ export default function PrescriptionsPage() {
       setShowForm(false);
       setForm({ patientId: '', consultationId: '', prescriptionType: 'OPD', items: [{ ...EMPTY_ITEM }] });
       setSelectedPat(null); setPatSearch('');
+      setDrugSearches(['']); setDrugResults({}); setDrugSelected({});
       fetchRx();
-    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to save prescription'); }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to save prescription');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const sendToPharmacy = async (id: string) => {
@@ -315,9 +330,12 @@ export default function PrescriptionsPage() {
                                     <button key={d.id} type="button"
                                       onClick={() => selectDrug(i, d)}
                                       className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm border-b border-gray-50 last:border-0">
-                                      <span className="font-medium">{d.name}</span>
+                                      <span className="font-medium">{d.brandName || d.genericName || d.name}</span>
                                       {d.strength && <span className="text-gray-500 ml-1">{d.strength}</span>}
                                       {d.dosageForm && <span className="text-xs text-gray-400 ml-2 bg-gray-100 px-1.5 py-0.5 rounded">{d.dosageForm}</span>}
+                                      {d.genericName && d.brandName && d.genericName !== d.brandName && (
+                                        <span className="block text-[11px] text-gray-400 mt-0.5">{d.genericName}</span>
+                                      )}
                                     </button>
                                   ))}
                                 </div>
@@ -362,7 +380,7 @@ export default function PrescriptionsPage() {
 
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
-                <button type="submit" className="px-5 py-2 text-sm rounded-lg text-white font-medium" style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>Save Prescription</button>
+                <button type="submit" disabled={submitting} className="px-5 py-2 text-sm rounded-lg text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed" style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>{submitting ? 'Saving...' : 'Save Prescription'}</button>
               </div>
             </form>
           </div>
