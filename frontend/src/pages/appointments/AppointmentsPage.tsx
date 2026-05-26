@@ -261,7 +261,7 @@ export default function AppointmentsPage() {
     if (!showEdit || !editForm.doctorId || !editForm.appointmentDate) { setEditSlots([]); return; }
     setEditSlotsLoading(true);
     api.get('/appointments/slots', { params: { doctorId: editForm.doctorId, date: editForm.appointmentDate } })
-      .then(r => setEditSlots(r.data || []))
+      .then(r => setEditSlots(r.data?.slots || r.data || []))
       .catch((err) => { console.error('Failed to fetch edit slots:', err); setEditSlots([]); })
       .finally(() => setEditSlotsLoading(false));
   }, [showEdit, editForm.doctorId, editForm.appointmentDate]);

@@ -123,12 +123,62 @@ export class AppointmentsService {
   }
 
   async getDoctorSlots(tenantId: string, doctorId: string, date: string, locationId: string) {
-    const aff = await this.prisma.doctorOrgAffiliation.findFirst({ where: { tenantId, doctorId, isActive: true } });
+    const aff = await this.prisma.doctorOrgAffiliation.findFirst({
+      where: { tenantId, doctorId, isActive: true, ...(locationId ? { locationId } : {}) },
+      include: { schedules: true },
+    });
     if (!aff) throw new NotFoundException('Doctor affiliation not found');
-    const booked = await this.prisma.appointment.findMany({ where: { tenantId, doctorId, appointmentDate: new Date(date), status: { notIn: ['CANCELLED', 'NO_SHOW'] } }, select: { appointmentTime: true } });
+    const target = new Date(date);
+    // 0=Sun..6=Sat in JS. Map to schedule's MON..SUN strings.
+    const dayMap = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    const dayKey = dayMap[target.getDay()];
+
+    // Leave check — any leave whose range covers this date hides everything.
+    const onLeave = await this.prisma.doctorLeave.findFirst({
+      where: {
+        affiliationId: aff.id,
+        tenantId,
+        startDate: { lte: target },
+        endDate: { gte: target },
+      },
+      select: { id: true, reason: true, leaveType: true },
+    });
+    if (onLeave) return { slots: [], onLeave: true, leaveReason: onLeave.reason || onLeave.leaveType };
+
+    // Find the schedule row for this weekday. If no row, fall back to the
+    // legacy availableDays + 09:00–18:00 window so older orgs keep working.
+    const sched = (aff.schedules || []).find((s: any) => s.dayOfWeek === dayKey && s.isActive);
+    let startTime = '09:00';
+    let endTime = '18:00';
+    let breakStart: string | null = null;
+    let breakEnd: string | null = null;
+    let slotMins = aff.slotDurationMinutes || 15;
+    if (sched) {
+      startTime = sched.startTime;
+      endTime = sched.endTime;
+      breakStart = sched.breakStart;
+      breakEnd = sched.breakEnd;
+      slotMins = sched.slotDurationMinutes || slotMins;
+    } else if (!(aff.availableDays || []).includes(dayKey)) {
+      // No schedule row AND legacy availableDays excludes this day.
+      return { slots: [], onLeave: false };
+    }
+
+    const booked = await this.prisma.appointment.findMany({
+      where: { tenantId, doctorId, appointmentDate: target, status: { notIn: ['CANCELLED', 'NO_SHOW'] } },
+      select: { appointmentTime: true },
+    });
     const bookedTimes = new Set(booked.map(a => a.appointmentTime));
-    const slots = this.generateTimeSlots('09:00', '18:00', aff.slotDurationMinutes);
-    return slots.map(slot => ({ time: slot, available: !bookedTimes.has(slot) }));
+    const slots = this.generateTimeSlots(startTime, endTime, slotMins);
+    const result = slots.map(slot => {
+      const inBreak = breakStart && breakEnd && slot >= breakStart && slot < breakEnd;
+      return {
+        time: slot,
+        available: !bookedTimes.has(slot) && !inBreak,
+        reason: inBreak ? 'BREAK' : (bookedTimes.has(slot) ? 'BOOKED' : undefined),
+      };
+    });
+    return { slots: result, onLeave: false, hours: { startTime, endTime, breakStart, breakEnd, slotMins } };
   }
 
   private generateTimeSlots(start: string, end: string, durationMins: number) {

@@ -256,6 +256,7 @@ function AppRoutes() {
           <Route path="admin/roles" element={<RoleRoute roles={['ADMIN']}><RolesPage /></RoleRoute>} />
           <Route path="admin/departments" element={<RoleRoute roles={['ADMIN']}><DepartmentsPage /></RoleRoute>} />
           <Route path="admin/doctor-availability" element={<RoleRoute roles={['ADMIN']}><DoctorAvailabilityPage /></RoleRoute>} />
+          <Route path="admin/doctor-availability/:affiliationId" element={<RoleRoute roles={['ADMIN']}><MyAvailabilityPage /></RoleRoute>} />
           <Route path="admin/reports" element={<RoleRoute roles={['ADMIN', 'LAB', 'BILLING']}><ReportsPage /></RoleRoute>} />
           <Route path="admin/audit" element={<RoleRoute roles={['ADMIN']}><AuditPage /></RoleRoute>} />
           <Route path="admin/locations" element={<RoleRoute roles={['ADMIN']}><LocationsPage /></RoleRoute>} />

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Stethoscope, Edit2, X, Save, Calendar, Clock, IndianRupee, Users as UsersIcon } from 'lucide-react';
+import { Stethoscope, Edit2, X, Save, Calendar, Clock, IndianRupee, Users as UsersIcon, CalendarDays } from 'lucide-react';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
@@ -174,9 +175,15 @@ export default function DoctorAvailabilityPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <button onClick={() => openEdit(r)} className="flex items-center gap-1 text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">
-                      <Edit2 size={11} /> Edit
-                    </button>
+                    <div className="flex gap-1.5">
+                      <Link to={`/app/admin/doctor-availability/${r.id}`}
+                        className="flex items-center gap-1 text-xs px-2 py-1 bg-indigo-50 text-indigo-700 rounded-md hover:bg-indigo-100 font-medium">
+                        <CalendarDays size={11} /> Schedule
+                      </Link>
+                      <button onClick={() => openEdit(r)} className="flex items-center gap-1 text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">
+                        <Edit2 size={11} /> Quick Edit
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

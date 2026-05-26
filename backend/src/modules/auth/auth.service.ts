@@ -496,24 +496,60 @@ export class AuthService {
 
   async getPatientFacingSlots(tenantId: string, doctorId: string, date: string) {
     if (!doctorId || !date) return [];
-    const aff = await this.prisma.doctorOrgAffiliation.findFirst({ where: { tenantId, doctorId, isActive: true } });
+    const aff = await this.prisma.doctorOrgAffiliation.findFirst({
+      where: { tenantId, doctorId, isActive: true },
+      include: { schedules: true },
+    });
     if (!aff) return [];
+
+    const target = new Date(date);
+    const dayMap = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    const dayKey = dayMap[target.getDay()];
+
+    // On leave → no slots
+    const onLeave = await this.prisma.doctorLeave.findFirst({
+      where: { affiliationId: aff.id, tenantId, startDate: { lte: target }, endDate: { gte: target } },
+      select: { id: true },
+    });
+    if (onLeave) return [];
+
+    // Hours from schedule row → fall back to legacy 09:00–18:00
+    const sched = (aff.schedules || []).find((s: any) => s.dayOfWeek === dayKey && s.isActive);
+    let startTime = '09:00';
+    let endTime = '18:00';
+    let breakStart: string | null = null;
+    let breakEnd: string | null = null;
+    let slotMins = aff.slotDurationMinutes || 15;
+    if (sched) {
+      startTime = sched.startTime;
+      endTime = sched.endTime;
+      breakStart = sched.breakStart;
+      breakEnd = sched.breakEnd;
+      slotMins = sched.slotDurationMinutes || slotMins;
+    } else if (!(aff.availableDays || []).includes(dayKey)) {
+      return [];
+    }
+
     const booked = await this.prisma.appointment.findMany({
-      where: { tenantId, doctorId, appointmentDate: new Date(date), status: { notIn: ['CANCELLED', 'NO_SHOW'] } },
+      where: { tenantId, doctorId, appointmentDate: target, status: { notIn: ['CANCELLED', 'NO_SHOW'] } },
       select: { appointmentTime: true },
     });
     const bookedTimes = new Set(booked.map(a => a.appointmentTime));
     const slots: string[] = [];
-    const duration = aff.slotDurationMinutes || 15;
-    let cur = 9 * 60;
-    const end = 18 * 60;
+    const [sh, sm] = startTime.split(':').map(Number);
+    const [eh, em] = endTime.split(':').map(Number);
+    let cur = sh * 60 + sm;
+    const end = eh * 60 + em;
     while (cur < end) {
       const h = Math.floor(cur / 60).toString().padStart(2, '0');
       const m = (cur % 60).toString().padStart(2, '0');
       slots.push(`${h}:${m}`);
-      cur += duration;
+      cur += slotMins;
     }
-    return slots.map(time => ({ time, available: !bookedTimes.has(time) }));
+    return slots.map(time => {
+      const inBreak = !!(breakStart && breakEnd && time >= breakStart && time < breakEnd);
+      return { time, available: !bookedTimes.has(time) && !inBreak };
+    });
   }
 
   async getPatientAppointments(tenantId: string, patientAccountId: string, query: any) {

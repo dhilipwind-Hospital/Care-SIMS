@@ -223,7 +223,57 @@ model DoctorOrgAffiliation {
   tenant   Tenant         @relation(fields: [tenantId], references: [id])
   location TenantLocation? @relation(fields: [locationId], references: [id])
 
+  schedules DoctorSchedule[]
+  leaves    DoctorLeave[]
+
   @@map("doctor_org_affiliations")
+}
+
+// Per-day working hours for a doctor at a given affiliation.
+// One row per weekday (MON..SUN). startTime/endTime are "HH:mm". Optional
+// break window blocks slots between breakStart..breakEnd. If no row exists
+// for a weekday, the doctor is considered off that day.
+model DoctorSchedule {
+  id            String   @id @default(uuid())
+  affiliationId String   @map("affiliation_id")
+  tenantId      String   @map("tenant_id")
+  dayOfWeek     String   @map("day_of_week") // MON|TUE|WED|THU|FRI|SAT|SUN
+  startTime     String   @map("start_time")  // HH:mm
+  endTime       String   @map("end_time")    // HH:mm
+  breakStart    String?  @map("break_start")
+  breakEnd      String?  @map("break_end")
+  slotDurationMinutes Int @default(15) @map("slot_duration_minutes")
+  maxPatients   Int?     @map("max_patients")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  affiliation DoctorOrgAffiliation @relation(fields: [affiliationId], references: [id], onDelete: Cascade)
+
+  @@unique([affiliationId, dayOfWeek])
+  @@index([tenantId, affiliationId])
+  @@map("doctor_schedules")
+}
+
+// Date-range leaves / blocked dates that override the weekly schedule.
+// A leave that spans (startDate..endDate) hides every slot on those calendar
+// days at the patient self-booking layer.
+model DoctorLeave {
+  id            String   @id @default(uuid())
+  affiliationId String   @map("affiliation_id")
+  tenantId      String   @map("tenant_id")
+  startDate     DateTime @map("start_date") @db.Date
+  endDate       DateTime @map("end_date") @db.Date
+  reason        String?
+  leaveType     String   @default("LEAVE") @map("leave_type") // LEAVE|HOLIDAY|CONFERENCE|EMERGENCY
+  status        String   @default("APPROVED")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  affiliation DoctorOrgAffiliation @relation(fields: [affiliationId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, affiliationId])
+  @@index([startDate, endDate])
+  @@map("doctor_leaves")
 }
 
 model PlatformAuditLog {

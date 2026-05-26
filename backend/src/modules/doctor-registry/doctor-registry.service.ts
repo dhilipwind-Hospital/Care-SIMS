@@ -135,8 +135,120 @@ export class DoctorRegistryService {
       include: {
         doctor: { select: { id: true, firstName: true, lastName: true, specialties: true, ayphenStatus: true } },
         location: { select: { id: true, locationCode: true, name: true } },
+        schedules: { orderBy: { dayOfWeek: 'asc' } },
+        leaves: { where: { endDate: { gte: new Date() } }, orderBy: { startDate: 'asc' } },
       },
     });
+  }
+
+  // ─── Per-day schedule (DoctorSchedule) ────────────────────────────────
+  // upsertSchedules replaces the entire weekly grid for an affiliation in a
+  // single transaction. The frontend sends an array — we delete rows for
+  // weekdays not in the payload and upsert the rest.
+  async listSchedules(tenantId: string, affiliationId: string, opts?: { actorDoctorId?: string }) {
+    const aff = await this.prisma.doctorOrgAffiliation.findFirst({ where: { id: affiliationId, tenantId } });
+    if (!aff) throw new NotFoundException('Affiliation not found');
+    if (opts?.actorDoctorId && aff.doctorId !== opts.actorDoctorId) {
+      throw new ForbiddenException('You can only view your own schedule');
+    }
+    return this.prisma.doctorSchedule.findMany({
+      where: { affiliationId, tenantId },
+      orderBy: { dayOfWeek: 'asc' },
+    });
+  }
+
+  async upsertSchedules(tenantId: string, affiliationId: string, rows: any[], opts?: { actorDoctorId?: string }) {
+    const aff = await this.prisma.doctorOrgAffiliation.findFirst({ where: { id: affiliationId, tenantId } });
+    if (!aff) throw new NotFoundException('Affiliation not found');
+    if (opts?.actorDoctorId && aff.doctorId !== opts.actorDoctorId) {
+      throw new ForbiddenException('You can only edit your own schedule');
+    }
+    const valid = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+    const safe = (rows || []).filter(r => valid.includes(r.dayOfWeek));
+    return this.prisma.$transaction(async (tx) => {
+      // Delete weekdays not in the payload (= doctor turned them off)
+      const keepDays = safe.map(r => r.dayOfWeek);
+      await tx.doctorSchedule.deleteMany({
+        where: { affiliationId, tenantId, ...(keepDays.length ? { dayOfWeek: { notIn: keepDays } } : {}) },
+      });
+      // Upsert each kept day
+      for (const r of safe) {
+        await tx.doctorSchedule.upsert({
+          where: { affiliationId_dayOfWeek: { affiliationId, dayOfWeek: r.dayOfWeek } },
+          create: {
+            affiliationId, tenantId, dayOfWeek: r.dayOfWeek,
+            startTime: r.startTime || '09:00',
+            endTime: r.endTime || '17:00',
+            breakStart: r.breakStart || null,
+            breakEnd: r.breakEnd || null,
+            slotDurationMinutes: Number(r.slotDurationMinutes) || aff.slotDurationMinutes || 15,
+            maxPatients: r.maxPatients != null ? Number(r.maxPatients) : null,
+            isActive: r.isActive !== false,
+          },
+          update: {
+            startTime: r.startTime || '09:00',
+            endTime: r.endTime || '17:00',
+            breakStart: r.breakStart || null,
+            breakEnd: r.breakEnd || null,
+            slotDurationMinutes: Number(r.slotDurationMinutes) || aff.slotDurationMinutes || 15,
+            maxPatients: r.maxPatients != null ? Number(r.maxPatients) : null,
+            isActive: r.isActive !== false,
+          },
+        });
+      }
+      // Mirror to legacy availableDays so existing slot logic keeps working
+      await tx.doctorOrgAffiliation.update({
+        where: { id: affiliationId },
+        data: { availableDays: keepDays },
+      });
+      return tx.doctorSchedule.findMany({ where: { affiliationId, tenantId }, orderBy: { dayOfWeek: 'asc' } });
+    });
+  }
+
+  // ─── Leave (DoctorLeave) ──────────────────────────────────────────────
+  async listLeaves(tenantId: string, affiliationId: string, opts?: { actorDoctorId?: string; includePast?: boolean }) {
+    const aff = await this.prisma.doctorOrgAffiliation.findFirst({ where: { id: affiliationId, tenantId } });
+    if (!aff) throw new NotFoundException('Affiliation not found');
+    if (opts?.actorDoctorId && aff.doctorId !== opts.actorDoctorId) {
+      throw new ForbiddenException('You can only view your own leaves');
+    }
+    const where: any = { affiliationId, tenantId };
+    if (!opts?.includePast) where.endDate = { gte: new Date() };
+    return this.prisma.doctorLeave.findMany({ where, orderBy: { startDate: 'asc' } });
+  }
+
+  async addLeave(tenantId: string, affiliationId: string, dto: any, opts?: { actorDoctorId?: string }) {
+    const aff = await this.prisma.doctorOrgAffiliation.findFirst({ where: { id: affiliationId, tenantId } });
+    if (!aff) throw new NotFoundException('Affiliation not found');
+    if (opts?.actorDoctorId && aff.doctorId !== opts.actorDoctorId) {
+      throw new ForbiddenException('You can only add your own leaves');
+    }
+    if (!dto.startDate || !dto.endDate) throw new BadRequestException('startDate and endDate are required');
+    const start = new Date(dto.startDate);
+    const end = new Date(dto.endDate);
+    if (end < start) throw new BadRequestException('endDate cannot be before startDate');
+    return this.prisma.doctorLeave.create({
+      data: {
+        affiliationId, tenantId,
+        startDate: start, endDate: end,
+        reason: dto.reason || null,
+        leaveType: dto.leaveType || 'LEAVE',
+        status: 'APPROVED',
+      },
+    });
+  }
+
+  async deleteLeave(tenantId: string, leaveId: string, opts?: { actorDoctorId?: string }) {
+    const row = await this.prisma.doctorLeave.findFirst({
+      where: { id: leaveId, tenantId },
+      include: { affiliation: { select: { doctorId: true } } },
+    });
+    if (!row) throw new NotFoundException('Leave not found');
+    if (opts?.actorDoctorId && row.affiliation.doctorId !== opts.actorDoctorId) {
+      throw new ForbiddenException('You can only delete your own leaves');
+    }
+    await this.prisma.doctorLeave.delete({ where: { id: leaveId } });
+    return { ok: true };
   }
 
   async getDoctorsByLocation(tenantId: string, locationId: string) {

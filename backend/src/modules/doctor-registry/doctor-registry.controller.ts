@@ -50,6 +50,67 @@ export class DoctorRegistryController {
     return this.svc.updateAffiliation(tid, id, body, { actorDoctorId });
   }
 
+  // ─── Per-affiliation weekly schedule ───────────────────────────────────
+  @Get('affiliations/:id/schedule')
+  @Roles('SYS_ORG_ADMIN', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_RECEPTIONIST')
+  listSchedule(
+    @CurrentUser('tenantId') tid: string,
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+  ) {
+    const actorDoctorId = user?.isDoctor ? user.sub : undefined;
+    return this.svc.listSchedules(tid, id, { actorDoctorId });
+  }
+
+  @Put('affiliations/:id/schedule')
+  @Roles('SYS_ORG_ADMIN', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR')
+  upsertSchedule(
+    @CurrentUser('tenantId') tid: string,
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() body: any,
+  ) {
+    const actorDoctorId = user?.isDoctor ? user.sub : undefined;
+    const rows = Array.isArray(body?.schedules) ? body.schedules : Array.isArray(body) ? body : [];
+    return this.svc.upsertSchedules(tid, id, rows, { actorDoctorId });
+  }
+
+  // ─── Per-affiliation leaves / blocked dates ────────────────────────────
+  @Get('affiliations/:id/leaves')
+  @Roles('SYS_ORG_ADMIN', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_RECEPTIONIST')
+  listLeaves(
+    @CurrentUser('tenantId') tid: string,
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Query('includePast') includePast?: string,
+  ) {
+    const actorDoctorId = user?.isDoctor ? user.sub : undefined;
+    return this.svc.listLeaves(tid, id, { actorDoctorId, includePast: includePast === '1' });
+  }
+
+  @Post('affiliations/:id/leaves')
+  @Roles('SYS_ORG_ADMIN', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR')
+  addLeave(
+    @CurrentUser('tenantId') tid: string,
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() body: any,
+  ) {
+    const actorDoctorId = user?.isDoctor ? user.sub : undefined;
+    return this.svc.addLeave(tid, id, body, { actorDoctorId });
+  }
+
+  @Patch('leaves/:leaveId/cancel')
+  @Roles('SYS_ORG_ADMIN', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR')
+  deleteLeave(
+    @CurrentUser('tenantId') tid: string,
+    @CurrentUser() user: any,
+    @Param('leaveId') leaveId: string,
+  ) {
+    const actorDoctorId = user?.isDoctor ? user.sub : undefined;
+    return this.svc.deleteLeave(tid, leaveId, { actorDoctorId });
+  }
+
   @Get('by-location/:locationId')
   @Roles('SYS_ORG_ADMIN', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_RECEPTIONIST', 'SYS_NURSE')
   byLocation(@CurrentUser('tenantId') tid: string, @Param('locationId') lid: string) { return this.svc.getDoctorsByLocation(tid, lid); }

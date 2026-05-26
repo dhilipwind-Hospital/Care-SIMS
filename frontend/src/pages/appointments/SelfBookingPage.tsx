@@ -45,7 +45,7 @@ export default function SelfBookingPage() {
     if (!selectedDoctor || !selectedDate) return;
     setSlotsLoading(true);
     api.get(`/appointments/slots`, { params: { doctorId: selectedDoctor.id, date: selectedDate, locationId: selectedDoctor.locationId } })
-      .then(r => setSlots(r.data || []))
+      .then(r => setSlots(r.data?.slots || r.data || []))
       .catch((err) => { console.error('Failed to fetch appointment slots:', err); setSlots([]); })
       .finally(() => setSlotsLoading(false));
   }, [selectedDoctor, selectedDate]);
