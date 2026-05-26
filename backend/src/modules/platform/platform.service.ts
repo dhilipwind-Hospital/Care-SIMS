@@ -941,9 +941,62 @@ export class PlatformService {
         console.error('[seed-starter] secondary-location top-up failed:', err);
       }
 
+      // Top up TODAY's queue tokens so the doctor's queue isn't empty on demo
+      // day. Tokens carry a queueDate column — yesterday's seed won't show up
+      // today. Idempotent: skip if today already has tokens for any patient.
+      let queueTokensCreated = 0;
+      try {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const existingToday = await this.prisma.queueToken.count({
+          where: { tenantId, queueDate: today },
+        });
+        if (existingToday < 2) {
+          const sampleDoctor = await this.prisma.doctorRegistry.findUnique({
+            where: { email: `doctor.demo@${tenant.slug}.local` },
+            select: { id: true },
+          });
+          const samplePatients = await this.prisma.patient.findMany({
+            where: { tenantId },
+            select: { id: true },
+            take: 2,
+            orderBy: { createdAt: 'asc' },
+          });
+          if (sampleDoctor && samplePatients.length) {
+            // Pick the first active location for the token.
+            const loc = await this.prisma.tenantLocation.findFirst({
+              where: { tenantId, isActive: true },
+              orderBy: { createdAt: 'asc' },
+              select: { id: true },
+            });
+            if (loc) {
+              for (let i = 0; i < samplePatients.length && existingToday + i < 2; i++) {
+                await this.prisma.queueToken.create({
+                  data: {
+                    tenantId, locationId: loc.id,
+                    tokenNumber: existingToday + i + 1,
+                    patientId: samplePatients[i].id,
+                    doctorId: sampleDoctor.id,
+                    visitType: 'OPD',
+                    priority: 'NORMAL',
+                    status: 'WAITING',
+                    queueDate: today,
+                    checkInTime: new Date(),
+                  } as any,
+                });
+                queueTokensCreated++;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[seed-starter] queue-token top-up failed:', err);
+      }
+
       const noteParts: string[] = [];
       if (featuresInserted + featuresTurnedOn > 0) noteParts.push(`Enabled ${featuresInserted + featuresTurnedOn} feature module(s)`);
       if (secondaryLocationAdded) noteParts.push('Added a branch location');
+      if (queueTokensCreated > 0) noteParts.push(`Issued ${queueTokensCreated} queue token(s) for today`);
       const note = noteParts.length
         ? `${noteParts.join('. ')}. Existing data was left alone.`
         : 'This org already has staff, departments, wards, drugs and patients. Click Refresh Data Counts to see totals.';
@@ -951,7 +1004,7 @@ export class PlatformService {
       return {
         message: 'Starter data already present — synced',
         tenant: { id: tenantId, slug: tenant.slug, name: tenant.legalName },
-        created: { staffUsers: 0, departments: 0, drugs: 0, drugBatches: 0, wards: 0, beds: 0, doctorAffiliated: false, patients: 0, queueTokens: 0, vitals: 0, appointments: 0, locations: secondaryLocationAdded ? 1 : 0, errors: [] },
+        created: { staffUsers: 0, departments: 0, drugs: 0, drugBatches: 0, wards: 0, beds: 0, doctorAffiliated: false, patients: 0, queueTokens: queueTokensCreated, vitals: 0, appointments: 0, locations: secondaryLocationAdded ? 1 : 0, errors: [] },
         sharedPassword: 'Demo@1234',
         note,
         staff: [],
@@ -959,6 +1012,7 @@ export class PlatformService {
         skipped: true,
         featuresEnabled: featuresInserted + featuresTurnedOn,
         secondaryLocationAdded,
+        queueTokensCreated,
       };
     }
 
