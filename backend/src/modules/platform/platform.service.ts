@@ -1303,6 +1303,32 @@ export class PlatformService {
           summary.patients++;
         }
         createdPatients.push({ id: pat.id, patientId: pat.patientId, firstName: pat.firstName, lastName: pat.lastName });
+
+        // Also create a global PatientAccount so the patient can log in to
+        // the portal. Skip if one already exists for this email (the email
+        // is unique across the whole platform).
+        const existingAcct = await this.prisma.patientAccount.findUnique({ where: { email: p.email } });
+        if (!existingAcct) {
+          await this.prisma.patientAccount.create({
+            data: {
+              email: p.email,
+              passwordHash, // shared Demo@1234 hash from outer scope
+              firstName: p.firstName,
+              lastName: p.lastName,
+              phone: p.mobile,
+              dateOfBirth: new Date(p.dob),
+              gender: p.gender,
+              bloodGroup: p.bloodGroup,
+            } as any,
+          });
+        } else {
+          // Reset password so the demo password works even if the account
+          // existed from a prior seed run with a different hash.
+          await this.prisma.patientAccount.update({
+            where: { id: existingAcct.id },
+            data: { passwordHash },
+          });
+        }
       }
     });
 
