@@ -831,14 +831,12 @@ export class PlatformService {
     });
     const existingMap = new Map(existing.map(f => [f.moduleId, f.isEnabled]));
 
-    // All applicable feature modules (everything for HOSPITAL+MULTISPECIALTY,
-    // which covers the demo flows).
-    const allModules = Array.from(new Set([
-      ...(DEFAULT_FEATURES['HOSPITAL'] || []),
-      ...(DEFAULT_FEATURES['MULTISPECIALTY'] || []),
-    ]));
+    // Enable EVERY module that exists in the featureModule registry — older
+    // DEFAULT_FEATURES['HOSPITAL'] doesn't include newer flags like
+    // MOD_SHIFT_HANDOVER / MOD_AMBULANCE / MOD_BLOOD_BANK, so demo orgs
+    // would hit 403s on those pages. This endpoint is the "give this org
+    // everything" lever, so pull the full registry.
     const validModules = await this.prisma.featureModule.findMany({
-      where: { moduleId: { in: allModules } },
       select: { moduleId: true },
     });
 
