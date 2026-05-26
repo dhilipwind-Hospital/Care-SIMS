@@ -171,9 +171,12 @@ export default function PharmacyPage() {
     return true;
   });
 
-  const totalAmount = selectedRx?.medications?.reduce((sum: number, m: any) => {
-    return sum + (m.pricePerUnit || 0) * (m.quantity || 1);
-  }, 0);
+  // Prescription model exposes `items`, not `medications`. Coalesce so we
+  // never call .toLocaleString() on undefined.
+  const totalAmount: number = (selectedRx?.items || selectedRx?.medications || []).reduce(
+    (sum: number, m: any) => sum + (Number(m.pricePerUnit || m.unitPrice || 0)) * (Number(m.quantity || 1)),
+    0,
+  );
 
   return (
     <div className="p-6 space-y-5">
