@@ -412,6 +412,53 @@ export class AuthService {
     const account = await this.prisma.patientAccount.findUnique({ where: { id: patientAccountId } });
     if (!account) throw new UnauthorizedException('Patient account not found');
 
+    // Auto-create a tenant Patient row if this account has never been to
+    // this hospital before. Without this, every patient-facing endpoint
+    // returns "no patient record" because resolvePatientRecord matches by
+    // email + tenantId.
+    const existingPatient = await this.prisma.patient.findFirst({
+      where: { tenantId, email: account.email },
+      select: { id: true },
+    });
+    if (!existingPatient) {
+      // Pick a default location: the one the patient chose, else the first
+      // active location in the tenant.
+      let homeLocationId = locationId;
+      if (!homeLocationId) {
+        const loc = await this.prisma.tenantLocation.findFirst({
+          where: { tenantId, isActive: true },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+        });
+        homeLocationId = loc?.id;
+      }
+      if (homeLocationId) {
+        const pid = `P${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 9)}`;
+        try {
+          await this.prisma.patient.create({
+            data: {
+              tenantId,
+              locationId: homeLocationId,
+              patientId: pid,
+              registrationType: 'SELF',
+              firstName: account.firstName,
+              lastName: account.lastName,
+              dateOfBirth: account.dateOfBirth,
+              gender: account.gender,
+              bloodGroup: account.bloodGroup,
+              mobile: account.phone,
+              email: account.email,
+            } as any,
+          });
+        } catch (err) {
+          // Don't block the select-org if the auto-create fails — the patient
+          // can still browse public info and reception can register them manually.
+          // eslint-disable-next-line no-console
+          console.error('[selectOrgForPatient] auto-create patient failed:', err);
+        }
+      }
+    }
+
     const enabledFeatures = await this.prisma.organizationFeature.findMany({
       where: { tenantId, isEnabled: true },
     });
@@ -576,7 +623,10 @@ export class AuthService {
 
   async bookPatientAppointment(tenantId: string, patientAccountId: string, dto: any) {
     const { patient } = await this.resolvePatientRecord(tenantId, patientAccountId);
-    if (!patient) throw new UnauthorizedException('No patient record found for this account in this hospital');
+    // BadRequest (400) — not Unauthorized (401). The patient IS authenticated;
+    // they just don't have a tenant record yet. Sending 401 here trips the
+    // axios interceptor's auto-logout flow.
+    if (!patient) throw new BadRequestException('No patient record found for this account in this hospital');
     // Check slot conflict
     const conflict = await this.prisma.appointment.findFirst({
       where: { tenantId, doctorId: dto.doctorId, appointmentDate: new Date(dto.appointmentDate), appointmentTime: dto.appointmentTime, status: { notIn: ['CANCELLED', 'NO_SHOW'] } },

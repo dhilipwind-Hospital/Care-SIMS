@@ -21,16 +21,35 @@ function cancelAllPendingRequests() {
 
 function handleAuthFailure() {
   cancelAllPendingRequests();
+
+  // Pick the right login surface based on where the user came from so a
+  // patient hitting 401 doesn't get bounced to the staff /login screen.
+  let target = '/login';
+  try {
+    const raw = localStorage.getItem('hms_user');
+    if (raw) {
+      const u = JSON.parse(raw);
+      if (u?.userType === 'patient' || u?.role === 'PATIENT') target = '/patient/login';
+      else if (u?.userType === 'doctor' || u?.role === 'DOCTOR') target = '/doctor/login';
+    }
+    // Fallback: infer from current URL prefix if user blob was missing.
+    if (target === '/login') {
+      const path = window.location.pathname;
+      if (path.startsWith('/app/patient') || path.startsWith('/patient')) target = '/patient/login';
+      else if (path.startsWith('/app/doctor') || path.startsWith('/doctor')) target = '/doctor/login';
+    }
+  } catch { /* keep default */ }
+
   localStorage.removeItem('hms_token');
   localStorage.removeItem('hms_refresh_token');
   localStorage.removeItem('hms_user');
 
-  // Don't redirect if already on login page (prevent redirect loop)
-  if (window.location.pathname === '/login') return;
+  // Don't redirect if already on the target login page (prevent loops).
+  if (window.location.pathname === target) return;
 
   toast.error('Your session has expired. Redirecting to login...');
   setTimeout(() => {
-    window.location.href = '/login';
+    window.location.href = target;
   }, 1500);
 }
 
