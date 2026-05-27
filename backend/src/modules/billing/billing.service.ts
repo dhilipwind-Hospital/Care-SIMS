@@ -27,6 +27,24 @@ export class BillingService {
     const discountAmount = dto.discountAmount || 0;
     const taxAmount = dto.taxAmount || 0;
     const netTotal = subtotal - discountAmount + taxAmount;
+
+    // Invoice.locationId is NOT NULL. Fall back: staff primary -> patient
+    // home -> first active tenant location.
+    let locationId = dto.locationId;
+    if (!locationId) {
+      const staff = await this.prisma.tenantUser.findUnique({ where: { id: createdById }, select: { primaryLocationId: true } }).catch(() => null);
+      locationId = staff?.primaryLocationId;
+    }
+    if (!locationId && dto.patientId) {
+      const pat = await this.prisma.patient.findFirst({ where: { id: dto.patientId, tenantId }, select: { locationId: true } });
+      locationId = pat?.locationId;
+    }
+    if (!locationId) {
+      const loc = await this.prisma.tenantLocation.findFirst({ where: { tenantId, isActive: true }, orderBy: { createdAt: 'asc' }, select: { id: true } });
+      locationId = loc?.id;
+    }
+    if (!locationId) throw new BadRequestException('No active location for this organization');
+
     return generateSequentialId(this.prisma, {
       table: 'Invoice',
       idColumn: 'invoiceNumber',
@@ -35,7 +53,7 @@ export class BillingService {
       callback: async (tx, invoiceNumber) => {
         return tx.invoice.create({
           data: {
-            tenantId, invoiceNumber, locationId: dto.locationId, patientId: dto.patientId,
+            tenantId, invoiceNumber, locationId, patientId: dto.patientId,
             admissionId: dto.admissionId, doctorId: dto.doctorId, departmentId: dto.departmentId,
             invoiceType: dto.invoiceType || 'OPD', subtotal, discountAmount, taxAmount, netTotal,
             paidAmount: 0, status: 'DRAFT',

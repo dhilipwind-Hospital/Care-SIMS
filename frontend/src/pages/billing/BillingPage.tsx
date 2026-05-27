@@ -33,6 +33,9 @@ export default function BillingPage() {
   const [patientSearch, setPatientSearch] = useState('');
   const [patients, setPatients] = useState<any[]>([]);
   const [patientLoading, setPatientLoading] = useState(false);
+  // Keep the selected patient object so the chip can render name + PID even
+  // after the search results dropdown is cleared.
+  const [selectedPatient, setSelectedPatient] = useState<any>(null);
 
   const [revenueStats, setRevenueStats] = useState<any>(null);
 
@@ -104,7 +107,7 @@ export default function BillingPage() {
     try {
       const payload = { ...form, lineItems: items.filter(it => it.description && it.unitPrice).map(it => ({ ...it, unitPrice: Number(it.unitPrice), quantity: Number(it.quantity) })) };
       await api.post('/billing/invoices', payload);
-      setShowNew(false); setForm(EMPTY_FORM); setItems([{ ...EMPTY_ITEM }]); setPatientSearch('');
+      setShowNew(false); setForm(EMPTY_FORM); setItems([{ ...EMPTY_ITEM }]); setPatientSearch(''); setSelectedPatient(null);
       fetchInvoices();
     } catch (err: any) { setFormError(err.response?.data?.message || 'Failed to create invoice'); }
     finally { setSubmitting(false); }
@@ -354,7 +357,7 @@ export default function BillingPage() {
             <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 rounded-full border-2 border-teal-600 text-teal-700 text-sm font-semibold hover:bg-teal-50 transition-all">
               <Printer size={14} /> Print Invoice
             </button>
-            <button onClick={() => { setShowNew(true); setForm(EMPTY_FORM); setItems([{ ...EMPTY_ITEM }]); setFormError(''); setPatientSearch(''); }}
+            <button onClick={() => { setShowNew(true); setForm(EMPTY_FORM); setItems([{ ...EMPTY_ITEM }]); setFormError(''); setPatientSearch(''); setSelectedPatient(null); }}
               className="flex items-center gap-2 px-4 py-2 rounded-full text-white text-sm font-semibold transition-all"
               style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
               <Plus size={14} /> New Invoice
@@ -892,10 +895,13 @@ export default function BillingPage() {
             {/* Patient search */}
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Patient <span className="text-red-500">*</span></label>
-              {form.patientId ? (
+              {form.patientId && selectedPatient ? (
                 <div className="flex items-center justify-between p-3 bg-teal-50 rounded-xl">
-                  <span className="text-sm font-medium text-teal-800">{patients.find(p => p.id === form.patientId)?.firstName} {patients.find(p => p.id === form.patientId)?.lastName} — {patients.find(p => p.id === form.patientId)?.patientId}</span>
-                  <button type="button" onClick={() => { setForm(f => ({ ...f, patientId: '' })); }} className="text-teal-600 hover:text-red-500"><X size={14} /></button>
+                  <span className="text-sm font-medium text-teal-800">
+                    {selectedPatient.firstName} {selectedPatient.lastName}
+                    {selectedPatient.patientId ? ` — ${selectedPatient.patientId}` : ''}
+                  </span>
+                  <button type="button" onClick={() => { setForm(f => ({ ...f, patientId: '' })); setSelectedPatient(null); }} className="text-teal-600 hover:text-red-500"><X size={14} /></button>
                 </div>
               ) : (
                 <div className="relative">
@@ -906,7 +912,7 @@ export default function BillingPage() {
                   {patients.length > 0 && (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-200 shadow-lg z-10 max-h-48 overflow-y-auto">
                       {patientLoading ? <div className="p-3 text-sm text-gray-400">Searching…</div> : patients.map(p => (
-                        <button key={p.id} type="button" onClick={() => { setForm(f => ({ ...f, patientId: p.id })); setPatients([]); setPatientSearch(''); }}
+                        <button key={p.id} type="button" onClick={() => { setForm(f => ({ ...f, patientId: p.id })); setSelectedPatient(p); setPatients([]); setPatientSearch(''); }}
                           className="w-full text-left px-4 py-2.5 hover:bg-gray-50 text-sm">
                           <span className="font-medium">{p.firstName} {p.lastName}</span>
                           <span className="text-gray-400 ml-2">{p.patientId} · {p.phone}</span>
