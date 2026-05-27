@@ -45,26 +45,100 @@ export class BillingService {
     }
     if (!locationId) throw new BadRequestException('No active location for this organization');
 
-    return generateSequentialId(this.prisma, {
-      table: 'Invoice',
-      idColumn: 'invoiceNumber',
-      prefix: `INV-${new Date().getFullYear()}-`,
-      tenantId,
-      callback: async (tx, invoiceNumber) => {
-        return tx.invoice.create({
-          data: {
-            tenantId, invoiceNumber, locationId, patientId: dto.patientId,
-            admissionId: dto.admissionId, doctorId: dto.doctorId, departmentId: dto.departmentId,
-            invoiceType: dto.invoiceType || 'OPD', subtotal, discountAmount, taxAmount, netTotal,
-            paidAmount: 0, status: 'DRAFT',
-            insuranceProvider: dto.insuranceProvider, policyNumber: dto.policyNumber,
-            createdById,
-            lineItems: { create: dto.lineItems.map((i: any, idx: number) => ({ description: i.description, category: i.category, quantity: i.quantity, unitPrice: i.unitPrice, discountPct: i.discountPct || 0, taxPct: i.taxPct || 0, amount: Number(i.quantity) * Number(i.unitPrice), referenceId: i.referenceId, sortOrder: idx })) },
-          },
-          include: { lineItems: true },
-        });
-      },
+    // Verify the patient belongs to this tenant — otherwise the FK insert
+    // dies with an opaque P2003 that the generic 500 handler masks.
+    const patientExists = await this.prisma.patient.findFirst({ where: { id: dto.patientId, tenantId }, select: { id: true } });
+    if (!patientExists) throw new BadRequestException('Patient not found in this organization');
+
+    try {
+      return await generateSequentialId(this.prisma, {
+        table: 'Invoice',
+        idColumn: 'invoiceNumber',
+        prefix: `INV-${new Date().getFullYear()}-`,
+        tenantId,
+        callback: async (tx, invoiceNumber) => {
+          return tx.invoice.create({
+            data: {
+              tenantId, invoiceNumber, locationId, patientId: dto.patientId,
+              admissionId: dto.admissionId, doctorId: dto.doctorId, departmentId: dto.departmentId,
+              invoiceType: dto.invoiceType || 'OPD', subtotal, discountAmount, taxAmount, netTotal,
+              paidAmount: 0, status: 'DRAFT',
+              insuranceProvider: dto.insuranceProvider, policyNumber: dto.policyNumber,
+              createdById,
+              lineItems: { create: dto.lineItems.map((i: any, idx: number) => ({ description: i.description, category: i.category, quantity: Number(i.quantity), unitPrice: Number(i.unitPrice), discountPct: Number(i.discountPct || 0), taxPct: Number(i.taxPct || 0), amount: Number(i.quantity) * Number(i.unitPrice), referenceId: i.referenceId, sortOrder: idx })) },
+            },
+            include: { lineItems: true },
+          });
+        },
+      });
+    } catch (err: any) {
+      // Log the real Prisma error so we can see it in Render logs instead of
+      // a generic "Internal server error" 500 from Nest.
+      // eslint-disable-next-line no-console
+      console.error('[billing.createInvoice] failed:', {
+        code: err?.code, message: err?.message, meta: err?.meta,
+        ctx: { tenantId, patientId: dto.patientId, locationId, createdById, itemCount: dto.lineItems?.length },
+      });
+      // Re-throw as a 400 with the message so the frontend shows something useful.
+      throw new BadRequestException(err?.message || 'Failed to create invoice');
+    }
+  }
+
+  // Returns a per-patient billing summary: outstanding balance, totals,
+  // breakdown by line-item category (Consultation / Lab / Pharmacy / etc),
+  // and the last 5 invoices. Used by the New Invoice modal so the billing
+  // user sees what the patient already owes before creating another bill.
+  async getPatientBillingSummary(tenantId: string, patientId: string) {
+    const patient = await this.prisma.patient.findFirst({
+      where: { id: patientId, tenantId },
+      select: { id: true, patientId: true, firstName: true, lastName: true, mobile: true, email: true, gender: true, ageYears: true, dateOfBirth: true, bloodGroup: true },
     });
+    if (!patient) return null;
+
+    const invoices = await this.prisma.invoice.findMany({
+      where: { tenantId, patientId },
+      orderBy: { createdAt: 'desc' },
+      include: { lineItems: { select: { category: true, amount: true } } },
+    });
+
+    const totalInvoiced = invoices.reduce((s, i) => s + Number(i.netTotal), 0);
+    const totalPaid = invoices.reduce((s, i) => s + Number(i.paidAmount), 0);
+    const outstanding = invoices
+      .filter(i => i.status !== 'CANCELLED')
+      .reduce((s, i) => s + (Number(i.netTotal) - Number(i.paidAmount)), 0);
+
+    // Category breakdown across all non-cancelled invoices.
+    const byCategory: Record<string, number> = {};
+    for (const inv of invoices) {
+      if (inv.status === 'CANCELLED') continue;
+      for (const li of inv.lineItems) {
+        const key = li.category || 'OTHER';
+        byCategory[key] = (byCategory[key] || 0) + Number(li.amount);
+      }
+    }
+
+    const recent = invoices.slice(0, 5).map(i => ({
+      id: i.id,
+      invoiceNumber: i.invoiceNumber,
+      invoiceType: i.invoiceType,
+      status: i.status,
+      netTotal: Number(i.netTotal),
+      paidAmount: Number(i.paidAmount),
+      balance: Math.max(Number(i.netTotal) - Number(i.paidAmount), 0),
+      createdAt: i.createdAt,
+    }));
+
+    return {
+      patient,
+      totals: {
+        invoicedCount: invoices.length,
+        totalInvoiced,
+        totalPaid,
+        outstanding,
+      },
+      byCategory: Object.entries(byCategory).map(([category, amount]) => ({ category, amount })),
+      recent,
+    };
   }
 
   async getInvoices(tenantId: string, query: any) {

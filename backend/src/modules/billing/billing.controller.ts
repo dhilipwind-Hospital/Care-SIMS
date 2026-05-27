@@ -23,6 +23,14 @@ export class BillingController {
   constructor(private svc: BillingService) {}
   @Get('invoices') getAll(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getInvoices(tid, q); }
 
+  // Per-patient billing summary used by the New Invoice modal so the billing
+  // user sees outstanding balance + breakdown by service category before
+  // creating a new invoice.
+  @Get('patients/:patientId/summary')
+  patientSummary(@CurrentUser('tenantId') tid: string, @Param('patientId') pid: string) {
+    return this.svc.getPatientBillingSummary(tid, pid);
+  }
+
   @Get('invoices/export')
   async exportCsv(@CurrentUser('tenantId') tid: string, @Query() q: any, @Res() res: Response) {
     const { data } = await this.svc.getInvoices(tid, { ...q, page: 1, limit: 10000 });

@@ -36,6 +36,20 @@ export default function BillingPage() {
   // Keep the selected patient object so the chip can render name + PID even
   // after the search results dropdown is cleared.
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
+  // Billing summary shown in the New Invoice modal so the user sees the
+  // patient's outstanding balance, category breakdown and recent invoices.
+  const [patSummary, setPatSummary] = useState<any | null>(null);
+  const [patSummaryLoading, setPatSummaryLoading] = useState(false);
+  useEffect(() => {
+    if (!selectedPatient?.id) { setPatSummary(null); return; }
+    let cancelled = false;
+    setPatSummaryLoading(true);
+    api.get(`/billing/patients/${selectedPatient.id}/summary`)
+      .then(r => { if (!cancelled) setPatSummary(r.data); })
+      .catch(() => { if (!cancelled) setPatSummary(null); })
+      .finally(() => { if (!cancelled) setPatSummaryLoading(false); });
+    return () => { cancelled = true; };
+  }, [selectedPatient?.id]);
 
   const [revenueStats, setRevenueStats] = useState<any>(null);
 
@@ -896,13 +910,80 @@ export default function BillingPage() {
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Patient <span className="text-red-500">*</span></label>
               {form.patientId && selectedPatient ? (
-                <div className="flex items-center justify-between p-3 bg-teal-50 rounded-xl">
-                  <span className="text-sm font-medium text-teal-800">
-                    {selectedPatient.firstName} {selectedPatient.lastName}
-                    {selectedPatient.patientId ? ` — ${selectedPatient.patientId}` : ''}
-                  </span>
-                  <button type="button" onClick={() => { setForm(f => ({ ...f, patientId: '' })); setSelectedPatient(null); }} className="text-teal-600 hover:text-red-500"><X size={14} /></button>
-                </div>
+                <>
+                  <div className="flex items-center justify-between p-3 bg-teal-50 rounded-xl">
+                    <span className="text-sm font-medium text-teal-800">
+                      {selectedPatient.firstName} {selectedPatient.lastName}
+                      {selectedPatient.patientId ? ` — ${selectedPatient.patientId}` : ''}
+                    </span>
+                    <button type="button" onClick={() => { setForm(f => ({ ...f, patientId: '' })); setSelectedPatient(null); }} className="text-teal-600 hover:text-red-500"><X size={14} /></button>
+                  </div>
+
+                  {/* Patient billing summary — outstanding, category breakdown, recent invoices */}
+                  {patSummaryLoading ? (
+                    <div className="mt-3 p-3 text-xs text-gray-400 bg-gray-50 rounded-xl border border-gray-100">Loading patient summary…</div>
+                  ) : patSummary ? (
+                    <div className="mt-3 space-y-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                      {/* Top KPIs */}
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="bg-white rounded-lg p-2 border border-gray-100">
+                          <div className="text-[10px] uppercase text-gray-400 tracking-wide">Invoiced</div>
+                          <div className="text-sm font-bold text-gray-900 mt-0.5">₹{Number(patSummary.totals.totalInvoiced).toLocaleString('en-IN')}</div>
+                          <div className="text-[10px] text-gray-400 mt-0.5">{patSummary.totals.invoicedCount} bill(s)</div>
+                        </div>
+                        <div className="bg-white rounded-lg p-2 border border-gray-100">
+                          <div className="text-[10px] uppercase text-gray-400 tracking-wide">Paid</div>
+                          <div className="text-sm font-bold text-green-700 mt-0.5">₹{Number(patSummary.totals.totalPaid).toLocaleString('en-IN')}</div>
+                        </div>
+                        <div className={`rounded-lg p-2 border ${patSummary.totals.outstanding > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100'}`}>
+                          <div className="text-[10px] uppercase text-gray-400 tracking-wide">Outstanding</div>
+                          <div className={`text-sm font-bold mt-0.5 ${patSummary.totals.outstanding > 0 ? 'text-amber-700' : 'text-gray-900'}`}>₹{Number(patSummary.totals.outstanding).toLocaleString('en-IN')}</div>
+                        </div>
+                      </div>
+
+                      {/* Category breakdown */}
+                      {patSummary.byCategory?.length > 0 && (
+                        <div>
+                          <div className="text-[10px] uppercase text-gray-500 tracking-wide font-semibold mb-1">Spent by Service</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {patSummary.byCategory.map((c: any) => (
+                              <span key={c.category} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 bg-white border border-gray-200 rounded-full">
+                                <span className="text-gray-500">{c.category}:</span>
+                                <span className="font-semibold text-gray-800">₹{Number(c.amount).toLocaleString('en-IN')}</span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Recent invoices */}
+                      {patSummary.recent?.length > 0 && (
+                        <div>
+                          <div className="text-[10px] uppercase text-gray-500 tracking-wide font-semibold mb-1">Recent Invoices</div>
+                          <div className="space-y-1">
+                            {patSummary.recent.map((r: any) => (
+                              <div key={r.id} className="flex items-center justify-between text-[11px] bg-white rounded-md px-2 py-1 border border-gray-100">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="font-semibold text-gray-700 truncate">{r.invoiceNumber}</span>
+                                  <span className="text-gray-400">{new Date(r.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
+                                  <span className={`px-1.5 py-px rounded text-[9px] font-bold ${r.status === 'PAID' ? 'bg-green-100 text-green-700' : r.status === 'CANCELLED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{r.status}</span>
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <span className="text-gray-500">₹{Number(r.netTotal).toLocaleString('en-IN')}</span>
+                                  {r.balance > 0 && <span className="text-amber-700 font-semibold">Due ₹{Number(r.balance).toLocaleString('en-IN')}</span>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {patSummary.totals.invoicedCount === 0 && (
+                        <div className="text-xs text-gray-500 italic">No previous invoices for this patient.</div>
+                      )}
+                    </div>
+                  ) : null}
+                </>
               ) : (
                 <div className="relative">
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
