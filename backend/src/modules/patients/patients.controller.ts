@@ -16,11 +16,19 @@ import { UpdatePatientDto } from './dto/update-patient.dto';
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
 @RequireFeature('MOD_PAT_REG')
+// Class-level: write endpoints (POST/PUT) only allow registration desk + clinical.
+// Read endpoints below override this to also include billing/lab/OT — every
+// downstream module needs to look up patient by name/id/mobile.
 @Roles('SYS_ORG_ADMIN', 'SYS_RECEPTIONIST', 'SYS_FRONT_OFFICE', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_NURSE', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE', 'SYS_PHARMACIST', 'SYS_PHARMACY_INCHARGE')
 @Controller('patients')
 export class PatientsController {
   constructor(private svc: PatientsService) {}
-  @Get() findAll(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.findAll(tid, q); }
+
+  // Read endpoints — wider allowlist (billing/lab/OT/blood-bank etc all need
+  // to search patients to attach invoices, samples, OT bookings, donations).
+  @Get()
+  @Roles('SYS_ORG_ADMIN', 'SYS_RECEPTIONIST', 'SYS_FRONT_OFFICE', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_NURSE', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE', 'SYS_PHARMACIST', 'SYS_PHARMACY_INCHARGE', 'SYS_BILLING', 'SYS_BILLING_MANAGER', 'SYS_LAB_TECHNICIAN', 'SYS_LAB_INCHARGE', 'SYS_RADIOLOGIST', 'SYS_OT_INCHARGE', 'SYS_OT_TECHNICIAN', 'SYS_BLOOD_BANK_INCHARGE', 'SYS_AMBULANCE_DRIVER', 'SYS_AMBULANCE_INCHARGE')
+  findAll(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.findAll(tid, q); }
 
   @Get('export')
   async exportCsv(@CurrentUser('tenantId') tid: string, @Query() q: any, @Res() res: Response) {
@@ -39,14 +47,19 @@ export class PatientsController {
     sendCsvResponse(res, `patients-${new Date().toISOString().slice(0, 10)}.csv`, generateCsv(columns, data));
   }
   @Post() create(@CurrentUser('tenantId') tid: string, @Body() body: CreatePatientDto, @CurrentUser('sub') uid: string) { return this.svc.create(tid, body, uid); }
-  @Get('by-pid/:pid') findByPid(@CurrentUser('tenantId') tid: string, @Param('pid') pid: string) { return this.svc.findByPatientId(tid, pid); }
+
+  @Get('by-pid/:pid')
+  @Roles('SYS_ORG_ADMIN', 'SYS_RECEPTIONIST', 'SYS_FRONT_OFFICE', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_NURSE', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE', 'SYS_PHARMACIST', 'SYS_PHARMACY_INCHARGE', 'SYS_BILLING', 'SYS_BILLING_MANAGER', 'SYS_LAB_TECHNICIAN', 'SYS_LAB_INCHARGE', 'SYS_RADIOLOGIST', 'SYS_OT_INCHARGE', 'SYS_OT_TECHNICIAN', 'SYS_BLOOD_BANK_INCHARGE', 'SYS_AMBULANCE_DRIVER', 'SYS_AMBULANCE_INCHARGE')
+  findByPid(@CurrentUser('tenantId') tid: string, @Param('pid') pid: string) { return this.svc.findByPatientId(tid, pid); }
 
   @Get('summary/:id')
   getSummary(@CurrentUser('tenantId') tid: string, @Param('id') id: string) {
     return this.svc.getSummary(tid, id);
   }
 
-  @Get(':id') findOne(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.findOne(tid, id); }
+  @Get(':id')
+  @Roles('SYS_ORG_ADMIN', 'SYS_RECEPTIONIST', 'SYS_FRONT_OFFICE', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_NURSE', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE', 'SYS_PHARMACIST', 'SYS_PHARMACY_INCHARGE', 'SYS_BILLING', 'SYS_BILLING_MANAGER', 'SYS_LAB_TECHNICIAN', 'SYS_LAB_INCHARGE', 'SYS_RADIOLOGIST', 'SYS_OT_INCHARGE', 'SYS_OT_TECHNICIAN', 'SYS_BLOOD_BANK_INCHARGE', 'SYS_AMBULANCE_DRIVER', 'SYS_AMBULANCE_INCHARGE')
+  findOne(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.findOne(tid, id); }
   @Put(':id') update(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: UpdatePatientDto) { return this.svc.update(tid, id, body); }
   @Get(':id/history') history(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getHistory(tid, id); }
   @Get(':id/access-log') accessLog(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getAccessLog(tid, id); }
