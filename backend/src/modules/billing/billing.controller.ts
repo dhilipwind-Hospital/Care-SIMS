@@ -31,6 +31,13 @@ export class BillingController {
     return this.svc.getPatientBillingSummary(tid, pid);
   }
 
+  // Revenue split by service category (Doctor Fee / Lab / Pharmacy / etc).
+  // Drives the "Revenue by Service Line" report.
+  @Get('reports/revenue-by-category')
+  revenueByCategory(@CurrentUser('tenantId') tid: string, @Query() q: any) {
+    return this.svc.getRevenueByCategory(tid, q);
+  }
+
   @Get('invoices/export')
   async exportCsv(@CurrentUser('tenantId') tid: string, @Query() q: any, @Res() res: Response) {
     const { data } = await this.svc.getInvoices(tid, { ...q, page: 1, limit: 10000 });

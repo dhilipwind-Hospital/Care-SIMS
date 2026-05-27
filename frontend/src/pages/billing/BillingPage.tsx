@@ -15,6 +15,20 @@ import { useAuth } from '../../context/AuthContext';
 const EMPTY_FORM = { patientId: '', invoiceType: 'OPD', notes: '' };
 const EMPTY_ITEM = { description: '', category: 'CONSULTATION', quantity: 1, unitPrice: '', taxPct: 0 };
 
+// One source of truth for line-item categories. Reused in the New Invoice
+// modal, the add-item drawer, and the category breakdown chips.
+const LINE_CATEGORIES: Array<{ value: string; label: string; cls: string }> = [
+  { value: 'CONSULTATION', label: 'Doctor Fee',    cls: 'bg-teal-100 text-teal-700' },
+  { value: 'LAB',          label: 'Lab',            cls: 'bg-rose-100 text-rose-700' },
+  { value: 'PHARMACY',     label: 'Pharmacy',       cls: 'bg-amber-100 text-amber-700' },
+  { value: 'RADIOLOGY',    label: 'Radiology',      cls: 'bg-purple-100 text-purple-700' },
+  { value: 'PROCEDURE',    label: 'Procedure / OT', cls: 'bg-blue-100 text-blue-700' },
+  { value: 'ADMISSION',    label: 'Room / Bed',     cls: 'bg-indigo-100 text-indigo-700' },
+  { value: 'NURSING',      label: 'Nursing',        cls: 'bg-pink-100 text-pink-700' },
+  { value: 'OTHER',        label: 'Other',          cls: 'bg-gray-100 text-gray-600' },
+];
+const categoryStyle = (cat?: string) => LINE_CATEGORIES.find(c => c.value === (cat || 'OTHER')) || LINE_CATEGORIES[LINE_CATEGORIES.length - 1];
+
 export default function BillingPage() {
   const { user } = useAuth();
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -52,6 +66,17 @@ export default function BillingPage() {
   }, [selectedPatient?.id]);
 
   const [revenueStats, setRevenueStats] = useState<any>(null);
+  // Revenue by service line (Doctor Fee, Lab, Pharmacy, etc) for the
+  // current month — populated from the new /billing/reports endpoint.
+  const [revByCategory, setRevByCategory] = useState<any | null>(null);
+  useEffect(() => {
+    const now = new Date();
+    const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    const to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+    api.get('/billing/reports/revenue-by-category', { params: { from, to } })
+      .then(r => setRevByCategory(r.data))
+      .catch(() => setRevByCategory(null));
+  }, []);
 
   // Detail panel
   const [selected, setSelected] = useState<any>(null);
@@ -457,6 +482,54 @@ export default function BillingPage() {
         </div>
       )}
 
+      {/* Revenue by Service Line — Doctor Fee, Lab, Pharmacy, etc. */}
+      {revByCategory && revByCategory.totals.invoiced > 0 && (
+        <div className="px-3 sm:px-6 pt-4">
+          <div className="hms-card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-semibold text-gray-800">Revenue by Service Line — This Month</h3>
+                <p className="text-xs text-gray-400 mt-0.5">{revByCategory.totals.invoiceCount} finalized invoice(s)</p>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-gray-400">Collected / Invoiced</div>
+                <div className="text-sm font-bold text-gray-800">
+                  ₹{Number(revByCategory.totals.collected).toLocaleString('en-IN')}
+                  <span className="text-gray-400 font-normal"> / ₹{Number(revByCategory.totals.invoiced).toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2.5">
+              {revByCategory.categories.map((c: any) => {
+                const st = categoryStyle(c.category);
+                const pct = revByCategory.totals.invoiced > 0 ? (c.invoiced / revByCategory.totals.invoiced) * 100 : 0;
+                const collectedPct = c.invoiced > 0 ? (c.collected / c.invoiced) * 100 : 0;
+                return (
+                  <div key={c.category}>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${st.cls}`}>{st.label}</span>
+                        <span className="text-gray-400">{pct.toFixed(1)}% of revenue</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-green-700 font-semibold">₹{Number(c.collected).toLocaleString('en-IN')}</span>
+                        <span className="text-gray-400">/ ₹{Number(c.invoiced).toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+                    <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                      <div className="h-2 bg-teal-200 relative" style={{ width: `${pct}%` }}>
+                        <div className="absolute inset-y-0 left-0 bg-teal-600 rounded-r-full" style={{ width: `${collectedPct}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-3 text-[11px] text-gray-400">Dark fill = collected · Light fill = invoiced. Cancelled + draft invoices excluded.</p>
+          </div>
+        </div>
+      )}
+
       {/* Split content area */}
       <div className="flex flex-1 gap-5 px-3 sm:px-6 py-5 overflow-auto">
 
@@ -574,15 +647,46 @@ export default function BillingPage() {
                       </div>
                     ))}
                   </div>
+                  {/* Category breakdown chips — show how this invoice splits
+                      across Doctor Fee / Lab / Pharmacy / etc. */}
+                  {selected.lineItems?.length > 0 && (() => {
+                    const byCat: Record<string, number> = {};
+                    for (const it of selected.lineItems) {
+                      const amt = Number(it.amount || (Number(it.unitPrice) * Number(it.quantity)));
+                      byCat[it.category || 'OTHER'] = (byCat[it.category || 'OTHER'] || 0) + amt;
+                    }
+                    const rows = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+                    return (
+                      <div className="pt-2 border-t border-gray-100">
+                        <div className="text-[10px] uppercase text-gray-400 tracking-wide font-semibold mb-1.5">By Service</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {rows.map(([cat, amt]) => {
+                            const st = categoryStyle(cat);
+                            return (
+                              <span key={cat} className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold ${st.cls}`}>
+                                {st.label}: ₹{amt.toLocaleString('en-IN')}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {/* Line items summary */}
                   {selected.lineItems?.length > 0 && (
                     <div className="space-y-1.5 pt-2 border-t border-gray-100">
-                      {selected.lineItems.map((it: any) => (
-                        <div key={it.id} className="flex justify-between text-sm">
-                          <span className="text-gray-700">{it.description}</span>
-                          <span className="font-medium text-gray-900">₹{Number(it.amount || (it.unitPrice * it.quantity)).toLocaleString()}</span>
-                        </div>
-                      ))}
+                      {selected.lineItems.map((it: any) => {
+                        const st = categoryStyle(it.category);
+                        return (
+                          <div key={it.id} className="flex justify-between items-center text-sm gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${st.cls}`}>{st.label}</span>
+                              <span className="text-gray-700 truncate">{it.description}</span>
+                            </div>
+                            <span className="font-medium text-gray-900 flex-shrink-0">₹{Number(it.amount || (it.unitPrice * it.quantity)).toLocaleString()}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </>
@@ -734,7 +838,7 @@ export default function BillingPage() {
                       value={newLine.category}
                       onChange={e => setNewLine(l => ({ ...l, category: e.target.value }))}
                       className="col-span-3 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
-                      {['CONSULTATION','LAB','PHARMACY','PROCEDURE','ROOM','OTHER'].map(c => <option key={c}>{c}</option>)}
+                      {LINE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                     </select>
                     <input
                       type="number" min="1"
@@ -946,12 +1050,14 @@ export default function BillingPage() {
                         <div>
                           <div className="text-[10px] uppercase text-gray-500 tracking-wide font-semibold mb-1">Spent by Service</div>
                           <div className="flex flex-wrap gap-1.5">
-                            {patSummary.byCategory.map((c: any) => (
-                              <span key={c.category} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 bg-white border border-gray-200 rounded-full">
-                                <span className="text-gray-500">{c.category}:</span>
-                                <span className="font-semibold text-gray-800">₹{Number(c.amount).toLocaleString('en-IN')}</span>
-                              </span>
-                            ))}
+                            {patSummary.byCategory.map((c: any) => {
+                              const st = categoryStyle(c.category);
+                              return (
+                                <span key={c.category} className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold ${st.cls}`}>
+                                  {st.label}: ₹{Number(c.amount).toLocaleString('en-IN')}
+                                </span>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
@@ -1033,7 +1139,7 @@ export default function BillingPage() {
                       placeholder="Description" className="col-span-4 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                     <select value={item.category} onChange={e => updateItem(i, 'category', e.target.value)}
                       className="col-span-3 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
-                      {['CONSULTATION','PROCEDURE','MEDICATION','LAB_TEST','ROOM','NURSING','MISC'].map(c => <option key={c}>{c}</option>)}
+                      {LINE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                     </select>
                     <input type="number" min="1" value={item.quantity} onChange={e => updateItem(i, 'quantity', e.target.value)}
                       className="col-span-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
@@ -1044,6 +1150,33 @@ export default function BillingPage() {
                   </div>
                 ))}
               </div>
+
+              {/* Category breakdown — split the subtotal by service line so the
+                  billing user sees how the total decomposes. */}
+              {items.some(it => Number(it.unitPrice) > 0) && (() => {
+                const byCat: Record<string, number> = {};
+                for (const it of items) {
+                  const amt = Number(it.quantity || 0) * Number(it.unitPrice || 0);
+                  if (amt <= 0) continue;
+                  byCat[it.category || 'OTHER'] = (byCat[it.category || 'OTHER'] || 0) + amt;
+                }
+                const rows = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+                return (
+                  <div className="mt-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <div className="text-[10px] uppercase text-gray-500 tracking-wide font-semibold mb-2">Breakdown by service</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {rows.map(([cat, amt]) => {
+                        const st = categoryStyle(cat);
+                        return (
+                          <span key={cat} className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold ${st.cls}`}>
+                            {st.label}: ₹{amt.toLocaleString('en-IN')}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="mt-3 text-right text-sm font-bold text-gray-900">Subtotal: ₹{subtotal.toLocaleString('en-IN')}</div>
             </div>
             {formError && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">{formError}</div>}

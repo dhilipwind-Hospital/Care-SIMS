@@ -141,6 +141,58 @@ export class BillingService {
     };
   }
 
+  // Revenue split by line-item category across a date range. Used by the
+  // billing Reports view to show "where the money came from" — Doctor Fee,
+  // Lab, Pharmacy, etc. Only finalized/paid/partial invoices count toward
+  // realized revenue; cancelled invoices are excluded.
+  async getRevenueByCategory(tenantId: string, query: any) {
+    const { from, to, locationId } = query;
+    const where: any = { tenantId, status: { notIn: ['CANCELLED', 'DRAFT'] } };
+    if (locationId) where.locationId = locationId;
+    if (from || to) {
+      where.createdAt = {};
+      if (from) where.createdAt.gte = new Date(from);
+      if (to) {
+        const end = new Date(to);
+        end.setDate(end.getDate() + 1);
+        where.createdAt.lt = end;
+      }
+    }
+    const invoices = await this.prisma.invoice.findMany({
+      where,
+      select: {
+        id: true, paidAmount: true, netTotal: true,
+        lineItems: { select: { category: true, amount: true } },
+      },
+    });
+
+    const byCategory: Record<string, { invoiced: number; collected: number }> = {};
+    let totalInvoiced = 0;
+    let totalCollected = 0;
+    for (const inv of invoices) {
+      const collectionRatio = Number(inv.paidAmount) / (Number(inv.netTotal) || 1);
+      for (const li of inv.lineItems) {
+        const key = li.category || 'OTHER';
+        const amount = Number(li.amount);
+        byCategory[key] = byCategory[key] || { invoiced: 0, collected: 0 };
+        byCategory[key].invoiced += amount;
+        // Distribute the invoice's collected amount across line items
+        // proportional to their contribution.
+        byCategory[key].collected += amount * collectionRatio;
+        totalInvoiced += amount;
+      }
+      totalCollected += Number(inv.paidAmount);
+    }
+
+    return {
+      range: { from: from || null, to: to || null },
+      totals: { invoiced: totalInvoiced, collected: totalCollected, invoiceCount: invoices.length },
+      categories: Object.entries(byCategory)
+        .map(([category, v]) => ({ category, invoiced: v.invoiced, collected: v.collected }))
+        .sort((a, b) => b.invoiced - a.invoiced),
+    };
+  }
+
   async getInvoices(tenantId: string, query: any) {
     const { patientId, locationId, status, type, page = 1, limit = 20 } = query;
     const skip = (Number(page) - 1) * Number(limit);
