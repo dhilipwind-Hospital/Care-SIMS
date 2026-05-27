@@ -12,7 +12,7 @@ import ExportButton from '../../components/ui/ExportButton';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 
-const EMPTY_FORM = { patientId: '', invoiceType: 'OPD', notes: '' };
+const EMPTY_FORM = { patientId: '', doctorId: '', invoiceType: 'OPD', notes: '' };
 const EMPTY_ITEM = { description: '', category: 'CONSULTATION', quantity: 1, unitPrice: '', taxPct: 0 };
 
 // One source of truth for line-item categories. Reused in the New Invoice
@@ -64,6 +64,24 @@ export default function BillingPage() {
       .finally(() => { if (!cancelled) setPatSummaryLoading(false); });
     return () => { cancelled = true; };
   }, [selectedPatient?.id]);
+
+  // Doctors list for the New Invoice modal's optional Doctor picker.
+  const [doctorsList, setDoctorsList] = useState<any[]>([]);
+  useEffect(() => {
+    if (!showNew) return;
+    api.get('/doctors/affiliations/tenant')
+      .then(r => {
+        const rows = Array.isArray(r.data?.data ?? r.data) ? (r.data?.data ?? r.data) : [];
+        // Flatten { doctor: {...} } into a single-level row for the dropdown.
+        setDoctorsList(rows.map((a: any) => ({
+          id: a.doctorId || a.doctor?.id || a.id,
+          firstName: a.doctor?.firstName || a.firstName || '',
+          lastName: a.doctor?.lastName || a.lastName || '',
+          specialties: a.doctor?.specialties || a.specialties,
+        })));
+      })
+      .catch(() => setDoctorsList([]));
+  }, [showNew]);
 
   const [revenueStats, setRevenueStats] = useState<any>(null);
   // Revenue by service line (Doctor Fee, Lab, Pharmacy, etc) for the
@@ -164,10 +182,20 @@ export default function BillingPage() {
   };
 
   const handlePay = async (id: string) => {
-    if (!payAmount) return;
+    // If the user typed a partial amount, use it; otherwise default to the
+    // full outstanding balance. The dead button was caused by requiring
+    // payAmount to be set when the page has no amount input.
+    const amt = Number(payAmount) > 0 ? Number(payAmount) : balance;
+    if (amt <= 0) { toast('Nothing to collect', { icon: 'ℹ️' }); return; }
     setPaying(true);
     try {
-      await api.post(`/billing/invoices/${id}/payments`, { amount: Number(payAmount), paymentMethod: payMethod });
+      // If the invoice is still in DRAFT, finalize it before recording a
+      // payment — backend's recordPayment doesn't auto-finalize.
+      if (selected?.status === 'DRAFT') {
+        try { await api.patch(`/billing/invoices/${id}/finalize`); } catch {}
+      }
+      await api.post(`/billing/invoices/${id}/payments`, { amount: amt, paymentMethod: payMethod });
+      toast.success('Payment recorded');
       setPayAmount(''); fetchInvoices();
       const { data } = await api.get(`/billing/invoices/${id}`); setSelected(data);
     } catch (err: any) { toast.error(err.response?.data?.message || 'Payment failed'); }
@@ -720,6 +748,25 @@ export default function BillingPage() {
                 <span className="text-sm font-semibold text-gray-700">Amount Due</span>
                 <span className="text-2xl font-black text-gray-900">₹{selected ? balance.toLocaleString() : '0'}</span>
               </div>
+              {/* Editable amount to collect — defaults to the full balance. */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Amount to Collect</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number" min={0} step={1}
+                    value={payAmount}
+                    onChange={e => setPayAmount(e.target.value)}
+                    placeholder={selected ? String(balance) : '0'}
+                    className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                  <button
+                    type="button"
+                    onClick={() => setPayAmount(String(balance))}
+                    disabled={!selected || balance <= 0}
+                    className="text-xs px-3 py-2 rounded-lg border border-teal-200 text-teal-700 hover:bg-teal-50 disabled:opacity-50">
+                    Full
+                  </button>
+                </div>
+              </div>
               <button
                 onClick={() => selected && handlePay(selected.id)}
                 disabled={paying || !selected || balance <= 0}
@@ -1110,7 +1157,7 @@ export default function BillingPage() {
                 </div>
               )}
             </div>
-            {/* Invoice type */}
+            {/* Invoice type + Doctor + Notes */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Invoice Type</label>
@@ -1120,6 +1167,18 @@ export default function BillingPage() {
                 </select>
               </div>
               <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Doctor (optional)</label>
+                <select value={form.doctorId} onChange={e => setForm(f => ({ ...f, doctorId: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+                  <option value="">— Select doctor —</option>
+                  {doctorsList.map(d => (
+                    <option key={d.id} value={d.id}>
+                      Dr. {d.firstName} {d.lastName}{d.specialties?.length ? ` · ${d.specialties[0]}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-span-2">
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Notes</label>
                 <input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                   placeholder="Optional notes…"
