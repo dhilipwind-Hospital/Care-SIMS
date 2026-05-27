@@ -127,13 +127,54 @@ export default function PatientAppointmentsPage() {
   };
 
   const handleCancel = async (id: string) => {
+    if (!confirm('Cancel this appointment? This cannot be undone.')) return;
     setCancellingId(id);
     try {
-      await api.patch(`/appointments/${id}/cancel`, { reason: 'Cancelled by patient' });
+      // Use the patient-scoped endpoint that enforces ownership.
+      await api.patch(`/auth/patient/me/appointments/${id}/cancel`, { reason: 'Cancelled by patient' });
       toast.success('Appointment cancelled');
       setMyAppts(prev => prev.map(a => a.id === id ? { ...a, status: 'CANCELLED' } : a));
-    } catch { toast.error('Failed to cancel'); }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to cancel');
+    }
     finally { setCancellingId(null); }
+  };
+
+  // ── Reschedule modal state ────────────────────────────────────
+  const [rescheduling, setRescheduling] = useState<any | null>(null);
+  const [reschDate, setReschDate]       = useState('');
+  const [reschTime, setReschTime]       = useState('');
+  const [reschSlots, setReschSlots]     = useState<Array<{ time: string; available: boolean }>>([]);
+  const [reschLoading, setReschLoading] = useState(false);
+  const [reschSubmitting, setReschSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!rescheduling || !reschDate) { setReschSlots([]); return; }
+    setReschLoading(true);
+    setReschTime('');
+    api.get('/auth/patient/me/slots', {
+      params: { doctorId: rescheduling.doctorId, date: reschDate },
+    })
+      .then(r => setReschSlots(Array.isArray(r.data) ? r.data : r.data?.slots || []))
+      .catch(() => setReschSlots([]))
+      .finally(() => setReschLoading(false));
+  }, [rescheduling, reschDate]);
+
+  const submitReschedule = async () => {
+    if (!rescheduling || !reschDate || !reschTime) return;
+    setReschSubmitting(true);
+    try {
+      await api.patch(`/auth/patient/me/appointments/${rescheduling.id}/reschedule`, {
+        appointmentDate: reschDate,
+        appointmentTime: reschTime,
+      });
+      toast.success('Appointment rescheduled');
+      setMyAppts(prev => prev.map(a => a.id === rescheduling.id ? { ...a, appointmentDate: reschDate, appointmentTime: reschTime, status: 'SCHEDULED' } : a));
+      setRescheduling(null);
+      setReschDate(''); setReschTime(''); setReschSlots([]);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to reschedule');
+    } finally { setReschSubmitting(false); }
   };
 
   const resetBooking = () => {
@@ -263,17 +304,98 @@ export default function PatientAppointmentsPage() {
                   )}
                 </div>
                 {appt.status === 'SCHEDULED' && (
-                  <button
-                    onClick={() => handleCancel(appt.id)}
-                    disabled={cancellingId === appt.id}
-                    className="flex-shrink-0 flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
-                    {cancellingId === appt.id ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}
-                    Cancel
-                  </button>
+                  <div className="flex-shrink-0 flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setRescheduling(appt);
+                        setReschDate('');
+                        setReschTime('');
+                        setReschSlots([]);
+                      }}
+                      className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-teal-200 text-teal-700 hover:bg-teal-50 transition-colors">
+                      <Calendar size={11} />
+                      Reschedule
+                    </button>
+                    <button
+                      onClick={() => handleCancel(appt.id)}
+                      disabled={cancellingId === appt.id}
+                      className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
+                      {cancellingId === appt.id ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}
+                      Cancel
+                    </button>
+                  </div>
                 )}
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {/* Reschedule modal */}
+      {rescheduling && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setRescheduling(null)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-gray-900">Reschedule Appointment</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Currently: {new Date(rescheduling.appointmentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} · {rescheduling.appointmentTime}
+                </p>
+              </div>
+              <button onClick={() => setRescheduling(null)} className="p-1 rounded hover:bg-gray-100"><X size={18} /></button>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">New Date</label>
+                <input
+                  type="date"
+                  value={reschDate}
+                  min={new Date().toISOString().slice(0, 10)}
+                  onChange={e => setReschDate(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">New Slot</label>
+                {!reschDate ? (
+                  <p className="mt-2 text-xs text-gray-400">Pick a date first.</p>
+                ) : reschLoading ? (
+                  <p className="mt-2 text-xs text-gray-400 flex items-center gap-1"><Loader2 size={11} className="animate-spin" /> Loading slots…</p>
+                ) : reschSlots.length === 0 ? (
+                  <p className="mt-2 text-xs text-gray-400">No slots available on this date (doctor may be on leave).</p>
+                ) : (
+                  <div className="mt-2 grid grid-cols-4 gap-2 max-h-40 overflow-y-auto">
+                    {reschSlots.map(s => (
+                      <button
+                        key={s.time}
+                        type="button"
+                        disabled={!s.available}
+                        onClick={() => setReschTime(s.time)}
+                        className={`px-2 py-1.5 text-xs rounded-md border transition-colors ${
+                          reschTime === s.time
+                            ? 'bg-teal-600 text-white border-teal-600'
+                            : s.available
+                              ? 'bg-white border-gray-200 text-gray-700 hover:border-teal-300'
+                              : 'bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed'
+                        }`}>
+                        {s.time}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
+              <button onClick={() => setRescheduling(null)} className="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 rounded-lg">Cancel</button>
+              <button
+                onClick={submitReschedule}
+                disabled={!reschDate || !reschTime || reschSubmitting}
+                className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50">
+                {reschSubmitting ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
+                Confirm
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

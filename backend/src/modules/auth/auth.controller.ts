@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Put, Patch, Delete, Body, Req, UseGuards, Query, HttpCode } from '@nestjs/common';
+import { Controller, Post, Get, Put, Patch, Delete, Body, Req, UseGuards, Query, HttpCode, Param } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
@@ -151,6 +151,27 @@ export class AuthController {
   @Get('patient/me/billing')
   getPatientBilling(@CurrentUser() user: any, @Query() q: any) {
     return this.authService.getPatientBilling(user.tenantId, user.sub, q);
+  }
+
+  // Patient pays an invoice via the portal (mock — no real gateway).
+  @UseGuards(JwtAuthGuard)
+  @Post('patient/me/invoices/:id/pay')
+  payPatientInvoice(@CurrentUser() user: any, @Param('id') id: string, @Body() body: any) {
+    return this.authService.payPatientInvoice(user.tenantId, user.sub, id, body || {});
+  }
+
+  // Patient cancels their own appointment.
+  @UseGuards(JwtAuthGuard)
+  @Patch('patient/me/appointments/:id/cancel')
+  cancelPatientAppointment(@CurrentUser() user: any, @Param('id') id: string, @Body() body: any) {
+    return this.authService.cancelPatientAppointment(user.tenantId, user.sub, id, body?.reason || '');
+  }
+
+  // Patient reschedules their own appointment.
+  @UseGuards(JwtAuthGuard)
+  @Patch('patient/me/appointments/:id/reschedule')
+  reschedulePatientAppointment(@CurrentUser() user: any, @Param('id') id: string, @Body() body: any) {
+    return this.authService.reschedulePatientAppointment(user.tenantId, user.sub, id, body || {});
   }
 
   @UseGuards(JwtAuthGuard)

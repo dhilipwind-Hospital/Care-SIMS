@@ -640,6 +640,100 @@ export class AuthService {
     return { data, meta: { total, page: Number(page), limit: Number(limit) } };
   }
 
+  // Mock online payment. No real gateway — records a Payment row of the
+  // requested amount against the invoice. Used by the patient portal "Pay
+  // Online" button for the demo. Idempotent via referenceNumber if the
+  // caller supplies one.
+  async payPatientInvoice(tenantId: string, patientAccountId: string, invoiceId: string, dto: any) {
+    const { patient } = await this.resolvePatientRecord(tenantId, patientAccountId);
+    if (!patient) throw new BadRequestException('Patient record not found in this organization');
+    return this.prisma.$transaction(async (tx) => {
+      const inv = await tx.invoice.findFirst({
+        where: { id: invoiceId, tenantId, patientId: patient.id },
+        include: { lineItems: true, payments: true },
+      });
+      if (!inv) throw new BadRequestException('Invoice not found or not yours');
+      if (inv.status === 'CANCELLED') throw new BadRequestException('Cannot pay a cancelled invoice');
+      if (inv.status === 'PAID') throw new BadRequestException('Invoice is already fully paid');
+      const balance = Number(inv.netTotal) - Number(inv.paidAmount);
+      const amount = Number(dto.amount) > 0 ? Math.min(Number(dto.amount), balance) : balance;
+      if (amount <= 0) throw new BadRequestException('Nothing to pay');
+      const payment = await tx.payment.create({
+        data: {
+          tenantId,
+          invoiceId,
+          amount,
+          paymentMethod: dto.paymentMethod || 'ONLINE',
+          referenceNumber: dto.referenceNumber || `PAT-${Date.now()}`,
+          notes: dto.notes || 'Paid via patient portal',
+          recordedById: patientAccountId,
+        } as any,
+      });
+      const newPaid = Number(inv.paidAmount) + amount;
+      const newBalance = Number(inv.netTotal) - newPaid;
+      const status = newBalance <= 0 ? 'PAID' : 'PARTIAL';
+      await tx.invoice.update({ where: { id: invoiceId }, data: { paidAmount: newPaid, status } });
+      return { payment, invoice: { id: invoiceId, paidAmount: newPaid, balance: Math.max(newBalance, 0), status } };
+    });
+  }
+
+  // Patient cancels their own upcoming appointment. Cannot cancel one
+  // already completed or cancelled.
+  async cancelPatientAppointment(tenantId: string, patientAccountId: string, appointmentId: string, reason: string) {
+    const { patient } = await this.resolvePatientRecord(tenantId, patientAccountId);
+    if (!patient) throw new BadRequestException('Patient record not found');
+    const appt = await this.prisma.appointment.findFirst({ where: { id: appointmentId, tenantId, patientId: patient.id } });
+    if (!appt) throw new BadRequestException('Appointment not found or not yours');
+    if (appt.status === 'CANCELLED') throw new BadRequestException('Already cancelled');
+    if (appt.status === 'COMPLETED') throw new BadRequestException('Cannot cancel a completed appointment');
+    return this.prisma.appointment.update({
+      where: { id: appointmentId },
+      data: {
+        status: 'CANCELLED',
+        cancellationReason: reason || 'Cancelled by patient',
+        cancelledById: patientAccountId,
+        cancelledAt: new Date(),
+      } as any,
+    });
+  }
+
+  // Patient reschedules their own upcoming appointment to a new date/time.
+  // Validates the new slot doesn't conflict with another booking on the
+  // same doctor.
+  async reschedulePatientAppointment(tenantId: string, patientAccountId: string, appointmentId: string, dto: any) {
+    const { patient } = await this.resolvePatientRecord(tenantId, patientAccountId);
+    if (!patient) throw new BadRequestException('Patient record not found');
+    const appt = await this.prisma.appointment.findFirst({ where: { id: appointmentId, tenantId, patientId: patient.id } });
+    if (!appt) throw new BadRequestException('Appointment not found or not yours');
+    if (appt.status === 'CANCELLED' || appt.status === 'COMPLETED') {
+      throw new BadRequestException('Cannot reschedule a cancelled or completed appointment');
+    }
+    if (!dto.appointmentDate || !dto.appointmentTime) {
+      throw new BadRequestException('appointmentDate and appointmentTime are required');
+    }
+    const newDate = new Date(dto.appointmentDate);
+    const conflict = await this.prisma.appointment.findFirst({
+      where: {
+        tenantId,
+        doctorId: appt.doctorId,
+        appointmentDate: newDate,
+        appointmentTime: dto.appointmentTime,
+        status: { notIn: ['CANCELLED', 'NO_SHOW'] },
+        id: { not: appointmentId },
+      },
+    });
+    if (conflict) throw new BadRequestException('That slot is no longer available');
+    return this.prisma.appointment.update({
+      where: { id: appointmentId },
+      data: {
+        appointmentDate: newDate,
+        appointmentTime: dto.appointmentTime,
+        rescheduledFromId: appt.id,
+        status: 'SCHEDULED',
+      } as any,
+    });
+  }
+
   async getPatientVitals(tenantId: string, patientAccountId: string) {
     const { patient } = await this.resolvePatientRecord(tenantId, patientAccountId);
     if (!patient) return [];

@@ -40,6 +40,30 @@ export default function PatientBillingPage() {
   const totalPaid = invoices.filter(i => i.status === 'PAID').reduce((s, i) => s + Number(i.netTotal || 0), 0);
   const totalPending = invoices.filter(i => ['FINALIZED', 'PARTIAL'].includes(i.status)).reduce((s, i) => s + (Number(i.netTotal || 0) - Number(i.paidAmount || 0)), 0);
 
+  // Mock online payment — POSTs to backend which records a Payment row and
+  // flips the invoice to PAID/PARTIAL. No real gateway is wired; this is
+  // the demo flow.
+  const [paying, setPaying] = useState<string | null>(null);
+  const handlePay = async (inv: any) => {
+    if (paying) return;
+    const balance = Number(inv.netTotal || 0) - Number(inv.paidAmount || 0);
+    if (balance <= 0) { toast('Already paid', { icon: 'ℹ️' }); return; }
+    if (!confirm(`Pay ₹${balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} for invoice ${inv.invoiceNumber}? (Demo — no real gateway)`)) return;
+    setPaying(inv.id);
+    try {
+      await api.post(`/auth/patient/me/invoices/${inv.id}/pay`, {
+        amount: balance,
+        paymentMethod: 'ONLINE',
+      });
+      toast.success('Payment successful');
+      fetchData(filter);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Payment failed');
+    } finally {
+      setPaying(null);
+    }
+  };
+
   const handlePrintInvoice = (inv: any) => {
     const win = window.open('', '_blank', 'width=800,height=700');
     if (!win) return;
@@ -169,6 +193,14 @@ export default function PatientBillingPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
+                      {balance > 0 && inv.status !== 'CANCELLED' && (
+                        <button
+                          onClick={e => { e.stopPropagation(); handlePay(inv); }}
+                          disabled={paying === inv.id}
+                          className="flex items-center gap-1 text-xs px-2.5 py-1 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-semibold disabled:opacity-50">
+                          <CreditCard size={11} /> {paying === inv.id ? 'Paying…' : `Pay ${fmtAmt(balance)}`}
+                        </button>
+                      )}
                       <button onClick={e => { e.stopPropagation(); handlePrintInvoice(inv); }} className="flex items-center gap-1 text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 font-medium"><Printer size={11} /> Print</button>
                       {isOpen ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                     </div>
