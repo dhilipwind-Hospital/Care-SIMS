@@ -102,7 +102,13 @@ export async function generateSequentialId<T>(
   // NOTE: Serializable isolation is incompatible with the Supabase transaction
   // pooler (pgBouncer) used in production. Use the default READ COMMITTED level
   // and rely on a unique constraint + small retry loop to handle races.
-  const MAX_RETRIES = 3;
+  //
+  // The MAX(...) approach hits a real problem under pgBouncer transaction
+  // pooling: a freshly-inserted row in another connection may not be visible
+  // to our SELECT yet, so two concurrent invoices both pick the same number
+  // and one fails with P2002. Retry loop covers occasional bursts; on every
+  // retry we also append a small random suffix so collisions can't repeat.
+  const MAX_RETRIES = 5;
   let lastErr: any;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
@@ -114,13 +120,19 @@ export async function generateSequentialId<T>(
           tenantId,
         );
         const nextVal = Number(result[0]?.nextVal ?? 1) + attempt; // bump on retry
-        const nextId = `${prefix}${String(nextVal).padStart(padLength, '0')}`;
+        // On retries, append a 2-char random suffix to dodge sticky pgBouncer
+        // visibility. First attempt keeps the clean INV-YYYY-000001 format.
+        const suffix = attempt > 0 ? `-${Math.random().toString(36).slice(2, 4).toUpperCase()}` : '';
+        const nextId = `${prefix}${String(nextVal).padStart(padLength, '0')}${suffix}`;
         return callback(tx, nextId);
       });
     } catch (err: any) {
       lastErr = err;
-      // Retry only on unique-constraint races
-      if (err?.code === 'P2002') continue;
+      // Retry on unique-constraint races. Also retry on Postgres serialization
+      // failures (40001) which can surface as raw errors here.
+      const msg = String(err?.message || '');
+      const isUniqueViolation = err?.code === 'P2002' || msg.includes('Unique constraint') || msg.includes('duplicate key');
+      if (isUniqueViolation) continue;
       throw err;
     }
   }
