@@ -499,6 +499,10 @@ export class AuthService {
     // row exists (e.g. patient onboarded before the auto-create code shipped,
     // or the select-org auto-create failed silently), create one now using
     // the account's profile data + the tenant's first active location.
+    //
+    // Important: Patient.gender, .mobile, .firstName, .lastName, .patientId
+    // are all NOT NULL in the schema, while their PatientAccount counterparts
+    // are nullable. Use sensible defaults when account is missing fields.
     if (!patient && account.email) {
       const loc = await this.prisma.tenantLocation.findFirst({
         where: { tenantId, isActive: true },
@@ -507,25 +511,25 @@ export class AuthService {
       });
       if (loc) {
         try {
-          const pid = `P${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 9)}`;
+          const pid = `P${Date.now().toString().slice(-7)}${Math.floor(Math.random() * 90 + 10)}`;
           patient = await this.prisma.patient.create({
             data: {
               tenantId,
               locationId: loc.id,
               patientId: pid,
               registrationType: 'SELF',
-              firstName: account.firstName,
-              lastName: account.lastName,
+              firstName: account.firstName || 'Patient',
+              lastName: account.lastName || 'Account',
               dateOfBirth: account.dateOfBirth,
-              gender: account.gender,
+              gender: account.gender || 'OTHER',
               bloodGroup: account.bloodGroup,
-              mobile: account.phone,
+              mobile: account.phone || '',
               email: account.email,
             } as any,
           });
         } catch (err) {
           // eslint-disable-next-line no-console
-          console.error('[resolvePatientRecord] self-heal create failed:', err);
+          console.error('[resolvePatientRecord] self-heal create failed:', { code: (err as any)?.code, message: (err as any)?.message, meta: (err as any)?.meta });
         }
       }
     }
