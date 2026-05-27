@@ -375,9 +375,10 @@ export class AuthService {
 
     await this.prisma.patientAccount.update({ where: { id: account.id }, data: { lastLogin: new Date() } });
 
-    // Return list of active organizations for the patient to choose
+    // Return organizations the patient can choose. Trial orgs are still
+    // "open for business" — only suspended/cancelled orgs should be hidden.
     const orgs = await this.prisma.tenant.findMany({
-      where: { isActive: true, subscriptionStatus: 'ACTIVE' },
+      where: { isActive: true, subscriptionStatus: { in: ['ACTIVE', 'TRIAL'] } },
       select: {
         id: true, tradeName: true, legalName: true, orgType: true, slug: true,
         locations: { where: { isActive: true }, select: { id: true, name: true, city: true, type: true } },
