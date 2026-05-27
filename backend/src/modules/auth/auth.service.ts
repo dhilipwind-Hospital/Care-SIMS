@@ -490,10 +490,46 @@ export class AuthService {
   private async resolvePatientRecord(tenantId: string, patientAccountId: string) {
     const account = await this.prisma.patientAccount.findUnique({ where: { id: patientAccountId } });
     if (!account) throw new UnauthorizedException('Patient account not found');
-    // Find the patient record in this tenant by email or mobile
-    const patient = await this.prisma.patient.findFirst({
+    // Find the patient record in this tenant by email.
+    let patient = await this.prisma.patient.findFirst({
       where: { tenantId, email: account.email },
     });
+
+    // Self-heal: if the account holds a tenant-scoped token but no Patient
+    // row exists (e.g. patient onboarded before the auto-create code shipped,
+    // or the select-org auto-create failed silently), create one now using
+    // the account's profile data + the tenant's first active location.
+    if (!patient && account.email) {
+      const loc = await this.prisma.tenantLocation.findFirst({
+        where: { tenantId, isActive: true },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      });
+      if (loc) {
+        try {
+          const pid = `P${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 9)}`;
+          patient = await this.prisma.patient.create({
+            data: {
+              tenantId,
+              locationId: loc.id,
+              patientId: pid,
+              registrationType: 'SELF',
+              firstName: account.firstName,
+              lastName: account.lastName,
+              dateOfBirth: account.dateOfBirth,
+              gender: account.gender,
+              bloodGroup: account.bloodGroup,
+              mobile: account.phone,
+              email: account.email,
+            } as any,
+          });
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error('[resolvePatientRecord] self-heal create failed:', err);
+        }
+      }
+    }
+
     return { account, patient };
   }
 
