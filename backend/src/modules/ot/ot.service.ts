@@ -545,7 +545,106 @@ export class OTService {
       this.logger.error(`Failed to prepare discharge summary for ${booking.bookingNumber}`, err),
     );
 
+    // Draft a post-op prescription template (analgesic + antibiotic if the
+    // procedure was contaminated/dirty class). Doctor edits/signs before
+    // sending to pharmacy.
+    this.createPostOpPrescriptionDraft(tenantId, updated).catch((err) =>
+      this.logger.error(`Failed to draft post-op prescription for ${booking.bookingNumber}`, err),
+    );
+
+    // Auto-order a routine post-op CBC (6h post-op) so nursing has the
+    // bloodwork queued. Doctor can cancel via the lab module if not needed.
+    this.createPostOpLabOrder(tenantId, updated).catch((err) =>
+      this.logger.error(`Failed to draft post-op lab order for ${booking.bookingNumber}`, err),
+    );
+
     return updated;
+  }
+
+  // Idempotent post-op prescription draft. We tag the notes with the booking
+  // id so re-running complete (or completing multiple times during testing)
+  // never duplicates the script. The doctor sees a PENDING prescription on
+  // their dashboard and can edit before clicking "Send to Pharmacy".
+  private async createPostOpPrescriptionDraft(tenantId: string, booking: any): Promise<void> {
+    if (!booking.primarySurgeonId) return;
+    const marker = `[ot:${booking.id}]`;
+    const existing = await this.prisma.prescription.findFirst({
+      where: { tenantId, patientId: booking.patientId, notes: { contains: marker } },
+      select: { id: true },
+    });
+    if (existing) return;
+
+    // Infection risk class is stashed in preOpChecklist JSON (no dedicated column).
+    const checklist = (booking.preOpChecklist || {}) as any;
+    const riskClass = checklist?.infectionRiskClass || '';
+    const needsAntibiotic = riskClass === 'CONTAMINATED' || riskClass === 'DIRTY';
+
+    const items: any[] = [
+      // Pain management — standard for any surgery.
+      { drugName: 'Paracetamol', strength: '500 mg', dosageForm: 'TABLET', dosage: '1 tab', frequency: 'QID', durationDays: 5, route: 'ORAL', instructions: 'After food. Maximum 4 g/day.', quantity: 20, refillsAllowed: 0, isControlled: false, status: 'PENDING', sortOrder: 0 },
+      { drugName: 'Diclofenac', strength: '50 mg', dosageForm: 'TABLET', dosage: '1 tab', frequency: 'BD', durationDays: 3, route: 'ORAL', instructions: 'After food. Stop if gastritis.', quantity: 6, refillsAllowed: 0, isControlled: false, status: 'PENDING', sortOrder: 1 },
+      // PPI cover.
+      { drugName: 'Pantoprazole', strength: '40 mg', dosageForm: 'TABLET', dosage: '1 tab', frequency: 'OD', durationDays: 5, route: 'ORAL', instructions: 'Before breakfast.', quantity: 5, refillsAllowed: 0, isControlled: false, status: 'PENDING', sortOrder: 2 },
+    ];
+    if (needsAntibiotic) {
+      items.push({ drugName: 'Amoxicillin + Clavulanic Acid', strength: '625 mg', dosageForm: 'TABLET', dosage: '1 tab', frequency: 'TDS', durationDays: 5, route: 'ORAL', instructions: 'After food. Complete the full course.', quantity: 15, refillsAllowed: 0, isControlled: false, status: 'PENDING', sortOrder: 3 });
+    }
+
+    const validity = new Date(); validity.setDate(validity.getDate() + 30);
+    const rxNumber = `RX-${Date.now()}-OT-${booking.bookingNumber.split('-').pop()}`;
+    try {
+      await this.prisma.prescription.create({
+        data: {
+          tenantId,
+          rxNumber,
+          locationId: booking.locationId,
+          patientId: booking.patientId,
+          doctorId: booking.primarySurgeonId,
+          validityDate: validity,
+          notes: `Post-op draft for ${booking.procedureName} ${marker}. Review & sign before sending to pharmacy.`,
+          status: 'PENDING',
+          items: { create: items },
+        },
+      });
+    } catch (err) {
+      this.logger.error(`Could not create post-op Rx draft for ${booking.bookingNumber}`, err as any);
+    }
+  }
+
+  // Idempotent post-op lab order: routine CBC ~6h post-op. Tagged with the
+  // booking id in clinicalNotes so retry never duplicates.
+  private async createPostOpLabOrder(tenantId: string, booking: any): Promise<void> {
+    if (!booking.primarySurgeonId) return;
+    const marker = `[ot:${booking.id}]`;
+    const existing = await this.prisma.labOrder.findFirst({
+      where: { tenantId, patientId: booking.patientId, clinicalNotes: { contains: marker } },
+      select: { id: true },
+    });
+    if (existing) return;
+
+    const orderNumber = `LAB-${Date.now()}-OT-${booking.bookingNumber.split('-').pop()}`;
+    try {
+      await this.prisma.labOrder.create({
+        data: {
+          tenantId,
+          orderNumber,
+          locationId: booking.locationId,
+          patientId: booking.patientId,
+          doctorId: booking.primarySurgeonId,
+          priority: 'ROUTINE',
+          status: 'ORDERED',
+          clinicalNotes: `Post-op CBC for ${booking.procedureName} ${marker}. Draw at 6h post-op.`,
+          items: {
+            create: [
+              { testCode: 'CBC',    testName: 'Complete Blood Count',  category: 'HAEMATOLOGY', urgency: 'ROUTINE', status: 'PENDING' },
+              { testCode: 'CRP',    testName: 'C-Reactive Protein',    category: 'BIOCHEMISTRY', urgency: 'ROUTINE', status: 'PENDING' },
+            ],
+          },
+        },
+      });
+    } catch (err) {
+      this.logger.error(`Could not create post-op lab order for ${booking.bookingNumber}`, err as any);
+    }
   }
 
   // Best-effort: pre-fill a DRAFT discharge summary for an IPD admission so
