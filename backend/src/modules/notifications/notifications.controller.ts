@@ -3,7 +3,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { sendEmail } from '../../common/utils/mailer';
+import { sendEmail, getLastEmailError } from '../../common/utils/mailer';
 
 @ApiTags('Notifications') @ApiBearerAuth('access-token') @UseGuards(JwtAuthGuard) @Controller('notifications')
 export class NotificationsController {
@@ -32,6 +32,7 @@ export class EmailHealthController {
       user: user || null,
       passSet,
       from: from || null,
+      lastError: getLastEmailError(),
     };
   }
 
@@ -52,7 +53,7 @@ export class EmailHealthController {
       </div>
     `;
     const ok = await sendEmail(to, subject, html);
-    if (!ok) throw new BadRequestException('SMTP not configured or send failed — check backend logs');
+    if (!ok) throw new BadRequestException(`SMTP send failed: ${getLastEmailError() || 'unknown error'}`);
     return { sent: true, to, subject };
   }
 }
