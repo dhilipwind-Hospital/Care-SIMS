@@ -53,6 +53,23 @@ function handleAuthFailure() {
   }, 1500);
 }
 
+// Drop empty-string values from any *Id field in a request body. Backend DTOs
+// use @IsUUID() on optional foreign keys, which fails on "" with "fooId must
+// be a UUID". Forms keep these as "" while user hasn't picked anything, so
+// strip them client-side rather than fixing every form individually.
+function stripEmptyIdFields(value: any): any {
+  if (Array.isArray(value)) return value.map(stripEmptyIdFields);
+  if (value && typeof value === 'object' && value.constructor === Object) {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (/Id$/.test(k) && v === '') continue;
+      out[k] = stripEmptyIdFields(v);
+    }
+    return out;
+  }
+  return value;
+}
+
 api.interceptors.request.use((config) => {
   // Respect an explicit per-request Authorization header — only fall back to
   // the stored token when the caller hasn't set one. The patient-login flow
@@ -60,6 +77,11 @@ api.interceptors.request.use((config) => {
   if (!config.headers.Authorization) {
     const token = localStorage.getItem('hms_token');
     if (token) config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  // Sanitize empty UUID-shaped fields out of JSON bodies.
+  if (config.data && !(config.data instanceof FormData) && !(config.data instanceof Blob)) {
+    config.data = stripEmptyIdFields(config.data);
   }
 
   // Attach a cancel token to track this request

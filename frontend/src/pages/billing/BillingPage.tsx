@@ -162,14 +162,7 @@ export default function BillingPage() {
     if (items.every(it => !it.description || !it.unitPrice)) { setFormError('Add at least one line item'); return; }
     setSubmitting(true); setFormError('');
     try {
-      const { doctorId, ...rest } = form;
-      const payload: any = {
-        ...rest,
-        lineItems: items
-          .filter(it => it.description && it.unitPrice)
-          .map(it => ({ ...it, unitPrice: Number(it.unitPrice), quantity: Number(it.quantity) })),
-      };
-      if (doctorId) payload.doctorId = doctorId;
+      const payload = { ...form, lineItems: items.filter(it => it.description && it.unitPrice).map(it => ({ ...it, unitPrice: Number(it.unitPrice), quantity: Number(it.quantity) })) };
       await api.post('/billing/invoices', payload);
       setShowNew(false); setForm(EMPTY_FORM); setItems([{ ...EMPTY_ITEM }]); setPatientSearch(''); setSelectedPatient(null);
       fetchInvoices();
