@@ -2,6 +2,8 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { generateSequentialId } from '../../common/utils/id-generator';
 import { v4 as uuidv4 } from 'uuid';
+import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 import { sendEmail } from '../../common/utils/mailer';
 
 @Injectable()
@@ -137,6 +139,49 @@ export class PatientsService {
 
     if (dto.email) {
       const orgName = tenant?.tradeName || tenant?.legalName || 'our hospital';
+      let tempPassword: string | null = null;
+      try {
+        const existing = await this.prisma.patientAccount.findUnique({ where: { email: dto.email } });
+        if (!existing) {
+          tempPassword = this.generateTempPassword();
+          const hash = await bcrypt.hash(tempPassword, 12);
+          await this.prisma.patientAccount.create({
+            data: {
+              email: dto.email,
+              passwordHash: hash,
+              firstName: dto.firstName,
+              lastName: dto.lastName || '',
+              phone: mobile,
+              dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : null,
+              gender: dto.gender,
+              bloodGroup: dto.bloodGroup,
+            },
+          });
+        }
+      } catch (err) {
+        // Don't block registration if portal-account creation fails (duplicate
+        // email race, etc.). Patient still gets the welcome email with their
+        // Patient ID and can self-register for the portal later.
+        this.logger.error(`Failed to auto-create portal account for ${dto.email}`, err as any);
+        tempPassword = null;
+      }
+
+      const loginUrl = `${process.env.FRONTEND_URL || 'http://localhost:5555'}/patient/login`;
+      const credentialsBlock = tempPassword
+        ? `<div style="margin-top:20px;padding:14px 16px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:8px;">
+            <p style="color:#0f766e;font-weight:600;margin:0 0 8px;">Patient Portal Access</p>
+            <p style="color:#334155;font-size:13px;margin:0;">You can now sign in to the patient portal to view appointments, lab results and invoices.</p>
+            <p style="color:#334155;font-size:13px;margin:10px 0 0;">
+              <strong>Login URL:</strong> <a href="${loginUrl}" style="color:#0f766e;">${loginUrl}</a><br/>
+              <strong>Email:</strong> ${dto.email}<br/>
+              <strong>Temporary Password:</strong> <code style="background:#fff;padding:2px 6px;border:1px solid #cbd5e1;border-radius:4px;font-family:monospace;">${tempPassword}</code>
+            </p>
+            <p style="color:#b45309;font-size:12px;margin:10px 0 0;">
+              For your security, please sign in and change this password as soon as possible.
+            </p>
+          </div>`
+        : '';
+
       const welcomeHtml = `
         <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
           <h2 style="color: #0F766E;">Welcome to ${orgName}, ${dto.firstName}!</h2>
@@ -151,6 +196,7 @@ export class PatientsService {
           <p style="color:#666;font-size:13px;margin-top:16px;">
             Please keep your Patient ID handy for future visits, appointments and billing.
           </p>
+          ${credentialsBlock}
           <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
           <p style="color:#aaa;font-size:12px;">${orgName} &middot; Powered by Ayphen HMS</p>
         </div>
@@ -161,6 +207,11 @@ export class PatientsService {
     }
 
     return created;
+  }
+
+  private generateTempPassword(): string {
+    // 12 chars from URL-safe alphabet — enough entropy, easy to type from email.
+    return crypto.randomBytes(9).toString('base64').replace(/[+/=]/g, '').slice(0, 12);
   }
 
   async findOne(tenantId: string, id: string) {
