@@ -144,6 +144,21 @@ export default function OTPage() {
   const [anaesSaving, setAnaesSaving] = useState(false);
   const [newEvent, setNewEvent] = useState({ time: '', type: 'DRUG', detail: '' });
 
+  // PACU / recovery section. Persisted as structured text inside
+  // anaesForm.recoveryNotes (which is the schema-backed column), so there's
+  // no DB change. On open we parse it back out; on save we re-serialise.
+  const [pacuForm, setPacuForm] = useState({
+    arrivedAt: '',       // ISO timestamp, set on PACU admit
+    dischargedAt: '',    // ISO timestamp, set on PACU discharge
+    destination: '',     // WARD / ICU / DAYCARE / HDU
+    activity: 0, breathing: 0, circulation: 0, consciousness: 0, oxygenation: 0,
+    bp: '', hr: '', spo2: '', temp: '', painScore: '',
+    nurseNotes: '',
+  });
+  const PACU_MARKER_START = '<<PACU_JSON:';
+  const PACU_MARKER_END = ':PACU_JSON>>';
+  const aldreteTotal = pacuForm.activity + pacuForm.breathing + pacuForm.circulation + pacuForm.consciousness + pacuForm.oxygenation;
+
   // Complete surgery modal
   const [completeBooking, setCompleteBooking] = useState<any>(null);
   const [completeForm, setCompleteForm] = useState({
@@ -317,24 +332,59 @@ export default function OTPage() {
   };
 
   // ---------- Anaesthesia Record ----------
+  // PACU state is persisted as a JSON blob embedded between markers inside
+  // anaesForm.recoveryNotes so that nothing in the DB schema needs to change.
+  // The "human" recovery notes typed by the nurse live above the marker line.
+  const emptyPacu = () => ({
+    arrivedAt: '', dischargedAt: '', destination: '',
+    activity: 0, breathing: 0, circulation: 0, consciousness: 0, oxygenation: 0,
+    bp: '', hr: '', spo2: '', temp: '', painScore: '',
+    nurseNotes: '',
+  });
+  const parsePacuFromNotes = (notes: string): { pacu: ReturnType<typeof emptyPacu>; humanNotes: string } => {
+    if (!notes) return { pacu: emptyPacu(), humanNotes: '' };
+    const start = notes.indexOf(PACU_MARKER_START);
+    const end = notes.indexOf(PACU_MARKER_END);
+    if (start === -1 || end === -1) return { pacu: emptyPacu(), humanNotes: notes };
+    try {
+      const json = notes.substring(start + PACU_MARKER_START.length, end);
+      const parsed = JSON.parse(json);
+      const humanNotes = (notes.substring(0, start) + notes.substring(end + PACU_MARKER_END.length)).trim();
+      return { pacu: { ...emptyPacu(), ...parsed }, humanNotes };
+    } catch {
+      return { pacu: emptyPacu(), humanNotes: notes };
+    }
+  };
+  const serializePacuIntoNotes = (humanNotes: string, pacu: any): string => {
+    const hasAnyPacuData = Object.values(pacu).some(v => v !== '' && v !== 0 && v !== null && v !== undefined);
+    if (!hasAnyPacuData) return humanNotes;
+    return `${humanNotes ? humanNotes.trim() + '\n\n' : ''}${PACU_MARKER_START}${JSON.stringify(pacu)}${PACU_MARKER_END}`;
+  };
+
   const openAnaesRecord = async (booking: any) => {
     setAnaesBooking(booking);
     setNewEvent({ time: '', type: 'DRUG', detail: '' });
     try {
       const { data } = await api.get(`/ot/bookings/${booking.id}/anaesthesia-record`);
       if (data) {
+        const { pacu, humanNotes } = parsePacuFromNotes(data.recoveryNotes || '');
         setAnaesForm({
           inductionMethod: data.inductionMethod || '', airwayDevice: data.airwayDevice || '',
           ettSize: data.ettSize || '', maintenanceAgent: data.maintenanceAgent || '',
           muscleRelaxant: data.muscleRelaxant || '', reversalAgent: data.reversalAgent || '',
           totalIVFluids: data.totalIVFluids?.toString() || '', totalBloodProducts: data.totalBloodProducts?.toString() || '',
           urineOutput: data.urineOutput?.toString() || '', recoveryScore: data.recoveryScore?.toString() || '',
-          recoveryNotes: data.recoveryNotes || '', events: data.events || [],
+          recoveryNotes: humanNotes, events: data.events || [],
         });
+        setPacuForm(pacu);
       } else {
         setAnaesForm({ inductionMethod: '', airwayDevice: '', ettSize: '', maintenanceAgent: '', muscleRelaxant: '', reversalAgent: '', totalIVFluids: '', totalBloodProducts: '', urineOutput: '', recoveryScore: '', recoveryNotes: '', events: [] });
+        setPacuForm(emptyPacu());
       }
-    } catch { setAnaesForm({ inductionMethod: '', airwayDevice: '', ettSize: '', maintenanceAgent: '', muscleRelaxant: '', reversalAgent: '', totalIVFluids: '', totalBloodProducts: '', urineOutput: '', recoveryScore: '', recoveryNotes: '', events: [] }); }
+    } catch {
+      setAnaesForm({ inductionMethod: '', airwayDevice: '', ettSize: '', maintenanceAgent: '', muscleRelaxant: '', reversalAgent: '', totalIVFluids: '', totalBloodProducts: '', urineOutput: '', recoveryScore: '', recoveryNotes: '', events: [] });
+      setPacuForm(emptyPacu());
+    }
   };
 
   const handleSaveAnaes = async () => {
@@ -342,6 +392,13 @@ export default function OTPage() {
     setAnaesSaving(true);
     try {
       const payload: any = { ...anaesForm };
+      // Auto-fill the schema-level recoveryScore from the Aldrete total so
+      // existing reports that read recoveryScore keep working without change.
+      if (aldreteTotal > 0 && !payload.recoveryScore) {
+        payload.recoveryScore = String(aldreteTotal);
+      }
+      // Roll the PACU panel into the recoveryNotes column.
+      payload.recoveryNotes = serializePacuIntoNotes(anaesForm.recoveryNotes, pacuForm);
       ['totalIVFluids', 'totalBloodProducts', 'urineOutput', 'recoveryScore'].forEach(k => {
         if (payload[k]) payload[k] = Number(payload[k]); else delete payload[k];
       });
@@ -350,6 +407,20 @@ export default function OTPage() {
       setAnaesBooking(null);
     } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to save'); }
     finally { setAnaesSaving(false); }
+  };
+
+  // PACU action — Admit to recovery (auto-stamp arrival time)
+  const handlePacuAdmit = () => {
+    if (pacuForm.arrivedAt) return;
+    setPacuForm({ ...pacuForm, arrivedAt: new Date().toISOString() });
+    toast.success('Patient admitted to PACU');
+  };
+  // PACU action — Discharge to ward / ICU / Day-care
+  const handlePacuDischarge = () => {
+    if (!pacuForm.destination) { toast.error('Pick a discharge destination first'); return; }
+    if (aldreteTotal < 9 && !window.confirm(`Aldrete score is ${aldreteTotal}/10. Discharge anyway?`)) return;
+    setPacuForm({ ...pacuForm, dischargedAt: new Date().toISOString() });
+    toast.success(`Discharged from PACU to ${pacuForm.destination}`);
   };
 
   const addEvent = () => {
@@ -1188,6 +1259,116 @@ export default function OTPage() {
                   <label className="block text-xs font-medium text-gray-600 mb-1">Recovery Notes</label>
                   <textarea className="hms-input w-full" rows={2} placeholder="Post-anaesthesia recovery observations..."
                     value={anaesForm.recoveryNotes} onChange={e => setAnaesForm({ ...anaesForm, recoveryNotes: e.target.value })} />
+                </div>
+              </div>
+
+              {/* ── PACU / RECOVERY ROOM PANEL ── */}
+              <div className="border-t border-gray-200 pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wide">PACU · Recovery Room</div>
+                    <p className="text-xs text-gray-400 mt-0.5">Track arrival, Aldrete score and discharge from the post-anaesthesia care unit</p>
+                  </div>
+                  {!pacuForm.arrivedAt && (
+                    <button type="button" onClick={handlePacuAdmit}
+                      className="px-3 py-1.5 text-xs rounded-lg bg-teal-600 hover:bg-teal-700 text-white">
+                      Admit to PACU now
+                    </button>
+                  )}
+                </div>
+
+                {pacuForm.arrivedAt && (
+                  <div className="bg-teal-50 border border-teal-100 rounded-xl px-3 py-2 text-xs text-teal-800 mb-3 flex items-center justify-between">
+                    <div>
+                      <strong>Arrived:</strong> {new Date(pacuForm.arrivedAt).toLocaleString('en-IN')}
+                      {pacuForm.dischargedAt && (
+                        <span className="ml-3"><strong>Discharged:</strong> {new Date(pacuForm.dischargedAt).toLocaleString('en-IN')} → {pacuForm.destination || '—'}</span>
+                      )}
+                    </div>
+                    {!pacuForm.dischargedAt && (
+                      <button type="button" onClick={handlePacuDischarge}
+                        className="px-3 py-1 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white">
+                        Discharge from PACU
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Aldrete sub-scores 0-2 each */}
+                <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 mb-3">
+                  {[
+                    { key: 'activity',      label: 'Activity'      },
+                    { key: 'breathing',     label: 'Breathing'     },
+                    { key: 'circulation',   label: 'Circulation'   },
+                    { key: 'consciousness', label: 'Consciousness' },
+                    { key: 'oxygenation',   label: 'Oxygenation'   },
+                  ].map(({ key, label }) => (
+                    <div key={key}>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+                      <select
+                        value={(pacuForm as any)[key]}
+                        onChange={e => setPacuForm({ ...pacuForm, [key]: Number(e.target.value) })}
+                        className="hms-input w-full">
+                        <option value={0}>0</option>
+                        <option value={1}>1</option>
+                        <option value={2}>2</option>
+                      </select>
+                    </div>
+                  ))}
+                </div>
+                <div className={`text-sm font-semibold mb-3 ${aldreteTotal >= 9 ? 'text-emerald-600' : aldreteTotal >= 7 ? 'text-amber-600' : 'text-red-600'}`}>
+                  Total Aldrete: {aldreteTotal}/10 {aldreteTotal >= 9 ? '· Ready for discharge' : aldreteTotal >= 7 ? '· Continue monitoring' : '· Not ready'}
+                </div>
+
+                {/* PACU vitals snapshot */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">BP (mmHg)</label>
+                    <input className="hms-input w-full" placeholder="120/80" value={pacuForm.bp}
+                      onChange={e => setPacuForm({ ...pacuForm, bp: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">HR (bpm)</label>
+                    <input type="number" className="hms-input w-full" placeholder="80" value={pacuForm.hr}
+                      onChange={e => setPacuForm({ ...pacuForm, hr: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">SpO₂ (%)</label>
+                    <input type="number" className="hms-input w-full" placeholder="98" value={pacuForm.spo2}
+                      onChange={e => setPacuForm({ ...pacuForm, spo2: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Temp (°C)</label>
+                    <input type="number" step="0.1" className="hms-input w-full" placeholder="36.8" value={pacuForm.temp}
+                      onChange={e => setPacuForm({ ...pacuForm, temp: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Pain (0-10)</label>
+                    <input type="number" min="0" max="10" className="hms-input w-full" placeholder="2" value={pacuForm.painScore}
+                      onChange={e => setPacuForm({ ...pacuForm, painScore: e.target.value })} />
+                  </div>
+                </div>
+
+                {/* Discharge destination */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Discharge Destination</label>
+                    <select className="hms-input w-full" value={pacuForm.destination}
+                      onChange={e => setPacuForm({ ...pacuForm, destination: e.target.value })}>
+                      <option value="">Select…</option>
+                      <option value="WARD">Ward</option>
+                      <option value="ICU">ICU</option>
+                      <option value="HDU">High-Dependency Unit (HDU)</option>
+                      <option value="DAYCARE_LOUNGE">Day-care Lounge</option>
+                      <option value="HOME">Home (day-surgery)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">PACU Nurse Notes</label>
+                    <input className="hms-input w-full" placeholder="Brief PACU course / handover"
+                      value={pacuForm.nurseNotes}
+                      onChange={e => setPacuForm({ ...pacuForm, nurseNotes: e.target.value })} />
+                  </div>
                 </div>
               </div>
             </div>
