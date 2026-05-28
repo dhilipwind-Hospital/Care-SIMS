@@ -538,7 +538,78 @@ export class OTService {
       this.logger.error(`Failed to auto-bill OT booking ${booking.bookingNumber}`, err),
     );
 
+    // If this surgery is linked to an IPD admission, pre-fill the discharge
+    // summary with the procedure details. Skipped when no admissionId is set
+    // (day-care / OPD surgery) — DischargeSummary has admissionId as NOT NULL.
+    this.prepareDischargeSummaryFromOT(tenantId, updated).catch((err) =>
+      this.logger.error(`Failed to prepare discharge summary for ${booking.bookingNumber}`, err),
+    );
+
     return updated;
+  }
+
+  // Best-effort: pre-fill a DRAFT discharge summary for an IPD admission so
+  // the discharging doctor only needs to add recovery instructions + follow-up.
+  // Idempotent via the unique (tenantId, admissionId) index — uses upsert so
+  // calling complete twice (or coming from a partially-filled draft already
+  // created by the admission flow) merges procedure info without overwriting
+  // doctor-entered fields.
+  private async prepareDischargeSummaryFromOT(tenantId: string, booking: any): Promise<void> {
+    if (!booking.admissionId) return;
+
+    const admission = await this.prisma.admission.findFirst({
+      where: { id: booking.admissionId, tenantId },
+      select: { admissionDate: true, locationId: true, admittingDoctorId: true, diagnosisOnAdmission: true },
+    });
+    if (!admission) return;
+
+    const procedureLine = `${booking.procedureName} (${booking.bookingNumber}) on ${new Date(booking.actualEnd || booking.scheduledDate).toLocaleDateString('en-IN')}`;
+    const treatmentBlock = [
+      `Procedure: ${booking.procedureName}`,
+      `OT Booking #: ${booking.bookingNumber}`,
+      booking.intraOpNotes ? `Intra-op: ${booking.intraOpNotes}` : null,
+      booking.postOpNotes ? `Post-op: ${booking.postOpNotes}` : null,
+      booking.complications ? `Complications: ${booking.complications}` : null,
+    ].filter(Boolean).join('\n');
+
+    const existing = await this.prisma.dischargeSummary.findUnique({
+      where: { tenantId_admissionId: { tenantId, admissionId: booking.admissionId } },
+    });
+
+    if (existing) {
+      // Don't trample doctor-entered fields. Only update when destination is
+      // empty or when we have richer data to merge. Append rather than replace
+      // the procedures array.
+      const existingProcs: any[] = Array.isArray(existing.proceduresPerformed) ? existing.proceduresPerformed as any[] : [];
+      const alreadyHasProcedure = existingProcs.some((p: any) => p?.bookingId === booking.id);
+      const newProcs = alreadyHasProcedure
+        ? existingProcs
+        : [...existingProcs, { bookingId: booking.id, bookingNumber: booking.bookingNumber, procedureName: booking.procedureName, date: booking.actualEnd || booking.scheduledDate }];
+      await this.prisma.dischargeSummary.update({
+        where: { id: existing.id },
+        data: {
+          proceduresPerformed: newProcs,
+          // Only fill blanks; never overwrite text the doctor typed.
+          treatmentGiven: existing.treatmentGiven && existing.treatmentGiven.trim() ? existing.treatmentGiven : treatmentBlock,
+        },
+      });
+      return;
+    }
+
+    await this.prisma.dischargeSummary.create({
+      data: {
+        tenantId,
+        locationId: admission.locationId,
+        admissionId: booking.admissionId,
+        patientId: booking.patientId,
+        doctorId: booking.primarySurgeonId || admission.admittingDoctorId,
+        admissionDate: admission.admissionDate,
+        diagnosisOnAdmission: admission.diagnosisOnAdmission || procedureLine,
+        proceduresPerformed: [{ bookingId: booking.id, bookingNumber: booking.bookingNumber, procedureName: booking.procedureName, date: booking.actualEnd || booking.scheduledDate }],
+        treatmentGiven: treatmentBlock,
+        status: 'DRAFT',
+      },
+    });
   }
 
   // Build line items for a completed OT booking. Defaults are sensible
