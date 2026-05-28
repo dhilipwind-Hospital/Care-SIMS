@@ -14,8 +14,18 @@ const EMPTY_BOOKING = {
   otRoomId: '', patientId: '', admissionId: '', procedureName: '',
   primarySurgeonId: '', anesthetistId: '', scheduledDate: '',
   scheduledStart: '', expectedDurationMins: 60, surgeryType: 'ELECTIVE',
-  anesthesiaType: '', notes: '',
+  anesthesiaType: '', notes: '', infectionRiskClass: '',
 };
+
+// Standard infection risk classification from CDC / NHSN.
+// Drives antibiotic prophylaxis decisions and SSI risk stratification.
+const INFECTION_RISK_CLASSES = [
+  { value: '', label: 'Select…' },
+  { value: 'CLEAN', label: 'Clean (Class I)' },
+  { value: 'CLEAN_CONTAMINATED', label: 'Clean-Contaminated (Class II)' },
+  { value: 'CONTAMINATED', label: 'Contaminated (Class III)' },
+  { value: 'DIRTY', label: 'Dirty / Infected (Class IV)' },
+];
 
 const CHECKLIST_ITEMS = [
   { section: 'Before Induction (Sign In)', items: [
@@ -89,6 +99,8 @@ export default function OTPage() {
   const [completeForm, setCompleteForm] = useState({
     intraOpNotes: '', postOpNotes: '', estimatedBloodLoss: '',
     bloodUnitsUsed: '', complications: '', drainInserted: false, drainType: '',
+    specimensText: '', implantsText: '',
+    instrumentsBefore: '', instrumentsAfter: '',
   });
   const [completeSaving, setCompleteSaving] = useState(false);
 
@@ -172,6 +184,7 @@ export default function OTPage() {
         surgeryType: booking.surgeryType || 'ELECTIVE',
         anesthesiaType: booking.anesthesiaType || '',
         notes: booking.notes || '',
+        infectionRiskClass: booking.preOpChecklist?.infectionRiskClass || '',
       });
       setSelectedPatientLabel(
         booking.patient ? `${booking.patient.firstName} ${booking.patient.lastName} — ${booking.patient.patientId}` : booking.patientId
@@ -202,11 +215,22 @@ export default function OTPage() {
     if (!bookingForm.scheduledStart) { setFormError('Please select a start time'); return; }
     setSubmitting(true); setFormError('');
     try {
+      // infectionRiskClass lives inside the preOpChecklist JSON column on the
+      // backend (no dedicated column), so fold it in before sending. Don't
+      // ship the standalone top-level field — the DTO doesn't accept it.
+      const { infectionRiskClass, ...rest } = bookingForm;
+      const existingChecklist: any = editingId
+        ? (await api.get(`/ot/bookings/${editingId}`).then(r => r.data?.preOpChecklist || {}).catch(() => ({})))
+        : {};
+      const payload: any = { ...rest };
+      if (infectionRiskClass) {
+        payload.preOpChecklist = { ...existingChecklist, infectionRiskClass };
+      }
       if (editingId) {
-        await api.put(`/ot/bookings/${editingId}`, bookingForm);
+        await api.put(`/ot/bookings/${editingId}`, payload);
         toast.success('Booking updated successfully');
       } else {
-        await api.post('/ot/bookings', bookingForm);
+        await api.post('/ot/bookings', payload);
         toast.success('Surgery scheduled successfully');
       }
       setShowBooking(false);
@@ -344,7 +368,12 @@ export default function OTPage() {
 
   // ---------- Complete Surgery ----------
   const openComplete = (booking: any) => {
-    setCompleteForm({ intraOpNotes: '', postOpNotes: '', estimatedBloodLoss: '', bloodUnitsUsed: '', complications: '', drainInserted: false, drainType: '' });
+    setCompleteForm({
+      intraOpNotes: '', postOpNotes: '', estimatedBloodLoss: '',
+      bloodUnitsUsed: '', complications: '', drainInserted: false, drainType: '',
+      specimensText: '', implantsText: '',
+      instrumentsBefore: '', instrumentsAfter: '',
+    });
     setCompleteBooking(booking);
   };
 
@@ -352,14 +381,40 @@ export default function OTPage() {
     if (!completeBooking) return;
     setCompleteSaving(true);
     try {
+      // Specimens / implants are stored as JSON arrays. Each line in the
+      // textarea becomes one entry, so the surgical team can free-form the
+      // list (e.g. "Gallbladder · histopath"). Empty input → undefined so
+      // we don't overwrite anything with [].
+      const splitLines = (s: string) => s.split('\n').map(x => x.trim()).filter(Boolean);
+      const specimens = splitLines(completeForm.specimensText);
+      const implants = splitLines(completeForm.implantsText);
+
+      // Instrument count reconciliation — no dedicated column, so we prepend
+      // it to postOpNotes as a structured line. If counts don't match, we
+      // warn the user; they can still confirm completion (override).
+      let postOpNotes = completeForm.postOpNotes || '';
+      if (completeForm.instrumentsBefore && completeForm.instrumentsAfter) {
+        const before = Number(completeForm.instrumentsBefore);
+        const after = Number(completeForm.instrumentsAfter);
+        const status = before === after ? 'RECONCILED' : 'MISMATCH';
+        const line = `[Instrument count] before=${before} after=${after} (${status})`;
+        postOpNotes = postOpNotes ? `${line}\n\n${postOpNotes}` : line;
+        if (status === 'MISMATCH') {
+          const ok = window.confirm(`Instrument count mismatch (before ${before} / after ${after}). Continue anyway?`);
+          if (!ok) { setCompleteSaving(false); return; }
+        }
+      }
+
       await api.patch(`/ot/bookings/${completeBooking.id}/complete`, {
         intraOpNotes: completeForm.intraOpNotes || undefined,
-        postOpNotes: completeForm.postOpNotes || undefined,
+        postOpNotes: postOpNotes || undefined,
         estimatedBloodLoss: completeForm.estimatedBloodLoss ? Number(completeForm.estimatedBloodLoss) : undefined,
         bloodUnitsUsed: completeForm.bloodUnitsUsed ? Number(completeForm.bloodUnitsUsed) : undefined,
         complications: completeForm.complications || undefined,
         drainInserted: completeForm.drainInserted,
         drainType: completeForm.drainInserted ? completeForm.drainType : undefined,
+        specimens: specimens.length ? specimens : undefined,
+        implants: implants.length ? implants : undefined,
       });
       toast.success('Surgery completed');
       setCompleteBooking(null);
@@ -896,6 +951,17 @@ export default function OTPage() {
                 </div>
               </div>
 
+              {/* Infection Risk Class — drives antibiotic prophylaxis */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Infection Risk Class</label>
+                <select value={bookingForm.infectionRiskClass}
+                  onChange={e => setBookingForm(f => ({ ...f, infectionRiskClass: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                  {INFECTION_RISK_CLASSES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">CDC classification — used for antibiotic prophylaxis and SSI risk tracking.</p>
+              </div>
+
               {/* Admission ID + Notes */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -1227,6 +1293,44 @@ export default function OTPage() {
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Complications</label>
                 <textarea value={completeForm.complications} onChange={e => setCompleteForm(f => ({ ...f, complications: e.target.value }))}
                   placeholder="Any intra-operative complications..." rows={2} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none" />
+              </div>
+
+              {/* Specimens + Implants */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Specimens (one per line)</label>
+                  <textarea value={completeForm.specimensText}
+                    onChange={e => setCompleteForm(f => ({ ...f, specimensText: e.target.value }))}
+                    placeholder="e.g. Gallbladder — histopath&#10;Cyst fluid — culture"
+                    rows={3} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Implants (one per line)</label>
+                  <textarea value={completeForm.implantsText}
+                    onChange={e => setCompleteForm(f => ({ ...f, implantsText: e.target.value }))}
+                    placeholder="e.g. Stent · Cordis 7F · Lot #A1234"
+                    rows={3} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none" />
+                </div>
+              </div>
+
+              {/* Instrument count reconciliation */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Instrument Count (sponges / needles / sharps)</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <input type="number" min="0" value={completeForm.instrumentsBefore}
+                      onChange={e => setCompleteForm(f => ({ ...f, instrumentsBefore: e.target.value }))}
+                      placeholder="Count before incision"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                  </div>
+                  <div>
+                    <input type="number" min="0" value={completeForm.instrumentsAfter}
+                      onChange={e => setCompleteForm(f => ({ ...f, instrumentsAfter: e.target.value }))}
+                      placeholder="Count after closure"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">A mismatch will prompt for confirmation before marking the surgery complete.</p>
               </div>
 
               {/* Notes */}

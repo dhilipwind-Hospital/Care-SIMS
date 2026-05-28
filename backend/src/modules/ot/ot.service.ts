@@ -1,11 +1,73 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { WsGateway } from '../ws-gateway/ws-gateway.gateway';
 import { generateSequentialId } from '../../common/utils/id-generator';
+import { sendEmail } from '../../common/utils/mailer';
+import { BillingService } from '../billing/billing.service';
 
 @Injectable()
 export class OTService {
-  constructor(private prisma: PrismaService, private ws: WsGateway) {}
+  private readonly logger = new Logger(OTService.name);
+  constructor(private prisma: PrismaService, private ws: WsGateway, private billing: BillingService) {}
+
+  // Compute the [start, end] minute window for a booking. scheduledStart is
+  // "HH:MM"; we add expectedDurationMins to get the projected end. Returns
+  // null if start time is malformed so the caller can skip the conflict
+  // check (we never want to crash the booking flow over a parse error).
+  private bookingWindow(scheduledDate: Date, scheduledStart: string, durationMins: number): { startMs: number; endMs: number } | null {
+    if (!scheduledStart || typeof scheduledStart !== 'string') return null;
+    const [h, m] = scheduledStart.split(':').map((x) => Number(x));
+    if (Number.isNaN(h) || Number.isNaN(m)) return null;
+    const base = new Date(scheduledDate);
+    base.setHours(h, m, 0, 0);
+    const startMs = base.getTime();
+    const endMs = startMs + Math.max(15, Number(durationMins) || 60) * 60000;
+    return { startMs, endMs };
+  }
+
+  // True iff two windows overlap (strict: same-time touching does not count).
+  private windowsOverlap(a: { startMs: number; endMs: number }, b: { startMs: number; endMs: number }): boolean {
+    return a.startMs < b.endMs && b.startMs < a.endMs;
+  }
+
+  // Look for any SCHEDULED / IN_PROGRESS booking that overlaps the given
+  // window for the given surgeon, patient, or room. Excludes a booking id
+  // (for edits). Returns the offending booking with a tag identifying which
+  // resource conflicted, or null.
+  private async findConflict(
+    tenantId: string,
+    win: { startMs: number; endMs: number },
+    surgeonId: string,
+    patientId: string,
+    otRoomId: string,
+    scheduledDate: Date,
+    excludeId?: string,
+  ): Promise<{ kind: 'SURGEON' | 'PATIENT' | 'ROOM'; booking: any } | null> {
+    const dayStart = new Date(scheduledDate); dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
+    const candidates = await this.prisma.oTBooking.findMany({
+      where: {
+        tenantId,
+        status: { in: ['SCHEDULED', 'IN_PROGRESS'] },
+        scheduledDate: { gte: dayStart, lt: dayEnd },
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+        OR: [
+          { primarySurgeonId: surgeonId },
+          { patientId },
+          { otRoomId },
+        ],
+      },
+    });
+    for (const c of candidates) {
+      const other = this.bookingWindow(c.scheduledDate, c.scheduledStart, c.expectedDurationMins);
+      if (!other) continue;
+      if (!this.windowsOverlap(win, other)) continue;
+      if (c.primarySurgeonId === surgeonId) return { kind: 'SURGEON', booking: c };
+      if (c.patientId === patientId) return { kind: 'PATIENT', booking: c };
+      if (c.otRoomId === otRoomId) return { kind: 'ROOM', booking: c };
+    }
+    return null;
+  }
 
   async getRooms(tenantId: string, locationId?: string) {
     const where: any = { tenantId, isActive: true };
@@ -134,7 +196,25 @@ export class OTService {
   }
 
   async createBooking(tenantId: string, dto: any, createdById: string) {
-    return generateSequentialId(this.prisma, {
+    // Conflict check — block the booking if surgeon, patient or room is
+    // already occupied in the requested window. Defensive: if we can't
+    // parse the time we skip the check (window calc returns null).
+    const scheduledDate = new Date(dto.scheduledDate);
+    const win = this.bookingWindow(scheduledDate, dto.scheduledStart, dto.expectedDurationMins);
+    if (win) {
+      const conflict = await this.findConflict(
+        tenantId, win, dto.primarySurgeonId, dto.patientId, dto.otRoomId, scheduledDate,
+      );
+      if (conflict) {
+        const label =
+          conflict.kind === 'SURGEON' ? `the primary surgeon is already booked (${conflict.booking.bookingNumber})` :
+          conflict.kind === 'PATIENT' ? `the patient already has another OT booking (${conflict.booking.bookingNumber})` :
+          `the OT room is already booked (${conflict.booking.bookingNumber})`;
+        throw new BadRequestException(`Cannot create booking: ${label} in the requested time window.`);
+      }
+    }
+
+    const booking = await generateSequentialId(this.prisma, {
       table: 'OTBooking',
       idColumn: 'bookingNumber',
       prefix: `OT-${new Date().getFullYear()}-`,
@@ -149,7 +229,7 @@ export class OTService {
             anesthetistId: dto.anesthetistId, scrubNurseId: dto.scrubNurseId,
             departmentId: dto.departmentId, procedureName: dto.procedureName,
             procedureCode: dto.procedureCode, surgeryType: dto.surgeryType || 'ELECTIVE',
-            anesthesiaType: dto.anesthesiaType, scheduledDate: new Date(dto.scheduledDate),
+            anesthesiaType: dto.anesthesiaType, scheduledDate,
             scheduledStart: dto.scheduledStart, expectedDurationMins: dto.expectedDurationMins,
             bloodUnitsReserved: dto.bloodUnitsReserved || 0, notes: dto.notes, status: 'SCHEDULED', createdById,
           },
@@ -157,11 +237,93 @@ export class OTService {
         });
       },
     });
+
+    // Fire-and-forget booking confirmation emails — never block the create.
+    this.sendBookingConfirmationEmails(tenantId, booking).catch((err) =>
+      this.logger.error('Failed to send OT booking confirmation email', err as any),
+    );
+
+    return booking;
+  }
+
+  private async sendBookingConfirmationEmails(tenantId: string, booking: any) {
+    const [patient, surgeon, tenant] = await Promise.all([
+      this.prisma.patient.findFirst({ where: { id: booking.patientId, tenantId }, select: { firstName: true, lastName: true, email: true } }),
+      booking.primarySurgeonId
+        ? this.prisma.tenantUser.findFirst({ where: { id: booking.primarySurgeonId, tenantId }, select: { firstName: true, lastName: true, email: true } })
+        : Promise.resolve(null),
+      this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { tradeName: true, legalName: true } }),
+    ]);
+    const orgName = tenant?.tradeName || tenant?.legalName || 'your hospital';
+    const surgeonName = surgeon ? `Dr. ${surgeon.firstName} ${surgeon.lastName || ''}`.trim() : 'the surgical team';
+    const room = (booking as any).otRoom?.name || 'OT';
+    const dateStr = new Date(booking.scheduledDate).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const procedure = booking.procedureName || 'Surgical Procedure';
+
+    const wrap = (title: string, intro: string) => `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+        <div style="background:linear-gradient(135deg,#0F766E,#14B8A6);padding:20px;border-radius:12px 12px 0 0;">
+          <h1 style="color:#fff;margin:0;font-size:20px;">${orgName}</h1>
+        </div>
+        <div style="padding:24px;background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
+          <h2 style="color:#1f2937;margin:0 0 16px;">${title}</h2>
+          <p style="color:#4b5563;line-height:1.6;">${intro}</p>
+          <p style="color:#4b5563;font-size:13px;margin-top:12px;">
+            <strong>Booking #:</strong> ${booking.bookingNumber}<br/>
+            <strong>Procedure:</strong> ${procedure}<br/>
+            <strong>Surgeon:</strong> ${surgeonName}<br/>
+            <strong>Date:</strong> ${dateStr}<br/>
+            <strong>Time:</strong> ${booking.scheduledStart}<br/>
+            <strong>Theatre:</strong> ${room}<br/>
+            <strong>Expected duration:</strong> ${booking.expectedDurationMins} min<br/>
+            <strong>Surgery type:</strong> ${booking.surgeryType}
+          </p>
+          <p style="color:#9ca3af;font-size:12px;margin-top:16px;">If you need to reschedule or have any questions, please contact our OT desk.</p>
+        </div>
+        <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:16px;">This is an automated message from ${orgName}. Do not reply.</p>
+      </div>`;
+
+    if (patient?.email) {
+      sendEmail(patient.email, `Surgery scheduled - ${procedure} - ${orgName}`,
+        wrap('Your surgery has been scheduled',
+          `Dear ${patient.firstName || ''} ${patient.lastName || ''},<br/><br/>Your ${procedure} has been scheduled at ${orgName}. Please find the details below and follow any pre-operative instructions (fasting, medications, escort) given by our team.`),
+      ).catch((err) => this.logger.error(`Failed to email patient about OT booking ${booking.bookingNumber}`, err));
+    }
+    if (surgeon?.email) {
+      sendEmail(surgeon.email, `OT booking confirmed - ${booking.bookingNumber} - ${orgName}`,
+        wrap('OT booking confirmed',
+          `A new operating theatre booking has been created for your surgical block.`),
+      ).catch((err) => this.logger.error(`Failed to email surgeon about OT booking ${booking.bookingNumber}`, err));
+    }
   }
 
   async updateBooking(tenantId: string, id: string, dto: any) {
     const booking = await this.prisma.oTBooking.findFirst({ where: { id, tenantId } });
     if (!booking) throw new NotFoundException('OT Booking not found');
+
+    // If any of the scheduling fields change, re-run the conflict check
+    // against the *new* surgeon/patient/room/window.
+    const wantsRescheduling = ['scheduledDate', 'scheduledStart', 'expectedDurationMins', 'primarySurgeonId', 'otRoomId']
+      .some((k) => dto[k] !== undefined);
+    if (wantsRescheduling) {
+      const newDate = dto.scheduledDate !== undefined ? new Date(dto.scheduledDate) : booking.scheduledDate;
+      const newStart = dto.scheduledStart !== undefined ? dto.scheduledStart : booking.scheduledStart;
+      const newDuration = dto.expectedDurationMins !== undefined ? dto.expectedDurationMins : booking.expectedDurationMins;
+      const newSurgeon = dto.primarySurgeonId !== undefined ? dto.primarySurgeonId : booking.primarySurgeonId;
+      const newRoom = dto.otRoomId !== undefined ? dto.otRoomId : booking.otRoomId;
+      const win = this.bookingWindow(newDate, newStart, newDuration);
+      if (win) {
+        const conflict = await this.findConflict(tenantId, win, newSurgeon, booking.patientId, newRoom, newDate, id);
+        if (conflict) {
+          const label =
+            conflict.kind === 'SURGEON' ? `the primary surgeon is already booked (${conflict.booking.bookingNumber})` :
+            conflict.kind === 'PATIENT' ? `the patient already has another OT booking (${conflict.booking.bookingNumber})` :
+            `the OT room is already booked (${conflict.booking.bookingNumber})`;
+          throw new BadRequestException(`Cannot reschedule booking: ${label} in the requested time window.`);
+        }
+      }
+    }
+
     const data: any = {};
     if (dto.otRoomId !== undefined) data.otRoomId = dto.otRoomId;
     if (dto.primarySurgeonId !== undefined) data.primarySurgeonId = dto.primarySurgeonId;
@@ -367,6 +529,23 @@ export class OTService {
     if (dto.drainType !== undefined) data.drainType = dto.drainType;
     const updated = await this.prisma.oTBooking.update({ where: { id, tenantId }, data });
     this.ws.emitToTenant(tenantId, 'ot:status:changed', { action: 'completed', booking: updated });
+
+    // Auto-bill: add an OT line item to the patient's open invoice (or create
+    // one). Idempotent on the booking id, so re-completing won't double-bill.
+    // Fee is a sensible default; reception/billing can edit the draft.
+    this.billing.addChargeToOpenVisit(
+      tenantId,
+      booking.patientId,
+      {
+        description: `OT Procedure — ${booking.procedureName} (${booking.bookingNumber})`,
+        category: 'PROCEDURE',
+        quantity: 1,
+        unitPrice: 5000,
+        referenceId: booking.id,
+      },
+      { locationId: booking.locationId, doctorId: booking.primarySurgeonId, consultationId: undefined },
+    ).catch((err) => this.logger.error(`Failed to auto-bill OT booking ${booking.bookingNumber}`, err));
+
     return updated;
   }
 }
