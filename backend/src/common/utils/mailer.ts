@@ -1,9 +1,21 @@
 import * as nodemailer from 'nodemailer';
 import { Resend } from 'resend';
+import * as sgMail from '@sendgrid/mail';
 
 let resendClient: Resend | null = null;
 let smtpTransporter: nodemailer.Transporter | null = null;
+let sendgridReady = false;
 let lastError: string | null = null;
+
+function getSendgrid(): typeof sgMail | null {
+  const key = process.env.SENDGRID_API_KEY;
+  if (!key) return null;
+  if (!sendgridReady) {
+    sgMail.setApiKey(key);
+    sendgridReady = true;
+  }
+  return sgMail;
+}
 
 function getResend(): Resend | null {
   if (resendClient) return resendClient;
@@ -36,7 +48,8 @@ export function getLastEmailError(): string | null {
   return lastError;
 }
 
-export function getEmailProvider(): 'resend' | 'smtp' | 'none' {
+export function getEmailProvider(): 'sendgrid' | 'resend' | 'smtp' | 'none' {
+  if (process.env.SENDGRID_API_KEY) return 'sendgrid';
   if (process.env.RESEND_API_KEY) return 'resend';
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) return 'smtp';
   return 'none';
@@ -47,6 +60,24 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
     || process.env.SMTP_FROM
     || process.env.SMTP_USER
     || 'onboarding@resend.dev';
+
+  const sendgrid = getSendgrid();
+  if (sendgrid) {
+    try {
+      const [response] = await sendgrid.send({ from, to, subject, html });
+      lastError = null;
+      console.log(`Email sent to ${to}: ${subject} (sendgrid status=${response?.statusCode} messageId=${response?.headers?.['x-message-id']})`);
+      return true;
+    } catch (error: any) {
+      const body = error?.response?.body;
+      const detail = body
+        ? `code=${error?.code} ${JSON.stringify(body)}`
+        : `${error?.code || ''} ${error?.message || error}`.trim();
+      lastError = `SendGrid: ${detail}`;
+      console.error(`Failed to send email to ${to}: ${lastError}`);
+      return false;
+    }
+  }
 
   const resend = getResend();
   if (resend) {

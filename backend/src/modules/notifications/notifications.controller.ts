@@ -20,6 +20,15 @@ export class EmailHealthController {
   emailConfig() {
     const provider = getEmailProvider();
     const from = process.env.EMAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || null;
+    if (provider === 'sendgrid') {
+      return {
+        configured: true,
+        provider: 'SendGrid',
+        apiKeySet: true,
+        from,
+        lastError: getLastEmailError(),
+      };
+    }
     if (provider === 'resend') {
       return {
         configured: true,
