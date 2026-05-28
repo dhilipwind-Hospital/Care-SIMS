@@ -27,6 +27,56 @@ const INFECTION_RISK_CLASSES = [
   { value: 'DIRTY', label: 'Dirty / Infected (Class IV)' },
 ];
 
+// Common surgical procedures grouped by specialty. Picking one fills the
+// procedure name field; "Other / custom" leaves it empty for free text.
+// This is a hardcoded shortlist for now — a proper ProcedureCatalog table
+// keyed by ICD-10 / CPT codes is a future enhancement.
+const COMMON_PROCEDURES = [
+  { group: 'General Surgery', items: [
+    'Appendectomy',
+    'Laparoscopic Cholecystectomy',
+    'Inguinal Hernia Repair',
+    'Umbilical Hernia Repair',
+    'Hemorrhoidectomy',
+    'Excision of Lipoma / Sebaceous Cyst',
+    'Mastectomy',
+    'Thyroidectomy',
+  ]},
+  { group: 'Orthopaedics', items: [
+    'Total Knee Replacement',
+    'Total Hip Replacement',
+    'ORIF — Long Bone Fracture',
+    'Arthroscopy — Knee',
+    'Carpal Tunnel Release',
+    'Tendon Repair',
+  ]},
+  { group: 'Obstetrics & Gynaecology', items: [
+    'Caesarean Section (LSCS)',
+    'Normal Vaginal Delivery (assisted)',
+    'Hysterectomy — Abdominal',
+    'Hysterectomy — Laparoscopic',
+    'D&C / Dilatation and Curettage',
+    'Tubal Ligation',
+  ]},
+  { group: 'Urology', items: [
+    'TURP — Prostate',
+    'Cystoscopy',
+    'Ureteroscopy + DJ Stent',
+    'Circumcision',
+  ]},
+  { group: 'ENT', items: [
+    'Tonsillectomy',
+    'Adenoidectomy',
+    'FESS — Sinus Surgery',
+    'Septoplasty',
+  ]},
+  { group: 'Ophthalmology', items: [
+    'Cataract Surgery (Phacoemulsification)',
+    'Pterygium Excision',
+  ]},
+  { group: 'Other / Custom', items: ['Other (type below)'] },
+];
+
 const CHECKLIST_ITEMS = [
   { section: 'Before Induction (Sign In)', items: [
     { key: 'identityConfirmed', label: 'Patient identity confirmed' },
@@ -148,11 +198,15 @@ export default function OTPage() {
   const completed = bookings.filter(b => b.status === 'COMPLETED').length;
 
   // ---------- Patient search ----------
+  // When the search box is empty we show the most recently created patients
+  // so a first click still surfaces something useful. With ≥2 chars we hit
+  // the normal /patients?q= endpoint. Debounced 300ms so typing isn't laggy.
   const searchPatients = async (q: string) => {
-    if (!q.trim()) { setPatients([]); return; }
     setPatientLoading(true);
     try {
-      const { data } = await api.get('/patients', { params: { q, limit: 8 } });
+      const params: any = { limit: 8 };
+      if (q.trim().length >= 2) params.q = q.trim();
+      const { data } = await api.get('/patients', { params });
       setPatients(data.data || []);
     } catch (err) { console.error('Patient search failed:', err); toast.error('Patient search failed'); } finally { setPatientLoading(false); }
   };
@@ -844,7 +898,8 @@ export default function OTPage() {
                   <div className="relative">
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input value={patientSearch} onChange={e => setPatientSearch(e.target.value)}
-                      placeholder="Search by name, phone or patient ID..."
+                      onFocus={() => { if (patients.length === 0) searchPatients(''); }}
+                      placeholder="Click to see recent patients or search by name, phone, ID…"
                       className="w-full pl-8 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                     {patients.length > 0 && (
                       <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-200 shadow-lg z-10 max-h-48 overflow-y-auto">
@@ -870,16 +925,47 @@ export default function OTPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">OT Room <span className="text-red-500">*</span></label>
-                  <select value={bookingForm.otRoomId} onChange={e => setBookingForm(f => ({ ...f, otRoomId: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
-                    <option value="">Select room</option>
+                  <select value={bookingForm.otRoomId}
+                    onChange={e => setBookingForm(f => ({ ...f, otRoomId: e.target.value }))}
+                    disabled={rooms.length === 0}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-50 disabled:text-gray-400">
+                    <option value="">{rooms.length === 0 ? 'No OT rooms configured' : 'Select room'}</option>
                     {rooms.map(r => <option key={r.id} value={r.id}>{r.name} ({r.type})</option>)}
                   </select>
+                  {rooms.length === 0 && (
+                    <button type="button"
+                      onClick={() => { setShowBooking(false); setTab('rooms'); }}
+                      className="mt-1 text-xs text-teal-600 hover:text-teal-700 underline">
+                      Go to Rooms tab to add an OT room first
+                    </button>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Procedure Name <span className="text-red-500">*</span></label>
+                  <select
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v && v !== 'Other (type below)') {
+                        setBookingForm(f => ({ ...f, procedureName: v }));
+                      } else if (v === 'Other (type below)') {
+                        setBookingForm(f => ({ ...f, procedureName: '' }));
+                      }
+                    }}
+                    value={
+                      COMMON_PROCEDURES.flatMap(g => g.items).includes(bookingForm.procedureName)
+                        ? bookingForm.procedureName
+                        : (bookingForm.procedureName ? 'Other (type below)' : '')
+                    }
+                    className="w-full mb-2 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                    <option value="">Pick from common procedures…</option>
+                    {COMMON_PROCEDURES.map(group => (
+                      <optgroup key={group.group} label={group.group}>
+                        {group.items.map(p => <option key={p} value={p}>{p}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
                   <input value={bookingForm.procedureName} onChange={e => setBookingForm(f => ({ ...f, procedureName: e.target.value }))}
-                    placeholder="e.g. Appendectomy"
+                    placeholder="…or type custom procedure name"
                     className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                 </div>
               </div>
