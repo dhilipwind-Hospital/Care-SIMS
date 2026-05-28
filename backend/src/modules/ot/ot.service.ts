@@ -530,22 +530,78 @@ export class OTService {
     const updated = await this.prisma.oTBooking.update({ where: { id, tenantId }, data });
     this.ws.emitToTenant(tenantId, 'ot:status:changed', { action: 'completed', booking: updated });
 
-    // Auto-bill: add an OT line item to the patient's open invoice (or create
-    // one). Idempotent on the booking id, so re-completing won't double-bill.
-    // Fee is a sensible default; reception/billing can edit the draft.
-    this.billing.addChargeToOpenVisit(
-      tenantId,
-      booking.patientId,
+    // Itemised auto-billing — one line item per cost component. Each uses a
+    // distinct referenceId derived from the booking id, so addChargeToOpenVisit's
+    // per-referenceId idempotency guard prevents double-billing on retry.
+    // All sends are fire-and-forget so a billing hiccup never blocks completion.
+    this.autoBillOTCompletion(tenantId, updated).catch((err) =>
+      this.logger.error(`Failed to auto-bill OT booking ${booking.bookingNumber}`, err),
+    );
+
+    return updated;
+  }
+
+  // Build line items for a completed OT booking. Defaults are sensible
+  // placeholders — reception/billing can edit before finalising. Future
+  // enhancement: pull surgeon/anesthetist fees from per-doctor config and
+  // procedure fee from a ProcedureCatalog table.
+  private async autoBillOTCompletion(tenantId: string, booking: any): Promise<void> {
+    const PROCEDURE_FEE = 5000;     // surgeon-independent base fee
+    const SURGEON_FEE = 4000;       // primary surgeon professional fee
+    const ANESTHETIST_FEE = 2500;   // anaesthetist professional fee
+    const FACILITY_RATE_PER_MIN = 25; // OT room time charge (₹25/min)
+
+    // Use actual duration if available, else fall back to expected.
+    let mins = booking.expectedDurationMins || 60;
+    if (booking.actualStart && booking.actualEnd) {
+      mins = Math.max(15, Math.round((booking.actualEnd.getTime() - booking.actualStart.getTime()) / 60000));
+    }
+    const facilityCharge = mins * FACILITY_RATE_PER_MIN;
+
+    const lineItems: Array<{ description: string; category: string; quantity: number; unitPrice: number; referenceId: string }> = [
       {
         description: `OT Procedure — ${booking.procedureName} (${booking.bookingNumber})`,
         category: 'PROCEDURE',
         quantity: 1,
-        unitPrice: 5000,
-        referenceId: booking.id,
+        unitPrice: PROCEDURE_FEE,
+        referenceId: booking.id, // unchanged from previous behavior — preserves idempotency for already-completed bookings
       },
-      { locationId: booking.locationId, doctorId: booking.primarySurgeonId, consultationId: undefined },
-    ).catch((err) => this.logger.error(`Failed to auto-bill OT booking ${booking.bookingNumber}`, err));
+      {
+        description: `Surgeon Professional Fee (${booking.bookingNumber})`,
+        category: 'PROCEDURE',
+        quantity: 1,
+        unitPrice: SURGEON_FEE,
+        referenceId: `${booking.id}-surgeon`,
+      },
+      {
+        description: `OT Facility Charge — ${mins} min @ ₹${FACILITY_RATE_PER_MIN}/min (${booking.bookingNumber})`,
+        category: 'PROCEDURE',
+        quantity: 1,
+        unitPrice: facilityCharge,
+        referenceId: `${booking.id}-facility`,
+      },
+    ];
+    if (booking.anesthetistId) {
+      lineItems.push({
+        description: `Anaesthetist Professional Fee (${booking.bookingNumber})`,
+        category: 'PROCEDURE',
+        quantity: 1,
+        unitPrice: ANESTHETIST_FEE,
+        referenceId: `${booking.id}-anesthetist`,
+      });
+    }
 
-    return updated;
+    for (const item of lineItems) {
+      try {
+        await this.billing.addChargeToOpenVisit(
+          tenantId,
+          booking.patientId,
+          item,
+          { locationId: booking.locationId, doctorId: booking.primarySurgeonId, consultationId: undefined },
+        );
+      } catch (err) {
+        this.logger.error(`Failed to bill OT line "${item.description}" for ${booking.bookingNumber}`, err as any);
+      }
+    }
   }
 }
