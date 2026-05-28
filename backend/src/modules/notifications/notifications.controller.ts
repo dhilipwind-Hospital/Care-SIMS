@@ -3,7 +3,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { sendEmail, getLastEmailError } from '../../common/utils/mailer';
+import { sendEmail, getLastEmailError, getEmailProvider } from '../../common/utils/mailer';
 
 @ApiTags('Notifications') @ApiBearerAuth('access-token') @UseGuards(JwtAuthGuard) @Controller('notifications')
 export class NotificationsController {
@@ -18,22 +18,31 @@ export class NotificationsController {
 export class EmailHealthController {
   @Get('email')
   emailConfig() {
-    const host = process.env.SMTP_HOST;
-    const port = process.env.SMTP_PORT;
-    const user = process.env.SMTP_USER;
-    const passSet = !!process.env.SMTP_PASS;
-    const from = process.env.SMTP_FROM || process.env.SMTP_USER;
-    const configured = !!(host && user && passSet);
-    return {
-      configured,
-      provider: host?.includes('brevo') ? 'Brevo' : host?.includes('sendgrid') ? 'SendGrid' : host?.includes('mailtrap') ? 'Mailtrap' : (host || 'none'),
-      host: host || null,
-      port: port || null,
-      user: user || null,
-      passSet,
-      from: from || null,
-      lastError: getLastEmailError(),
-    };
+    const provider = getEmailProvider();
+    const from = process.env.EMAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || null;
+    if (provider === 'resend') {
+      return {
+        configured: true,
+        provider: 'Resend',
+        apiKeySet: true,
+        from,
+        lastError: getLastEmailError(),
+      };
+    }
+    if (provider === 'smtp') {
+      const host = process.env.SMTP_HOST;
+      return {
+        configured: true,
+        provider: host?.includes('brevo') ? 'Brevo (SMTP)' : host?.includes('sendgrid') ? 'SendGrid (SMTP)' : host?.includes('mailtrap') ? 'Mailtrap (SMTP)' : `SMTP (${host})`,
+        host,
+        port: process.env.SMTP_PORT,
+        user: process.env.SMTP_USER,
+        passSet: !!process.env.SMTP_PASS,
+        from,
+        lastError: getLastEmailError(),
+      };
+    }
+    return { configured: false, provider: 'none', from, lastError: getLastEmailError() };
   }
 
   @Post('email/test')
