@@ -1,10 +1,12 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { WsGateway } from '../ws-gateway/ws-gateway.gateway';
 import { calculateApacheII, calculateSOFA } from '../../common/utils/icu-scoring';
+import { sendEmail } from '../../common/utils/mailer';
 
 @Injectable()
 export class IcuService {
+  private readonly logger = new Logger(IcuService.name);
   constructor(private prisma: PrismaService, private ws: WsGateway) {}
 
   async listBeds(tenantId: string, locationId?: string) {
@@ -120,9 +122,62 @@ export class IcuService {
         alerts,
         recordedAt: record.recordedAt,
       });
+      this.emailCriticalAlert(tenantId, dto, alerts).catch((err) =>
+        this.logger.error('Failed to email ICU critical alert', err as any),
+      );
     }
 
     return { ...record, criticalAlerts: alerts.length > 0 ? alerts : undefined };
+  }
+
+  private async emailCriticalAlert(tenantId: string, dto: any, alerts: string[]) {
+    const [patient, admission, tenant] = await Promise.all([
+      this.prisma.patient.findFirst({ where: { id: dto.patientId, tenantId }, select: { firstName: true, lastName: true, patientId: true } }),
+      dto.admissionId ? this.prisma.admission.findFirst({ where: { id: dto.admissionId, tenantId }, select: { admittingDoctorId: true } }) : Promise.resolve(null),
+      this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { tradeName: true, legalName: true } }),
+    ]);
+    const orgName = tenant?.tradeName || tenant?.legalName || 'Hospital';
+
+    const recipients = new Set<string>();
+    const attendingDoctorId = (admission as any)?.admittingDoctorId;
+    if (attendingDoctorId) {
+      const doc = await this.prisma.tenantUser.findFirst({ where: { id: attendingDoctorId, tenantId }, select: { email: true } });
+      if (doc?.email) recipients.add(doc.email);
+    }
+    // Also notify a small backup pool of active doctors/nurses
+    const icuDoctors = await this.prisma.tenantUser.findMany({
+      where: { tenantId, isActive: true, role: { systemRoleId: { in: ['SYS_DOCTOR', 'SYS_NURSE'] } } },
+      select: { email: true },
+      take: 5,
+    }).catch(() => [] as any[]);
+    icuDoctors.filter((u: any) => u.email).slice(0, 3).forEach((u: any) => recipients.add(u.email));
+
+    if (recipients.size === 0) return;
+
+    const patientLabel = patient ? `${patient.firstName || ''} ${patient.lastName || ''} (${patient.patientId})`.trim() : `Patient ${dto.patientId}`;
+    const alertsHtml = alerts.map((a) => `<li style="margin:4px 0;color:#991b1b;">${a}</li>`).join('');
+    const recordedAt = new Date().toLocaleString('en-IN', { dateStyle: 'long', timeStyle: 'short' });
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+        <div style="background:#991b1b;padding:20px;border-radius:12px 12px 0 0;">
+          <h1 style="color:#fff;margin:0;font-size:20px;">⚠ ICU CRITICAL ALERT</h1>
+        </div>
+        <div style="padding:24px;background:#fff;border:1px solid #fecaca;border-top:none;border-radius:0 0 12px 12px;">
+          <p style="color:#4b5563;line-height:1.6;">
+            Critical vitals were just recorded for <strong>${patientLabel}</strong> at ${orgName}.
+          </p>
+          <h3 style="color:#991b1b;font-size:15px;margin:20px 0 0;">Critical findings</h3>
+          <ul style="margin:8px 0 0;padding-left:20px;">${alertsHtml}</ul>
+          <p style="color:#4b5563;font-size:13px;margin-top:16px;"><strong>Recorded:</strong> ${recordedAt}</p>
+          <p style="color:#991b1b;font-weight:600;margin-top:16px;">Immediate clinical review is required.</p>
+        </div>
+        <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:16px;">This is an automated alert from ${orgName} ICU monitoring.</p>
+      </div>`;
+
+    const subject = `⚠ ICU CRITICAL ALERT - ${patientLabel} - ${orgName}`;
+    for (const email of recipients) {
+      sendEmail(email, subject, html).catch((err) => this.logger.error(`Failed to send ICU alert to ${email}`, err));
+    }
   }
 
   async getAdmissionMonitoring(tenantId: string, admissionId: string) {
