@@ -239,7 +239,7 @@ export class BillingService {
   }
 
   async recordPayment(tenantId: string, invoiceId: string, dto: any, recordedById: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const inv = await tx.invoice.findFirst({ where: { id: invoiceId, tenantId }, include: { lineItems: true, payments: true, patient: true } });
       if (!inv) throw new NotFoundException('Invoice not found');
       if (inv.status === 'CANCELLED') throw new BadRequestException('Cannot pay cancelled invoice');
@@ -250,8 +250,35 @@ export class BillingService {
       const balance = Number(inv.netTotal) - newPaid;
       const status = balance <= 0 ? 'PAID' : 'PARTIAL';
       await tx.invoice.update({ where: { id: invoiceId }, data: { paidAmount: newPaid, status } });
-      return payment;
+      return { payment, inv, newPaid, balance, status };
     });
+
+    const { payment, inv, newPaid, balance, status } = result;
+    const patient = inv.patient as any;
+    if (patient?.email) {
+      const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { tradeName: true, legalName: true } });
+      const orgName = tenant?.tradeName || tenant?.legalName || 'Hospital';
+      const paidOn = new Date(payment.paymentDate).toLocaleString('en-IN', { dateStyle: 'long', timeStyle: 'short' });
+      const body = `Dear ${patient.firstName || ''} ${patient.lastName || ''},<br><br>
+        We have received your payment. Thank you.<br><br>
+        <strong>Receipt Details</strong><br>
+        Invoice Number: ${inv.invoiceNumber}<br>
+        Payment Amount: ₹${Number(dto.amount).toFixed(2)}<br>
+        Payment Method: ${dto.paymentMethod}${dto.referenceNumber ? ` (Ref: ${dto.referenceNumber})` : ''}<br>
+        Paid On: ${paidOn}<br><br>
+        <strong>Invoice Summary</strong><br>
+        Net Total: ₹${Number(inv.netTotal).toFixed(2)}<br>
+        Total Paid: ₹${Number(newPaid).toFixed(2)}<br>
+        Balance Due: ₹${Math.max(0, balance).toFixed(2)}<br>
+        Status: ${status}<br><br>
+        ${balance <= 0 ? 'Your invoice is fully settled.' : 'A balance remains on your account. Please contact the billing desk.'}`;
+      sendEmail(patient.email, `Payment Received - Invoice #${inv.invoiceNumber} - ${orgName}`, emailTemplate('Payment Receipt', body, orgName)).catch((err) =>
+        // eslint-disable-next-line no-console
+        console.error(`Failed to send payment receipt email to ${patient.email}:`, err),
+      );
+    }
+
+    return payment;
   }
 
   async cancelInvoice(tenantId: string, id: string, reason: string) {

@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { generateSequentialId } from '../../common/utils/id-generator';
+import { sendEmail } from '../../common/utils/mailer';
 
 // Default consultation fee when the org hasn't configured a per-doctor rate.
 // Reception/billing can edit the draft invoice before finalizing.
@@ -8,6 +9,7 @@ const DEFAULT_CONSULT_FEE = 500;
 
 @Injectable()
 export class ConsultationsService {
+  private readonly logger = new Logger(ConsultationsService.name);
   constructor(private prisma: PrismaService) {}
 
   async findAll(tenantId: string, query: any) {
@@ -104,7 +106,63 @@ export class ConsultationsService {
       console.error('Failed to auto-create consultation invoice:', err);
     }
 
+    try {
+      await this.sendVisitSummaryEmail(tenantId, (completed as any).id);
+    } catch (err) {
+      this.logger.error('Failed to send visit summary email', err as any);
+    }
+
     return completed;
+  }
+
+  private async sendVisitSummaryEmail(tenantId: string, consultationId: string) {
+    const c: any = await this.prisma.consultation.findFirst({
+      where: { id: consultationId, tenantId },
+      include: {
+        patient: { select: { firstName: true, lastName: true, email: true } },
+        diagnoses: true,
+        prescriptions: { include: { items: true } },
+      },
+    });
+    if (!c?.patient?.email) return;
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { tradeName: true, legalName: true } });
+    const orgName = tenant?.tradeName || tenant?.legalName || 'your hospital';
+    const doctor = c.doctorId ? await this.prisma.tenantUser.findFirst({ where: { id: c.doctorId, tenantId }, select: { firstName: true, lastName: true } }) : null;
+    const doctorName = doctor ? `Dr. ${doctor.firstName} ${doctor.lastName || ''}`.trim() : 'your doctor';
+    const visitDate = new Date(c.completedAt || c.startedAt || Date.now()).toLocaleString('en-IN', { dateStyle: 'long', timeStyle: 'short' });
+    const diagnosesHtml = (c.diagnoses || []).length
+      ? `<ul style="margin:8px 0 0;padding-left:18px;color:#4b5563;">${c.diagnoses.map((d: any) => `<li>${d.description}${d.icdCode ? ` <span style="color:#9ca3af;">(${d.icdCode})</span>` : ''}</li>`).join('')}</ul>`
+      : '<p style="color:#6b7280;margin:8px 0 0;">No diagnoses recorded.</p>';
+    const rxHtml = (c.prescriptions || []).length
+      ? `<ul style="margin:8px 0 0;padding-left:18px;color:#4b5563;">${(c.prescriptions || []).flatMap((rx: any) => (rx.items || []).map((it: any) => `<li>${it.drugName}${it.strength ? ' ' + it.strength : ''} — ${it.dosage || ''} ${it.frequency || ''}${it.durationDays ? ` for ${it.durationDays} days` : ''}</li>`)).join('')}</ul>`
+      : '<p style="color:#6b7280;margin:8px 0 0;">No prescriptions issued during this visit.</p>';
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+        <div style="background:linear-gradient(135deg,#0F766E,#14B8A6);padding:20px;border-radius:12px 12px 0 0;">
+          <h1 style="color:#fff;margin:0;font-size:20px;">${orgName}</h1>
+        </div>
+        <div style="padding:24px;background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
+          <h2 style="color:#1f2937;margin:0 0 16px;">Visit Summary</h2>
+          <p style="color:#4b5563;line-height:1.6;">
+            Dear ${c.patient.firstName || ''} ${c.patient.lastName || ''},<br/><br/>
+            Thank you for visiting ${orgName}. Below is a summary of your consultation with ${doctorName} on ${visitDate}.
+          </p>
+          <h3 style="color:#0F766E;font-size:15px;margin:20px 0 0;">Chief Complaint</h3>
+          <p style="color:#4b5563;margin:8px 0 0;">${c.chiefComplaint || '-'}</p>
+          ${c.assessment ? `<h3 style="color:#0F766E;font-size:15px;margin:20px 0 0;">Assessment</h3><p style="color:#4b5563;margin:8px 0 0;white-space:pre-line;">${c.assessment}</p>` : ''}
+          ${c.plan ? `<h3 style="color:#0F766E;font-size:15px;margin:20px 0 0;">Plan</h3><p style="color:#4b5563;margin:8px 0 0;white-space:pre-line;">${c.plan}</p>` : ''}
+          <h3 style="color:#0F766E;font-size:15px;margin:20px 0 0;">Diagnoses</h3>
+          ${diagnosesHtml}
+          <h3 style="color:#0F766E;font-size:15px;margin:20px 0 0;">Prescriptions</h3>
+          ${rxHtml}
+          <p style="color:#9ca3af;font-size:12px;margin-top:24px;">If you have any concerns or questions about this visit, please contact our reception desk. For follow-up appointments, please book through your account.</p>
+        </div>
+        <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:16px;">This is an automated message from ${orgName}. Do not reply.</p>
+      </div>
+    `;
+    sendEmail(c.patient.email, `Visit Summary - ${visitDate.split(',')[0]} - ${orgName}`, html).catch((err) =>
+      this.logger.error(`Failed to send visit summary email to ${c.patient.email}`, err),
+    );
   }
 
   private async autoCreateConsultInvoice(tenantId: string, consult: any, feeOverride?: number) {
