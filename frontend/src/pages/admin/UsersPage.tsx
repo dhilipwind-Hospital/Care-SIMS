@@ -9,7 +9,7 @@ import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import Pagination from '../../components/ui/Pagination';
 import api from '../../lib/api';
 
-const EMPTY_FORM = { firstName: '', lastName: '', email: '', password: '', roleId: '' };
+const EMPTY_FORM = { firstName: '', lastName: '', email: '', password: '', roleId: '', primaryLocationId: '' };
 
 type Tab = 'staff' | 'pending';
 
@@ -144,6 +144,7 @@ export default function UsersPage() {
     if (!addForm.firstName.trim() || !addForm.lastName.trim()) { setAddError('First and last name are required'); return; }
     if (!addForm.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addForm.email.trim())) { setAddError('Enter a valid email address'); return; }
     if (addForm.password.length < 8) { setAddError('Password must be at least 8 characters'); return; }
+    if (!addForm.primaryLocationId) { setAddError('Please select a primary location'); return; }
     setAddSaving(true); setAddError('');
     try {
       await api.post('/users', addForm);
@@ -259,6 +260,14 @@ export default function UsersPage() {
                   className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                   <option value="">Select role...</option>
                   {roles.map((r: any) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Primary Location <span className="text-red-500">*</span></label>
+                <select required value={addForm.primaryLocationId} onChange={e => setAddForm(f => ({ ...f, primaryLocationId: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                  <option value="">Select location...</option>
+                  {locations.map((l: any) => <option key={l.id} value={l.id}>{l.name}{l.city ? ` — ${l.city}` : ''}</option>)}
                 </select>
               </div>
               {addError && <div className="col-span-2 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">{addError}</div>}
