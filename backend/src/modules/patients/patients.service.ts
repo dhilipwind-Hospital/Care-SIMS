@@ -1,10 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { generateSequentialId } from '../../common/utils/id-generator';
 import { v4 as uuidv4 } from 'uuid';
+import { sendEmail } from '../../common/utils/mailer';
 
 @Injectable()
 export class PatientsService {
+  private readonly logger = new Logger(PatientsService.name);
   constructor(private prisma: PrismaService) {}
 
   async findAll(tenantId: string, query: any) {
@@ -99,7 +101,7 @@ export class PatientsService {
       };
     }
 
-    return generateSequentialId(this.prisma, {
+    const created = await generateSequentialId(this.prisma, {
       table: 'Patient',
       idColumn: 'patientId',
       prefix,
@@ -132,6 +134,33 @@ export class PatientsService {
         });
       },
     });
+
+    if (dto.email) {
+      const orgName = tenant?.tradeName || tenant?.legalName || 'our hospital';
+      const welcomeHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
+          <h2 style="color: #0F766E;">Welcome to ${orgName}, ${dto.firstName}!</h2>
+          <p>You have been registered as a patient at <strong>${orgName}</strong>.</p>
+          <p style="color:#666;font-size:13px;margin-top:16px;">
+            <strong>Your details</strong><br/>
+            Patient ID: ${(created as any)?.patientId || '-'}<br/>
+            Name: ${dto.firstName} ${dto.lastName || ''}<br/>
+            Phone: ${mobile}<br/>
+            Email: ${dto.email}
+          </p>
+          <p style="color:#666;font-size:13px;margin-top:16px;">
+            Please keep your Patient ID handy for future visits, appointments and billing.
+          </p>
+          <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
+          <p style="color:#aaa;font-size:12px;">${orgName} &middot; Powered by Ayphen HMS</p>
+        </div>
+      `;
+      sendEmail(dto.email, `Welcome to ${orgName} – your patient registration is confirmed`, welcomeHtml).catch((err) =>
+        this.logger.error(`Failed to send patient welcome email to ${dto.email}`, err),
+      );
+    }
+
+    return created;
   }
 
   async findOne(tenantId: string, id: string) {
