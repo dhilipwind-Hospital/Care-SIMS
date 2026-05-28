@@ -66,13 +66,16 @@ export default function BillingPage() {
   }, [selectedPatient?.id]);
 
   // Doctors list for the New Invoice modal's optional Doctor picker.
+  // Fetched once on mount so the dropdown is populated the instant the modal
+  // opens — previously this fired on showNew change, leaving the dropdown
+  // empty for the first ~1s of cold network requests.
   const [doctorsList, setDoctorsList] = useState<any[]>([]);
+  const [doctorsLoading, setDoctorsLoading] = useState(false);
   useEffect(() => {
-    if (!showNew) return;
+    setDoctorsLoading(true);
     api.get('/doctors/affiliations/tenant')
       .then(r => {
         const rows = Array.isArray(r.data?.data ?? r.data) ? (r.data?.data ?? r.data) : [];
-        // Flatten { doctor: {...} } into a single-level row for the dropdown.
         setDoctorsList(rows.map((a: any) => ({
           id: a.doctorId || a.doctor?.id || a.id,
           firstName: a.doctor?.firstName || a.firstName || '',
@@ -80,8 +83,9 @@ export default function BillingPage() {
           specialties: a.doctor?.specialties || a.specialties,
         })));
       })
-      .catch(() => setDoctorsList([]));
-  }, [showNew]);
+      .catch(() => setDoctorsList([]))
+      .finally(() => setDoctorsLoading(false));
+  }, []);
 
   const [revenueStats, setRevenueStats] = useState<any>(null);
   // Revenue by service line (Doctor Fee, Lab, Pharmacy, etc) for the
@@ -144,8 +148,13 @@ export default function BillingPage() {
     } catch (err) { toast.error('Operation failed'); } finally { setPatientLoading(false); }
   };
 
+  // 500ms debounce + 2-char minimum so we don't fire a search on every
+  // single keystroke (Render free tier cold-starts make the first request
+  // feel like the input is locked up).
   useEffect(() => {
-    const t = setTimeout(() => searchPatients(patientSearch), 300);
+    const q = patientSearch.trim();
+    if (q.length < 2) { setPatients([]); return; }
+    const t = setTimeout(() => searchPatients(q), 500);
     return () => clearTimeout(t);
   }, [patientSearch]);
 
@@ -1169,8 +1178,9 @@ export default function BillingPage() {
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Doctor (optional)</label>
                 <select value={form.doctorId} onChange={e => setForm(f => ({ ...f, doctorId: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
-                  <option value="">— Select doctor —</option>
+                  disabled={doctorsLoading && doctorsList.length === 0}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white disabled:opacity-60">
+                  <option value="">{doctorsLoading && doctorsList.length === 0 ? 'Loading doctors…' : '— Select doctor —'}</option>
                   {doctorsList.map(d => (
                     <option key={d.id} value={d.id}>
                       Dr. {d.firstName} {d.lastName}{d.specialties?.length ? ` · ${d.specialties[0]}` : ''}
