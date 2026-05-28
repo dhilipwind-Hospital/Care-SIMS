@@ -363,6 +363,31 @@ export class AuthService {
         bloodGroup: dto.bloodGroup,
       },
     });
+
+    const loginUrl = `${this.config.get('FRONTEND_URL') || 'http://localhost:5555'}/patient/login`;
+    const welcomeHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
+        <h2 style="color: #0F766E;">Welcome to Ayphen HMS, ${dto.firstName}!</h2>
+        <p>Your patient account has been created successfully.</p>
+        <p>You can now sign in and book appointments, view lab results, manage prescriptions, and access your medical records securely.</p>
+        <a href="${loginUrl}" style="display:inline-block;padding:12px 24px;background:linear-gradient(90deg,#0F766E,#14B8A6);color:#fff;text-decoration:none;border-radius:8px;font-weight:600;margin:16px 0;">
+          Sign in to your account
+        </a>
+        <p style="color:#666;font-size:13px;margin-top:24px;">
+          <strong>Account details</strong><br/>
+          Name: ${dto.firstName} ${dto.lastName}<br/>
+          Email: ${dto.email}<br/>
+          Phone: ${dto.phone}
+        </p>
+        <p style="color:#888;font-size:12px;margin-top:16px;">If you didn't create this account, please ignore this email or contact support.</p>
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
+        <p style="color:#aaa;font-size:12px;">Ayphen HMS &middot; Your health, organised.</p>
+      </div>
+    `;
+    sendEmail(dto.email, 'Welcome to Ayphen HMS – your account is ready', welcomeHtml).catch((err) =>
+      this.logger.error(`Failed to send welcome email to ${dto.email}`, err),
+    );
+
     return { message: 'Registration successful', id: account.id };
   }
 
