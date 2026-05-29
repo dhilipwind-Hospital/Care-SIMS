@@ -125,6 +125,28 @@ export class DoctorRegistryService {
       if (dto.isActive !== undefined) data.isActive = dto.isActive;
       if (dto.status !== undefined) data.status = dto.status;
       if (dto.employmentType !== undefined) data.employmentType = dto.employmentType;
+      // Location scoping — admin-only too. Validates that every locationId in
+      // allowedLocations belongs to THIS tenant before saving, otherwise an
+      // admin from Tenant A could grant a doctor access to Tenant B's branch.
+      if (dto.locationId !== undefined) data.locationId = dto.locationId;
+      if (dto.locationScope !== undefined) {
+        const v = String(dto.locationScope).toUpperCase();
+        if (v !== 'SINGLE' && v !== 'MULTI') {
+          throw new BadRequestException('locationScope must be SINGLE or MULTI');
+        }
+        data.locationScope = v;
+      }
+      if (dto.allowedLocations !== undefined) {
+        const ids = Array.isArray(dto.allowedLocations) ? dto.allowedLocations.filter((x: any) => typeof x === 'string' && x.length > 0) : [];
+        if (ids.length > 0) {
+          const valid = await this.prisma.tenantLocation.findMany({ where: { tenantId, id: { in: ids } }, select: { id: true } });
+          if (valid.length !== ids.length) {
+            throw new BadRequestException('One or more allowedLocations do not belong to this tenant');
+          }
+        }
+        data.allowedLocations = ids;
+      }
+      if (dto.crossLocationAccess !== undefined) data.crossLocationAccess = !!dto.crossLocationAccess;
     }
     return this.prisma.doctorOrgAffiliation.update({ where: { id: affiliationId }, data });
   }

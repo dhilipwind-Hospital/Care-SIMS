@@ -123,8 +123,21 @@ export class AppointmentsService {
   }
 
   async getDoctorSlots(tenantId: string, doctorId: string, date: string, locationId: string) {
+    // A doctor's affiliation is matched by:
+    //   • primary location (locationId), OR
+    //   • MULTI scope + locationId listed in allowedLocations, OR
+    //   • no locationId requested (let the caller default to the primary)
+    const whereBase: any = { tenantId, doctorId, isActive: true };
     const aff = await this.prisma.doctorOrgAffiliation.findFirst({
-      where: { tenantId, doctorId, isActive: true, ...(locationId ? { locationId } : {}) },
+      where: locationId
+        ? {
+            ...whereBase,
+            OR: [
+              { locationId },
+              { locationScope: 'MULTI', allowedLocations: { has: locationId } },
+            ],
+          }
+        : whereBase,
       include: { schedules: true },
     });
     if (!aff) throw new NotFoundException('Doctor affiliation not found');

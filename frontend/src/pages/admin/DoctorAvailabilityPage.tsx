@@ -24,6 +24,11 @@ type Affiliation = {
   availableDays?: string[];
   slotDurationMinutes?: number;
   maxPatientsPerDay?: number;
+  // Location scoping — already stored in DB, only freshly exposed in UI.
+  locationId?: string | null;
+  locationScope?: 'SINGLE' | 'MULTI' | string;
+  allowedLocations?: string[];
+  crossLocationAccess?: boolean;
   doctor?: { id: string; firstName: string; lastName: string; specialties?: string[]; ayphenStatus?: string };
   location?: { id: string; name: string; locationCode?: string };
 };
@@ -34,7 +39,12 @@ const EMPTY_FORM = {
   consultationFee: 500,
   maxPatientsPerDay: 30,
   isActive: true,
+  locationScope: 'SINGLE' as 'SINGLE' | 'MULTI',
+  allowedLocations: [] as string[],
+  crossLocationAccess: false,
 };
+
+type TenantLoc = { id: string; name: string; city?: string };
 
 export default function DoctorAvailabilityPage() {
   const [rows, setRows] = useState<Affiliation[]>([]);
@@ -43,6 +53,7 @@ export default function DoctorAvailabilityPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState('');
+  const [locations, setLocations] = useState<TenantLoc[]>([]);
 
   useEscapeClose(!!editing, () => setEditing(null));
 
@@ -56,16 +67,28 @@ export default function DoctorAvailabilityPage() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchRows(); }, []);
+  const fetchLocations = async () => {
+    try {
+      const { data } = await api.get('/org/locations');
+      const list: TenantLoc[] = Array.isArray(data?.data ?? data) ? (data?.data ?? data) : [];
+      setLocations(list);
+    } catch { /* non-fatal — the picker just shows empty */ }
+  };
+
+  useEffect(() => { fetchRows(); fetchLocations(); }, []);
 
   const openEdit = (a: Affiliation) => {
     setEditing(a);
+    const scope = (a.locationScope === 'MULTI' ? 'MULTI' : 'SINGLE') as 'SINGLE' | 'MULTI';
     setForm({
       availableDays: a.availableDays?.length ? a.availableDays : EMPTY_FORM.availableDays,
       slotDurationMinutes: a.slotDurationMinutes ?? 15,
       consultationFee: Number(a.consultationFee ?? 500),
       maxPatientsPerDay: a.maxPatientsPerDay ?? 30,
       isActive: a.isActive ?? true,
+      locationScope: scope,
+      allowedLocations: Array.isArray(a.allowedLocations) ? a.allowedLocations : [],
+      crossLocationAccess: !!a.crossLocationAccess,
     });
   };
 
@@ -90,6 +113,11 @@ export default function DoctorAvailabilityPage() {
         consultationFee: Number(form.consultationFee),
         maxPatientsPerDay: Number(form.maxPatientsPerDay),
         isActive: form.isActive,
+        locationScope: form.locationScope,
+        // Backend ignores allowedLocations when scope is SINGLE; we still
+        // send the current list so toggling MULTI→SINGLE→MULTI preserves it.
+        allowedLocations: form.locationScope === 'MULTI' ? form.allowedLocations : [],
+        crossLocationAccess: form.crossLocationAccess,
       });
       toast.success('Availability updated');
       setEditing(null);
@@ -246,6 +274,55 @@ export default function DoctorAvailabilityPage() {
                     <option value="0">Inactive</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Practice-location scoping. SINGLE = primary location only.
+                  MULTI = pick the additional branches this doctor practises at. */}
+              <div className="border-t border-gray-100 pt-4">
+                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Location Scope</label>
+                <div className="mt-2 flex gap-2">
+                  {(['SINGLE', 'MULTI'] as const).map(opt => (
+                    <button key={opt}
+                      type="button"
+                      onClick={() => setForm({ ...form, locationScope: opt })}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${form.locationScope === opt ? 'bg-teal-600 text-white border-teal-600' : 'bg-white border-gray-200 text-gray-600 hover:border-teal-300'}`}>
+                      {opt === 'SINGLE' ? 'Single location' : 'Multi-location'}
+                    </button>
+                  ))}
+                </div>
+
+                {form.locationScope === 'MULTI' && (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-xs text-gray-500">Tick every branch where this doctor practises. The primary location ({editing.location?.name || '—'}) is always included.</p>
+                    <div className="max-h-44 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                      {locations.length === 0 && (
+                        <div className="px-3 py-2 text-xs text-gray-400">No other locations configured yet.</div>
+                      )}
+                      {locations
+                        .filter(l => l.id !== editing.location?.id)
+                        .map(l => {
+                          const checked = form.allowedLocations.includes(l.id);
+                          return (
+                            <label key={l.id} className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer">
+                              <input type="checkbox" checked={checked}
+                                onChange={e => setForm({
+                                  ...form,
+                                  allowedLocations: e.target.checked
+                                    ? [...form.allowedLocations, l.id]
+                                    : form.allowedLocations.filter(x => x !== l.id),
+                                })} />
+                              <span className="text-gray-700">{l.name}{l.city ? ` — ${l.city}` : ''}</span>
+                            </label>
+                          );
+                        })}
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-gray-600 mt-1">
+                      <input type="checkbox" checked={form.crossLocationAccess}
+                        onChange={e => setForm({ ...form, crossLocationAccess: e.target.checked })} />
+                      <span>Allow this doctor to view patient records across all assigned branches</span>
+                    </label>
+                  </div>
+                )}
               </div>
 
               <p className="text-xs text-gray-500">Bookable slots use a 09:00–18:00 window with the slot duration above. Patients can self-book only on selected working days.</p>
