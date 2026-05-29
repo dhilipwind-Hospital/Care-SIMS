@@ -258,16 +258,27 @@ export class OTService {
       });
     } catch (err: any) {
       // Surface the underlying reason so the frontend stops seeing opaque 500s.
-      // Prisma foreign-key violations land here as P2003.
+      // Prisma errors often start with newlines and have multi-line bodies,
+      // so we hunt for the first non-empty line for the user-facing message.
       const code = err?.code || '';
       const meta = err?.meta || {};
-      const message = err?.message || String(err);
-      this.logger.error(`OT booking insert failed: code=${code} meta=${JSON.stringify(meta)} message=${message}`, err);
+      const raw = err?.message || String(err);
+      const firstLine = (raw.split('\n').map((s: string) => s.trim()).find((s: string) => s.length > 0)) || 'Database insert failed';
+      this.logger.error(`OT booking insert failed: code=${code} meta=${JSON.stringify(meta)} firstLine="${firstLine}" raw=${JSON.stringify(raw).slice(0, 500)}`, err);
+
+      // Map common Prisma codes to friendly messages.
       if (code === 'P2003') {
-        const field = meta?.field_name || 'foreign key';
-        throw new BadRequestException(`Cannot create booking: invalid reference (${field}). One of patient / surgeon / room / anesthetist / department doesn't exist in this tenant.`);
+        const field = meta?.field_name || meta?.constraint || 'foreign key';
+        throw new BadRequestException(`Invalid reference (${field}). One of patient / surgeon / room / anesthetist / department does not exist in this tenant.`);
       }
-      throw new BadRequestException(`Cannot create booking: ${message.split('\n')[0]}`);
+      if (code === 'P2002') {
+        throw new BadRequestException(`Duplicate value on ${meta?.target || 'a unique field'}.`);
+      }
+      if (code === 'P2025') {
+        throw new BadRequestException(`A required referenced record was not found.`);
+      }
+      // Generic fallback — always include the code so we can debug.
+      throw new BadRequestException(`Cannot create booking${code ? ` (Prisma ${code})` : ''}: ${firstLine}`);
     }
 
     // Fire-and-forget booking confirmation emails — never block the create.

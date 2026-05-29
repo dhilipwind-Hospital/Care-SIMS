@@ -311,7 +311,11 @@ export default function OTPage() {
       setShowBooking(false);
       fetchData();
     } catch (err: any) {
-      setFormError(err.response?.data?.message || 'Failed to save booking');
+      // NestJS returns string OR string[] (validation pipe). Normalise to a
+      // single human-readable line so the modal never shows an empty banner.
+      const m = err?.response?.data?.message;
+      const text = Array.isArray(m) ? m.join(' · ') : (typeof m === 'string' && m.trim() ? m : '');
+      setFormError(text || err?.response?.data?.error || `Request failed (HTTP ${err?.response?.status || '?'})`);
     } finally { setSubmitting(false); }
   };
 
