@@ -113,8 +113,23 @@ export async function generateSequentialId<T>(
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       return await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        // Robust against rows that don't end in a clean digit run (e.g. retry
+        // suffixed IDs like INV-2026-000001-AB). Without the CASE guard,
+        // SUBSTRING returns '' for those rows and CAST('' AS INTEGER) raises
+        // Postgres "invalid input syntax for type integer" — surfaced as a
+        // Prisma P2010 on every subsequent insert until the bad row is
+        // cleaned up. The CASE skips those rows.
         const result: any[] = await tx.$queryRawUnsafe(
-          `SELECT COALESCE(MAX(CAST(SUBSTRING("${dbIdColumn}" FROM '[0-9]+$') AS INTEGER)), 0) + 1 AS "nextVal"
+          `SELECT COALESCE(
+              MAX(
+                CASE
+                  WHEN SUBSTRING("${dbIdColumn}" FROM '[0-9]+$') ~ '^[0-9]+$'
+                  THEN CAST(SUBSTRING("${dbIdColumn}" FROM '[0-9]+$') AS INTEGER)
+                  ELSE 0
+                END
+              ),
+              0
+            ) + 1 AS "nextVal"
            FROM "${dbTable}"
            WHERE "${dbTenantColumn}" = $1`,
           tenantId,

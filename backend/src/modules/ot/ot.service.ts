@@ -257,14 +257,21 @@ export class OTService {
         },
       });
     } catch (err: any) {
-      // Surface the underlying reason so the frontend stops seeing opaque 500s.
-      // Prisma errors often start with newlines and have multi-line bodies,
-      // so we hunt for the first non-empty line for the user-facing message.
+      // Surface the underlying reason. Prisma's raw-SQL errors (P2010) have a
+      // multi-line message where the first line is the generic
+      // "Invalid `prisma.$queryRawUnsafe()` invocation:" boilerplate — the
+      // real Postgres error sits a few lines down. Walk all lines and pick
+      // the most informative one so the toast actually helps debugging.
       const code = err?.code || '';
       const meta = err?.meta || {};
-      const raw = err?.message || String(err);
-      const firstLine = (raw.split('\n').map((s: string) => s.trim()).find((s: string) => s.length > 0)) || 'Database insert failed';
-      this.logger.error(`OT booking insert failed: code=${code} meta=${JSON.stringify(meta)} firstLine="${firstLine}" raw=${JSON.stringify(raw).slice(0, 500)}`, err);
+      const raw = String(err?.message || err);
+      const lines = raw.split('\n').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+      const banner = /invalid `.+` invocation/i;
+      const pgErrorLine = lines.find((l: string) => /^error[:\s]/i.test(l) || /^message[:\s]/i.test(l) || /^db error/i.test(l));
+      const nonBanner = lines.find((l: string) => !banner.test(l));
+      const userLine = pgErrorLine || nonBanner || lines[0] || 'Database insert failed';
+
+      this.logger.error(`OT booking insert failed: code=${code} meta=${JSON.stringify(meta)} raw=${JSON.stringify(raw).slice(0, 1500)}`, err);
 
       // Map common Prisma codes to friendly messages.
       if (code === 'P2003') {
@@ -272,13 +279,14 @@ export class OTService {
         throw new BadRequestException(`Invalid reference (${field}). One of patient / surgeon / room / anesthetist / department does not exist in this tenant.`);
       }
       if (code === 'P2002') {
-        throw new BadRequestException(`Duplicate value on ${meta?.target || 'a unique field'}.`);
+        throw new BadRequestException(`Duplicate value on ${JSON.stringify(meta?.target) || 'a unique field'}.`);
       }
       if (code === 'P2025') {
         throw new BadRequestException(`A required referenced record was not found.`);
       }
-      // Generic fallback — always include the code so we can debug.
-      throw new BadRequestException(`Cannot create booking${code ? ` (Prisma ${code})` : ''}: ${firstLine}`);
+      // Generic fallback — always include the code and a chunk of the actual
+      // underlying detail (truncated) so the toast is debuggable on its own.
+      throw new BadRequestException(`Cannot create booking${code ? ` (Prisma ${code})` : ''}: ${userLine.slice(0, 300)}`);
     }
 
     // Fire-and-forget booking confirmation emails — never block the create.
