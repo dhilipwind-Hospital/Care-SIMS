@@ -196,6 +196,22 @@ export class OTService {
   }
 
   async createBooking(tenantId: string, dto: any, createdById: string) {
+    // Resolve locationId: prefer DTO, then OT room's location, then tenant's
+    // first active location. Required because OTBooking.locationId is NOT NULL
+    // and the controller can pass an undefined locationId when the calling
+    // user has no primaryLocationId (e.g. org admins seeded without one).
+    if (!dto.locationId && dto.otRoomId) {
+      const room = await this.prisma.oTRoom.findFirst({ where: { id: dto.otRoomId, tenantId }, select: { locationId: true } });
+      if (room?.locationId) dto.locationId = room.locationId;
+    }
+    if (!dto.locationId) {
+      const firstLoc = await this.prisma.tenantLocation.findFirst({ where: { tenantId, isActive: true }, orderBy: { createdAt: 'asc' }, select: { id: true } });
+      if (firstLoc?.id) dto.locationId = firstLoc.id;
+    }
+    if (!dto.locationId) {
+      throw new BadRequestException('Cannot create booking: no active location found for this tenant.');
+    }
+
     // Conflict check — block the booking if surgeon, patient or room is
     // already occupied in the requested window. Defensive: if we can't
     // parse the time we skip the check (window calc returns null).
@@ -214,30 +230,45 @@ export class OTService {
       }
     }
 
-    const booking = await generateSequentialId(this.prisma, {
-      table: 'OTBooking',
-      idColumn: 'bookingNumber',
-      prefix: `OT-${new Date().getFullYear()}-`,
-      tenantId,
-      padLength: 5,
-      callback: async (tx, bookingNumber) => {
-        return tx.oTBooking.create({
-          data: {
-            tenantId, bookingNumber, locationId: dto.locationId, patientId: dto.patientId,
-            admissionId: dto.admissionId, otRoomId: dto.otRoomId,
-            primarySurgeonId: dto.primarySurgeonId, assistingSurgeons: dto.assistingSurgeons || [],
-            anesthetistId: dto.anesthetistId, scrubNurseId: dto.scrubNurseId,
-            departmentId: dto.departmentId, procedureName: dto.procedureName,
-            procedureCode: dto.procedureCode, surgeryType: dto.surgeryType || 'ELECTIVE',
-            anesthesiaType: dto.anesthesiaType, scheduledDate,
-            scheduledStart: dto.scheduledStart, expectedDurationMins: dto.expectedDurationMins,
-            bloodUnitsReserved: dto.bloodUnitsReserved || 0, notes: dto.notes, status: 'SCHEDULED', createdById,
-            ...(dto.preOpChecklist ? { preOpChecklist: dto.preOpChecklist } : {}),
-          },
-          include: { otRoom: true },
-        });
-      },
-    });
+    let booking: any;
+    try {
+      booking = await generateSequentialId(this.prisma, {
+        table: 'OTBooking',
+        idColumn: 'bookingNumber',
+        prefix: `OT-${new Date().getFullYear()}-`,
+        tenantId,
+        padLength: 5,
+        callback: async (tx, bookingNumber) => {
+          return tx.oTBooking.create({
+            data: {
+              tenantId, bookingNumber, locationId: dto.locationId, patientId: dto.patientId,
+              admissionId: dto.admissionId, otRoomId: dto.otRoomId,
+              primarySurgeonId: dto.primarySurgeonId, assistingSurgeons: dto.assistingSurgeons || [],
+              anesthetistId: dto.anesthetistId, scrubNurseId: dto.scrubNurseId,
+              departmentId: dto.departmentId, procedureName: dto.procedureName,
+              procedureCode: dto.procedureCode, surgeryType: dto.surgeryType || 'ELECTIVE',
+              anesthesiaType: dto.anesthesiaType, scheduledDate,
+              scheduledStart: dto.scheduledStart, expectedDurationMins: dto.expectedDurationMins,
+              bloodUnitsReserved: dto.bloodUnitsReserved || 0, notes: dto.notes, status: 'SCHEDULED', createdById,
+              ...(dto.preOpChecklist ? { preOpChecklist: dto.preOpChecklist } : {}),
+            },
+            include: { otRoom: true },
+          });
+        },
+      });
+    } catch (err: any) {
+      // Surface the underlying reason so the frontend stops seeing opaque 500s.
+      // Prisma foreign-key violations land here as P2003.
+      const code = err?.code || '';
+      const meta = err?.meta || {};
+      const message = err?.message || String(err);
+      this.logger.error(`OT booking insert failed: code=${code} meta=${JSON.stringify(meta)} message=${message}`, err);
+      if (code === 'P2003') {
+        const field = meta?.field_name || 'foreign key';
+        throw new BadRequestException(`Cannot create booking: invalid reference (${field}). One of patient / surgeon / room / anesthetist / department doesn't exist in this tenant.`);
+      }
+      throw new BadRequestException(`Cannot create booking: ${message.split('\n')[0]}`);
+    }
 
     // Fire-and-forget booking confirmation emails — never block the create.
     this.sendBookingConfirmationEmails(tenantId, booking).catch((err) =>

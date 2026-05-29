@@ -1121,31 +1121,29 @@ export default function OTPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Procedure Name <span className="text-red-500">*</span></label>
-                  <select
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v && v !== 'Other (type below)') {
-                        setBookingForm(f => ({ ...f, procedureName: v }));
-                      } else if (v === 'Other (type below)') {
-                        setBookingForm(f => ({ ...f, procedureName: '' }));
-                      }
-                    }}
-                    value={
-                      COMMON_PROCEDURES.flatMap(g => g.items).includes(bookingForm.procedureName)
-                        ? bookingForm.procedureName
-                        : (bookingForm.procedureName ? 'Other (type below)' : '')
-                    }
-                    className="w-full mb-2 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
-                    <option value="">Pick from common procedures…</option>
-                    {COMMON_PROCEDURES.map(group => (
-                      <optgroup key={group.group} label={group.group}>
-                        {group.items.map(p => <option key={p} value={p}>{p}</option>)}
-                      </optgroup>
-                    ))}
-                  </select>
                   <input value={bookingForm.procedureName} onChange={e => setBookingForm(f => ({ ...f, procedureName: e.target.value }))}
-                    placeholder="…or type custom procedure name"
+                    placeholder="Type the procedure name"
                     className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="text-[11px] text-gray-400">Quick fill:</span>
+                    <select
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v && v !== 'Other (type below)') {
+                          setBookingForm(f => ({ ...f, procedureName: v }));
+                        }
+                        e.target.value = ''; // reset so the same option can be picked again
+                      }}
+                      defaultValue=""
+                      className="flex-1 text-xs text-gray-500 border-0 bg-transparent focus:outline-none focus:ring-0 cursor-pointer">
+                      <option value="">Pick from common procedures…</option>
+                      {COMMON_PROCEDURES.map(group => (
+                        <optgroup key={group.group} label={group.group}>
+                          {group.items.map(p => <option key={p} value={p}>{p}</option>)}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
 
