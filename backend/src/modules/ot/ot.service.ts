@@ -232,6 +232,7 @@ export class OTService {
             anesthesiaType: dto.anesthesiaType, scheduledDate,
             scheduledStart: dto.scheduledStart, expectedDurationMins: dto.expectedDurationMins,
             bloodUnitsReserved: dto.bloodUnitsReserved || 0, notes: dto.notes, status: 'SCHEDULED', createdById,
+            ...(dto.preOpChecklist ? { preOpChecklist: dto.preOpChecklist } : {}),
           },
           include: { otRoom: true },
         });

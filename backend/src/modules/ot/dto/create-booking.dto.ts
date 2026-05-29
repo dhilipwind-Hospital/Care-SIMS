@@ -1,5 +1,5 @@
 import {
-  IsNotEmpty, IsOptional, IsString, IsUUID, IsDateString, IsNumber, IsArray, Min,
+  IsNotEmpty, IsOptional, IsString, IsUUID, IsDateString, IsNumber, IsArray, IsObject, Min,
 } from 'class-validator';
 
 export class CreateOTBookingDto {
@@ -72,4 +72,10 @@ export class CreateOTBookingDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  // Free-form JSON checklist. Frontend currently stuffs infectionRiskClass
+  // here at create time and the full WHO checklist on update.
+  @IsOptional()
+  @IsObject()
+  preOpChecklist?: Record<string, any>;
 }
