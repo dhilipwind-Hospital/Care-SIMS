@@ -53,8 +53,22 @@ function camelToSnake(s: string): string {
 
 /** Map Prisma model name to actual DB table name (via @@map convention: snake_case plural). */
 function modelToTable(model: string): string {
+  // First check exact PascalCase overrides for models where camelToSnake
+  // produces a wrong result (e.g. consecutive uppercase like "OTBooking"
+  // collapses to "otbooking" not "ot_booking"). These map directly to the
+  // @@map(...) value declared on the Prisma model.
+  const pascalOverrides: Record<string, string> = {
+    OTBooking: 'ot_bookings',
+    OTRoom: 'ot_rooms',
+    OTEquipment: 'ot_equipment', // intentionally singular — matches @@map
+    MlcRecord: 'mlc_records',
+    NicuAdmission: 'nicu_admissions',
+    IcuBed: 'icu_beds',
+  };
+  if (pascalOverrides[model]) return pascalOverrides[model];
+
   const snake = camelToSnake(model);
-  // Handle known irregular/non-pluralizing tables
+  // Handle known irregular/non-pluralizing tables — keyed by camelToSnake output
   const overrides: Record<string, string> = {
     patient: 'patients',
     invoice: 'invoices',
@@ -67,8 +81,12 @@ function modelToTable(model: string): string {
     physiotherapy_order: 'physiotherapy_orders',
     ambulance_trip: 'ambulance_trips',
     pharmacy_return: 'pharmacy_returns',
-    o_t_booking: 'ot_bookings', // OTBooking → o_t_booking via naive conversion
+    // Legacy keys kept for safety in case any caller injects pre-snake-cased values
+    o_t_booking: 'ot_bookings',
     ot_booking: 'ot_bookings',
+    otbooking: 'ot_bookings',
+    otroom: 'ot_rooms',
+    otequipment: 'ot_equipment',
     dialysis_session: 'dialysis_sessions',
     mortuary_record: 'mortuary_records',
     insurance_claim: 'insurance_claims',
