@@ -159,6 +159,12 @@ export default function OTPage() {
   const PACU_MARKER_END = ':PACU_JSON>>';
   const aldreteTotal = pacuForm.activity + pacuForm.breathing + pacuForm.circulation + pacuForm.consciousness + pacuForm.oxygenation;
 
+  // Add-OT-Room modal
+  const [showRoomModal, setShowRoomModal] = useState(false);
+  const [roomForm, setRoomForm] = useState({ name: '', type: 'MAJOR_OT', capacityClass: 'CLASS_2' });
+  const [roomSaving, setRoomSaving] = useState(false);
+  const [roomError, setRoomError] = useState('');
+
   // Complete surgery modal
   const [completeBooking, setCompleteBooking] = useState<any>(null);
   const [completeForm, setCompleteForm] = useState({
@@ -407,6 +413,32 @@ export default function OTPage() {
       setAnaesBooking(null);
     } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to save'); }
     finally { setAnaesSaving(false); }
+  };
+
+  // ---------- Add OT Room ----------
+  const openAddRoom = () => {
+    setRoomForm({ name: '', type: 'MAJOR_OT', capacityClass: 'CLASS_2' });
+    setRoomError('');
+    setShowRoomModal(true);
+  };
+  const handleCreateRoom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!roomForm.name.trim()) { setRoomError('Room name is required'); return; }
+    setRoomSaving(true); setRoomError('');
+    try {
+      await api.post('/ot/rooms', {
+        name: roomForm.name.trim(),
+        type: roomForm.type,
+        capacityClass: roomForm.capacityClass,
+      });
+      toast.success(`OT room "${roomForm.name}" created`);
+      setShowRoomModal(false);
+      fetchData();
+    } catch (err: any) {
+      setRoomError(err.response?.data?.message || 'Failed to create OT room');
+    } finally {
+      setRoomSaving(false);
+    }
   };
 
   // PACU action — Admit to recovery (auto-stamp arrival time)
@@ -734,27 +766,39 @@ export default function OTPage() {
       )}
 
       {tab === 'rooms' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {rooms.slice((page - 1) * 20, page * 20).map(room => (
-            <div key={room.id} className="hms-card p-5">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-semibold text-gray-900">{room.name}</h4>
-                <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${room.status === 'AVAILABLE' ? 'bg-green-100 text-green-700' : room.status === 'IN_USE' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-                  {room.status}
-                </span>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-500">Add operating theatre rooms before scheduling surgeries.</p>
+            <button onClick={openAddRoom}
+              className="px-3 py-1.5 text-sm rounded-lg bg-teal-600 hover:bg-teal-700 text-white inline-flex items-center gap-2">
+              <Scissors size={14} /> Add OT Room
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {rooms.slice((page - 1) * 20, page * 20).map(room => (
+              <div key={room.id} className="hms-card p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold text-gray-900">{room.name}</h4>
+                  <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${room.status === 'AVAILABLE' ? 'bg-green-100 text-green-700' : room.status === 'IN_USE' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {room.status}
+                  </span>
+                </div>
+                <div className="text-sm text-gray-500 space-y-1">
+                  <div>Type: <span className="text-gray-700 font-medium">{room.type}</span></div>
+                  <div>Class: <span className="text-gray-700 font-medium">{room.capacityClass}</span></div>
+                </div>
               </div>
-              <div className="text-sm text-gray-500 space-y-1">
-                <div>Type: <span className="text-gray-700 font-medium">{room.type}</span></div>
-                <div>Class: <span className="text-gray-700 font-medium">{room.capacityClass}</span></div>
+            ))}
+            {rooms.length === 0 && !loading && (
+              <div className="col-span-3 hms-card">
+                <EmptyState icon={<Scissors size={36} />} title="No OT rooms configured"
+                  description="Click 'Add OT Room' above to create your first operating theatre." />
               </div>
-            </div>
-          ))}
-          {rooms.length === 0 && !loading && (
-            <div className="col-span-3 hms-card"><EmptyState icon={<Scissors size={36} />} title="No OT rooms configured" description="Add operating theatre rooms to manage surgeries" /></div>
-          )}
-          {rooms.length > 0 && (
-            <div className="col-span-3"><Pagination page={page} totalPages={Math.ceil(rooms.length / 20)} onPageChange={setPage} totalItems={rooms.length} pageSize={20} /></div>
-          )}
+            )}
+            {rooms.length > 0 && (
+              <div className="col-span-3"><Pagination page={page} totalPages={Math.ceil(rooms.length / 20)} onPageChange={setPage} totalItems={rooms.length} pageSize={20} /></div>
+            )}
+          </div>
         </div>
       )}
 
@@ -940,6 +984,70 @@ export default function OTPage() {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* ========== ADD OT ROOM MODAL ========== */}
+      {showRoomModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div>
+                <h2 className="font-bold text-gray-900">Add OT Room</h2>
+                <p className="text-xs text-gray-400 mt-0.5">Configure a new operating theatre</p>
+              </div>
+              <button onClick={() => setShowRoomModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleCreateRoom} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Room Name <span className="text-red-500">*</span></label>
+                <input value={roomForm.name}
+                  onChange={e => setRoomForm({ ...roomForm, name: e.target.value })}
+                  placeholder="e.g. OT-1, Main OT, Cardiac OT"
+                  className="hms-input w-full" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Type</label>
+                  <select value={roomForm.type}
+                    onChange={e => setRoomForm({ ...roomForm, type: e.target.value })}
+                    className="hms-input w-full">
+                    <option value="MAJOR_OT">Major OT</option>
+                    <option value="MINOR_OT">Minor OT</option>
+                    <option value="DAYCARE_OT">Day-care OT</option>
+                    <option value="EMERGENCY_OT">Emergency OT</option>
+                    <option value="CARDIAC_OT">Cardiac OT</option>
+                    <option value="NEURO_OT">Neuro OT</option>
+                    <option value="ORTHO_OT">Ortho OT</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Capacity / Class</label>
+                  <select value={roomForm.capacityClass}
+                    onChange={e => setRoomForm({ ...roomForm, capacityClass: e.target.value })}
+                    className="hms-input w-full">
+                    <option value="CLASS_1">Class 1 (Ultra-clean)</option>
+                    <option value="CLASS_2">Class 2 (Clean)</option>
+                    <option value="CLASS_3">Class 3 (Standard)</option>
+                  </select>
+                </div>
+              </div>
+              {roomError && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">{roomError}</div>
+              )}
+              <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
+                <button type="button" onClick={() => setShowRoomModal(false)}
+                  className="btn-secondary px-4 py-2">Cancel</button>
+                <button type="submit" disabled={roomSaving}
+                  className="btn-primary flex items-center gap-2 px-4 py-2">
+                  {roomSaving && <Loader2 size={14} className="animate-spin" />}
+                  {roomSaving ? 'Creating…' : 'Create Room'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
