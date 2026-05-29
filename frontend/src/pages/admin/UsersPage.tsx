@@ -173,7 +173,12 @@ export default function UsersPage() {
 
   const openEdit = (u: any) => {
     setEditing(u);
-    setEditForm({ firstName: u.firstName, lastName: u.lastName, roleId: u.roleId || u.role?.id || '' });
+    setEditForm({
+      firstName: u.firstName,
+      lastName: u.lastName,
+      roleId: u.roleId || u.role?.id || '',
+      primaryLocationId: u.primaryLocationId || '',
+    });
     setEditError('');
   };
 
@@ -336,6 +341,15 @@ export default function UsersPage() {
                   {roles.map((r: any) => <option key={r.id} value={r.id}>{r.name}</option>)}
                 </select>
               </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Primary Location</label>
+                <select value={editForm.primaryLocationId || ''}
+                  onChange={e => setEditForm((f: any) => ({ ...f, primaryLocationId: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                  <option value="">No location</option>
+                  {locations.map((l: any) => <option key={l.id} value={l.id}>{l.name}{l.city ? ` — ${l.city}` : ''}</option>)}
+                </select>
+              </div>
               {editError && <div className="col-span-2 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">{editError}</div>}
               <div className="col-span-2 flex justify-end gap-3 pt-2 border-t border-gray-100">
                 <button type="button" onClick={() => setEditing(null)} className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
@@ -496,7 +510,17 @@ export default function UsersPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">{u.department?.name || '---'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{u.location?.name || '---'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {(() => {
+                        // Backend returns primaryLocationId only — resolve the
+                        // display name from the locations list we already
+                        // fetched in fetchMeta(). Falls back to nested
+                        // u.location?.name if the backend ever joins it.
+                        const id = u.primaryLocationId || u.location?.id;
+                        const loc = id ? locations.find((l: any) => l.id === id) : null;
+                        return loc?.name || u.location?.name || '---';
+                      })()}
+                    </td>
                     <td className="px-4 py-3">
                       <button onClick={() => toggleActive(u)}
                         className={`flex items-center gap-1.5 text-xs px-2.5 py-0.5 rounded-full font-semibold transition-colors ${u.isActive ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
