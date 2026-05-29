@@ -111,6 +111,10 @@ export default function OTPage() {
   const [rooms, setRooms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'schedule'|'rooms'|'timeline'|'reports'>('schedule');
+  // Default the Schedule list to today, but let the user navigate to other
+  // dates. Setting "" means "show all dates" — useful when hunting for a
+  // booking you can't find.
+  const [viewDate, setViewDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [page, setPage] = useState(1);
 
   // Schedule surgery modal
@@ -200,8 +204,13 @@ export default function OTPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      const params: any = { limit: 30 };
+      // Only send a date filter when one is selected — empty viewDate means
+      // "show all upcoming + recent", which the backend handles by ignoring
+      // the missing query param.
+      if (viewDate) params.date = viewDate;
       const [bRes, rRes] = await Promise.all([
-        api.get('/ot/bookings', { params: { limit: 30, date: new Date().toISOString().split('T')[0] } }),
+        api.get('/ot/bookings', { params }),
         api.get('/ot/rooms'),
       ]);
       setBookings(bRes.data.data || []);
@@ -209,7 +218,9 @@ export default function OTPage() {
     } catch (err) { console.error('Failed to load OT data:', err); toast.error('Failed to load OT data'); } finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  // Re-fetch whenever the date filter changes so the list always matches the
+  // visible date picker. Initial mount handled by viewDate's default.
+  useEffect(() => { fetchData(); }, [viewDate]);
 
   // Escape key to close modals
   useEscapeClose(showBooking, () => setShowBooking(false));
@@ -309,7 +320,15 @@ export default function OTPage() {
         toast.success('Surgery scheduled successfully');
       }
       setShowBooking(false);
-      fetchData();
+      // If the saved booking is on a different date than the current filter,
+      // jump the filter to that date so the user immediately sees the row
+      // they just created. Otherwise the silent date-filter would hide it.
+      const savedDate = bookingForm.scheduledDate;
+      if (savedDate && savedDate !== viewDate) {
+        setViewDate(savedDate); // triggers refetch via useEffect
+      } else {
+        fetchData();
+      }
     } catch (err: any) {
       // NestJS returns string OR string[] (validation pipe). Normalise to a
       // single human-readable line so the modal never shows an empty banner.
@@ -689,8 +708,21 @@ export default function OTPage() {
 
       {tab === 'schedule' && (
         <div className="hms-card">
-          <div className="px-5 py-4 border-b border-gray-100">
+          <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
             <h3 className="font-semibold text-gray-800">OT Bookings</h3>
+            <div className="flex items-center gap-2 text-sm">
+              <label className="text-xs font-medium text-gray-500 uppercase">Show date</label>
+              <input type="date" value={viewDate}
+                onChange={e => setViewDate(e.target.value)}
+                className="border border-gray-200 rounded-lg px-2.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              <button type="button"
+                onClick={() => setViewDate(new Date().toISOString().slice(0, 10))}
+                className="px-2.5 py-1 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Today</button>
+              <button type="button"
+                onClick={() => setViewDate('')}
+                title="Show all dates"
+                className="px-2.5 py-1 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">All</button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
