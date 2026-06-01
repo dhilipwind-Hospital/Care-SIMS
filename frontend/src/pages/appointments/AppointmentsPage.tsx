@@ -184,6 +184,10 @@ export default function AppointmentsPage() {
   // Location filter for doctor dropdown
   const [locations, setLocations]     = useState<any[]>([]);
   const [locationFilter, setLocationFilter] = useState('');
+  // Department filter — narrows the doctor list to those whose affiliation
+  // matches the picked department name. Pure client-side filter; doesn't
+  // touch the doctors fetch, so existing flows keep working.
+  const [departmentFilter, setDepartmentFilter] = useState('');
 
   // Edit/Reschedule modal
   const [showEdit, setShowEdit]           = useState(false);
@@ -549,18 +553,49 @@ export default function AppointmentsPage() {
                     </select>
                   </div>
                 )}
+                {/* Department filter — narrows the doctor dropdown to a clinical specialty.
+                    Only shows departments that actually have doctors registered under them
+                    so admins never see an empty list. Leaving it "All" preserves the
+                    original behaviour where every doctor is selectable. */}
+                {(() => {
+                  const deptOptions = Array.from(new Set(doctors.map((d: any) => (d.departmentName || '').trim()).filter(Boolean))).sort();
+                  if (deptOptions.length === 0) return null;
+                  return (
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Filter by Department</label>
+                      <select value={departmentFilter} onChange={e => {
+                        setDepartmentFilter(e.target.value);
+                        // If the picked dept no longer contains the currently selected doctor,
+                        // clear the doctor pick so the user explicitly re-chooses.
+                        if (e.target.value && form.doctorId) {
+                          const stillVisible = doctors.find((d: any) => (d.doctorId || d.id) === form.doctorId && (d.departmentName || '').trim().toLowerCase() === e.target.value.toLowerCase());
+                          if (!stillVisible) setForm(f => ({ ...f, doctorId: '' }));
+                        }
+                      }}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                        <option value="">All departments</option>
+                        {deptOptions.map(d => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                    </div>
+                  );
+                })()}
                 {/* Doctor */}
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Doctor <span className="text-red-500">*</span></label>
                   <select value={form.doctorId} onChange={e => setForm(f => ({ ...f, doctorId: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                     <option value="">Select doctor…</option>
-                    {doctors.map((d: any) => (
-                      <option key={d.doctorId || d.id} value={d.doctorId || d.id}>
-                        Dr. {d.doctor?.firstName || d.firstName} {d.doctor?.lastName || d.lastName}
-                        {d.departmentName ? ` — ${d.departmentName}` : ''}
-                      </option>
-                    ))}
+                    {doctors
+                      .filter((d: any) => {
+                        if (!departmentFilter) return true;
+                        return (d.departmentName || '').trim().toLowerCase() === departmentFilter.toLowerCase();
+                      })
+                      .map((d: any) => (
+                        <option key={d.doctorId || d.id} value={d.doctorId || d.id}>
+                          Dr. {d.doctor?.firstName || d.firstName} {d.doctor?.lastName || d.lastName}
+                          {d.departmentName ? ` — ${d.departmentName}` : ''}
+                        </option>
+                      ))}
                   </select>
                 </div>
                 {/* Appointment Type */}
