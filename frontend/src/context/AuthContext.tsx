@@ -39,6 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [pendingDoctorAffiliations, setPendingDoctorAffiliations] = useState<DoctorAffiliation[] | null>(null);
   const [pendingDoctorToken, setPendingDoctorToken] = useState<string | null>(null);
+  const [pendingDoctorInfo, setPendingDoctorInfo] = useState<{ id: string; email: string; firstName: string; lastName: string } | null>(null);
   const [pendingMfa, setPendingMfa] = useState<MfaPending | null>(null);
 
   const login = useCallback(async (email: string, password: string, loginType: string): Promise<boolean> => {
@@ -100,9 +101,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const activeAffiliations = affiliations.filter(a => a.status === 'ACTIVE' || a.status === 'ACCEPTED');
 
         if (activeAffiliations.length > 1) {
-          // Multiple orgs — store partial token and affiliations, redirect to org selector
+          // Multiple orgs — store partial token, affiliations, and doctor info
+          // for the selector page to reconstruct the full user once an org is chosen.
           setPendingDoctorToken(data.accessToken);
           setPendingDoctorAffiliations(affiliations);
+          setPendingDoctorInfo({
+            id: doctorInfo.id,
+            email: doctorInfo.email,
+            firstName: doctorInfo.firstName,
+            lastName: doctorInfo.lastName,
+          });
           return true;
         } else if (activeAffiliations.length === 1) {
           // Single org — auto select and proceed
@@ -119,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             role: 'DOCTOR',
             userType: 'doctor' as const,
             tenantId: activeAffiliations[0].orgId,
+            tenantName: scopedRes.data?.tenantName || activeAffiliations[0].orgName,
             locationId: activeAffiliations[0].locationId,
           };
           setAuth(scopedRes.data.accessToken, doctorUser, scopedRes.data.refreshToken);
@@ -173,20 +182,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         { affiliationId },
         { headers: { Authorization: `Bearer ${pendingDoctorToken}` } }
       );
-      setAuth(data.accessToken, { ...data.user, userType: 'doctor' }, data.refreshToken);
+      // Backend returns { accessToken, tenantName, locationName } — no user object.
+      // Rebuild it from the stashed doctor info + the chosen affiliation.
+      const chosen = pendingDoctorAffiliations?.find(a => a.affiliationId === affiliationId);
+      const doctorUser = {
+        sub: pendingDoctorInfo?.id || '',
+        email: pendingDoctorInfo?.email || '',
+        firstName: pendingDoctorInfo?.firstName || '',
+        lastName: pendingDoctorInfo?.lastName || '',
+        role: 'DOCTOR',
+        userType: 'doctor' as const,
+        tenantId: chosen?.orgId || '',
+        tenantName: data?.tenantName || chosen?.orgName || '',
+        locationId: chosen?.locationId || '',
+      };
+      setAuth(data.accessToken, doctorUser, data.refreshToken);
       setUser(getUser());
       setPendingDoctorAffiliations(null);
       setPendingDoctorToken(null);
+      setPendingDoctorInfo(null);
     } finally {
       setLoading(false);
     }
-  }, [pendingDoctorToken]);
+  }, [pendingDoctorToken, pendingDoctorAffiliations, pendingDoctorInfo]);
 
   const logout = useCallback(() => {
     clearAuth();
     setUser(null);
     setPendingDoctorAffiliations(null);
     setPendingDoctorToken(null);
+    setPendingDoctorInfo(null);
     setPendingMfa(null);
     window.location.href = '/';
   }, []);

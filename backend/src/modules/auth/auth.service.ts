@@ -191,10 +191,23 @@ export class AuthService {
       }
     }
 
-    // Doctor user — no tenantId
-    if (!tenantId || userType === 'DOCTOR') {
+    // Doctor user — either pre-org-selection (no tenantId) or affiliated
+    // (type='TENANT' but the user lives in DoctorRegistry, not TenantUser).
+    // We check DoctorRegistry first so affiliated doctors don't fall through
+    // to the TenantUser lookup which would 401.
+    if (!tenantId || userType === 'DOCTOR' || userType === 'TENANT') {
       const doctor = await this.prisma.doctorRegistry.findUnique({ where: { id: userId } });
       if (doctor) {
+        let tenantName: string | undefined;
+        let locationId: string | undefined;
+        if (tenantId) {
+          const [tenant, affiliation] = await Promise.all([
+            this.prisma.tenant.findUnique({ where: { id: tenantId } }),
+            this.prisma.doctorOrgAffiliation.findFirst({ where: { doctorId: doctor.id, tenantId, isActive: true } }),
+          ]);
+          tenantName = tenant?.tradeName || tenant?.legalName;
+          locationId = affiliation?.locationId || undefined;
+        }
         return {
           id: doctor.id,
           email: doctor.email,
@@ -202,6 +215,9 @@ export class AuthService {
           lastName: doctor.lastName,
           role: { name: 'DOCTOR', systemRoleId: 'SYS_DOCTOR' },
           type: 'DOCTOR',
+          tenantId: tenantId || undefined,
+          tenantName,
+          locationId,
           specialties: doctor.specialties,
           permissions: [],
           specialFlags: [],
