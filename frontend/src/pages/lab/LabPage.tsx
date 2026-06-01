@@ -149,10 +149,23 @@ export default function LabPage() {
     }
   };
 
-  const handlePrintLabReport = (order: any) => {
+  const handlePrintLabReport = async (rowOrder: any) => {
+    // The list endpoint omits results — fetch the full detail before printing,
+    // otherwise the report renders with an empty "No results entered" table.
+    let order = rowOrder;
+    try {
+      const { data } = await api.get(`/lab/orders/${rowOrder.id}`);
+      order = data || rowOrder;
+    } catch {
+      toast.error('Failed to load report data');
+      return;
+    }
     const printWin = window.open('', '_blank', 'width=900,height=700');
     if (!printWin) return;
-    const results = order.results || order.testResults || [];
+    // Backend returns results as groups of { status, items: [{ testName, resultValue, resultUnit, refRangeText, refRangeLow, refRangeHigh, flag, ... }] }.
+    // Flatten to one row per test entry so the print table can iterate uniformly.
+    const groups = order.results || order.testResults || [];
+    const results = groups.flatMap((g: any) => g.items || g.entries || [g]);
     const patientName = order.patient
       ? `${order.patient.firstName || ''} ${order.patient.lastName || ''}`.trim()
       : order.patientName || '—';
@@ -217,15 +230,22 @@ export default function LabPage() {
         <th>Test Name</th><th>Result</th><th>Unit</th><th>Reference Range</th><th>Flag</th><th>Method</th>
       </tr></thead>
       <tbody>
-        ${results.length > 0 ? results.map((r: any) => `
-          <tr class="${r.abnormalFlag === 'HH' || r.abnormalFlag === 'LL' ? 'critical-row' : ''}">
+        ${results.length > 0 ? results.map((r: any) => {
+          const flag = r.flag || r.abnormalFlag || 'NORMAL';
+          const refRange = r.refRangeText
+            || (r.refRangeLow != null && r.refRangeHigh != null ? `${r.refRangeLow} – ${r.refRangeHigh}` : '')
+            || r.referenceRange
+            || '—';
+          return `
+          <tr class="${['HH','LL','CRITICAL'].includes(flag) ? 'critical-row' : ''}">
             <td>${r.testName || r.name || '—'}</td>
-            <td style="${flagColor[r.abnormalFlag] || flagColor.NORMAL}"><strong>${r.resultValue || r.value || '—'}</strong></td>
+            <td style="${flagColor[flag] || flagColor.NORMAL}"><strong>${r.resultValue || r.value || '—'}</strong></td>
             <td>${r.resultUnit || r.unit || '—'}</td>
-            <td>${r.referenceRange || '—'}</td>
-            <td style="${flagColor[r.abnormalFlag] || flagColor.NORMAL}">${r.abnormalFlag || 'Normal'}</td>
+            <td>${refRange}</td>
+            <td style="${flagColor[flag] || flagColor.NORMAL}">${flag}</td>
             <td>${r.method || '—'}</td>
-          </tr>`).join('') : '<tr><td colspan="6" style="text-align:center;color:#9ca3af">No results entered</td></tr>'}
+          </tr>`;
+        }).join('') : '<tr><td colspan="6" style="text-align:center;color:#9ca3af">No results entered</td></tr>'}
       </tbody>
     </table>
 
@@ -234,7 +254,7 @@ export default function LabPage() {
       <strong>Lab Notes:</strong> ${order.notes || order.labNotes}
     </div>` : ''}
 
-    ${results.some((r: any) => r.abnormalFlag === 'HH' || r.abnormalFlag === 'LL') ? `
+    ${results.some((r: any) => ['HH','LL','CRITICAL'].includes(r.flag || r.abnormalFlag)) ? `
     <div style="background:#fff1f2;border:1px solid #fecaca;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#dc2626;font-weight:600">
       ⚠ CRITICAL VALUES PRESENT — Physician has been notified
     </div>` : ''}
