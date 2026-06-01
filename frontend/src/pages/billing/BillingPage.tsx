@@ -88,7 +88,7 @@ export default function BillingPage() {
             description: u.description,
             category: u.category,
             quantity: u.quantity || 1,
-            unitPrice: '',
+            unitPrice: u.unitPrice ? String(u.unitPrice) : '',
             discountPercent: 0,
           }));
         });

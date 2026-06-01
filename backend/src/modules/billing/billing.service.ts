@@ -195,15 +195,18 @@ export class BillingService {
 
   // Recent consultations, lab orders, and prescriptions for a patient,
   // surfaced as candidate invoice line items so the billing user can add
-  // them with one click instead of retyping. The data model has no link
-  // back from invoice line items to source records, so we can't strictly
-  // exclude items that have already been billed — instead we cap at the
-  // last `days` days and let the user remove anything they don't want.
+  // them with one click instead of retyping. Skips anything already auto-
+  // billed by the lab/pharmacy integrations (they stamp the source id in
+  // InvoiceLineItem.referenceId).
   async getPatientUnbilledItems(tenantId: string, patientId: string, days = 30) {
     const since = new Date();
     since.setDate(since.getDate() - days);
 
-    const [consultations, labOrders, prescriptions] = await Promise.all([
+    const [billedRefs, consultations, labOrders, prescriptions] = await Promise.all([
+      this.prisma.invoiceLineItem.findMany({
+        where: { invoice: { tenantId, patientId } },
+        select: { referenceId: true },
+      }),
       this.prisma.consultation.findMany({
         where: { tenantId, patientId, status: 'COMPLETED', completedAt: { gte: since } },
         orderBy: { completedAt: 'desc' },
@@ -212,7 +215,7 @@ export class BillingService {
       this.prisma.labOrder.findMany({
         where: { tenantId, patientId, orderedAt: { gte: since } },
         orderBy: { orderedAt: 'desc' },
-        select: { id: true, orderNumber: true, orderedAt: true, items: { select: { testName: true, testCode: true } } },
+        select: { id: true, orderNumber: true, orderedAt: true, items: { select: { id: true, testName: true, testCode: true } } },
       }),
       this.prisma.prescription.findMany({
         where: {
@@ -221,9 +224,29 @@ export class BillingService {
           status: { notIn: ['CANCELLED'] },
         },
         orderBy: { issuedAt: 'desc' },
-        select: { id: true, rxNumber: true, issuedAt: true, items: { select: { drugName: true, quantity: true, strength: true } } },
+        select: { id: true, rxNumber: true, issuedAt: true, items: { select: { id: true, drugName: true, quantity: true, strength: true, drugId: true } } },
       }),
     ]);
+
+    // refSet: exact match for lab (item id) and consultation (id).
+    // refPrefixSet: pharmacy uses `${rxId}:${batchId}` so we match by prefix.
+    const refSet = new Set(billedRefs.map(r => r.referenceId).filter((x): x is string => !!x));
+
+    // Pull selling-price hints for the drugs in these prescriptions so the
+    // pharmacy lines land with a price already filled in instead of ₹0.
+    const drugIds = Array.from(new Set(prescriptions.flatMap(rx => rx.items.map(i => i.drugId).filter((id): id is string => !!id))));
+    const drugBatchPrices: Record<string, number> = {};
+    if (drugIds.length) {
+      const batches = await this.prisma.drugBatch.findMany({
+        where: { tenantId, drugId: { in: drugIds }, unitCost: { not: null }, quantityInStock: { gt: 0 } },
+        select: { drugId: true, unitCost: true },
+      });
+      for (const b of batches) {
+        if (!drugBatchPrices[b.drugId] && b.unitCost != null) {
+          drugBatchPrices[b.drugId] = Math.round(Number(b.unitCost) * 1.3 * 100) / 100;
+        }
+      }
+    }
 
     const items: Array<{
       sourceType: 'CONSULTATION' | 'LAB' | 'PHARMACY';
@@ -231,39 +254,53 @@ export class BillingService {
       description: string;
       category: string;
       quantity: number;
+      unitPrice: number;
       occurredAt: Date | null;
     }> = [];
 
     for (const c of consultations) {
+      if (refSet.has(c.id)) continue;
       items.push({
         sourceType: 'CONSULTATION',
         sourceId: c.id,
         description: `Consultation${c.chiefComplaint ? ` — ${c.chiefComplaint}` : ''}`,
         category: 'CONSULTATION',
         quantity: 1,
+        unitPrice: 0,
         occurredAt: c.completedAt,
       });
     }
     for (const lo of labOrders) {
       for (const li of lo.items) {
+        if (refSet.has(li.id)) continue;
         items.push({
           sourceType: 'LAB',
-          sourceId: lo.id,
-          description: `Lab: ${li.testName}${li.testCode ? ` (${li.testCode})` : ''}`,
+          sourceId: li.id,
+          description: `Lab — ${li.testName}${li.testCode ? ` (${li.testCode})` : ''}`,
           category: 'LAB',
           quantity: 1,
+          unitPrice: 200, // matches lab.service.ts DEFAULT_LAB_TEST_PRICE
           occurredAt: lo.orderedAt,
         });
       }
     }
     for (const rx of prescriptions) {
+      // Pharmacy auto-bill uses `${rxId}:${batchId}` — if ANY ref starts with
+      // `${rx.id}:`, dispensing already happened and we don't surface this Rx.
+      const dispensedRefPrefix = `${rx.id}:`;
+      const alreadyDispensed = Array.from(refSet).some(r => r.startsWith(dispensedRefPrefix));
+      if (alreadyDispensed) continue;
       for (const it of rx.items) {
+        const unitPrice = it.drugId && drugBatchPrices[it.drugId] != null
+          ? drugBatchPrices[it.drugId]
+          : 50; // matches pharmacy.service.ts DEFAULT_DRUG_PRICE
         items.push({
           sourceType: 'PHARMACY',
           sourceId: rx.id,
-          description: `${it.drugName}${it.strength ? ` ${it.strength}` : ''}`,
+          description: `Pharmacy — ${it.drugName}${it.strength ? ` ${it.strength}` : ''}`,
           category: 'PHARMACY',
           quantity: it.quantity ? Number(it.quantity) : 1,
+          unitPrice,
           occurredAt: rx.issuedAt,
         });
       }
