@@ -193,6 +193,52 @@ export class BillingService {
     };
   }
 
+  // Patients with at least one non-cancelled invoice whose paidAmount < netTotal.
+  // Used by the New Invoice modal to surface "who still owes us money" the
+  // moment the patient picker is focused — before the user types anything.
+  async getOutstandingPatients(tenantId: string, limit = 10) {
+    const liveInvoices = await this.prisma.invoice.findMany({
+      where: { tenantId, status: { in: ['DRAFT', 'FINALIZED', 'PARTIAL'] } },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        patientId: true,
+        netTotal: true,
+        paidAmount: true,
+        createdAt: true,
+        patient: { select: { id: true, patientId: true, firstName: true, lastName: true, mobile: true } },
+      },
+    });
+
+    const byPatient = new Map<string, { patient: any; outstanding: number; lastInvoiceAt: Date; bills: number }>();
+    for (const inv of liveInvoices) {
+      const balance = Number(inv.netTotal) - Number(inv.paidAmount);
+      if (balance <= 0) continue;
+      const prev = byPatient.get(inv.patientId);
+      if (prev) {
+        prev.outstanding += balance;
+        prev.bills += 1;
+        if (inv.createdAt > prev.lastInvoiceAt) prev.lastInvoiceAt = inv.createdAt;
+      } else {
+        byPatient.set(inv.patientId, {
+          patient: inv.patient,
+          outstanding: balance,
+          lastInvoiceAt: inv.createdAt,
+          bills: 1,
+        });
+      }
+    }
+
+    return Array.from(byPatient.values())
+      .sort((a, b) => b.outstanding - a.outstanding)
+      .slice(0, limit)
+      .map(r => ({
+        ...r.patient,
+        outstanding: r.outstanding,
+        unpaidBills: r.bills,
+        lastInvoiceAt: r.lastInvoiceAt,
+      }));
+  }
+
   async getInvoices(tenantId: string, query: any) {
     const { patientId, locationId, status, type, page = 1, limit = 20 } = query;
     const skip = (Number(page) - 1) * Number(limit);

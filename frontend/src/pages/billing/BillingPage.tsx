@@ -47,6 +47,8 @@ export default function BillingPage() {
   const [patientSearch, setPatientSearch] = useState('');
   const [patients, setPatients] = useState<any[]>([]);
   const [patientLoading, setPatientLoading] = useState(false);
+  const [outstandingPatients, setOutstandingPatients] = useState<any[]>([]);
+  const [patientFocused, setPatientFocused] = useState(false);
   // Keep the selected patient object so the chip can render name + PID even
   // after the search results dropdown is cleared.
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
@@ -148,15 +150,25 @@ export default function BillingPage() {
     } catch (err) { toast.error('Operation failed'); } finally { setPatientLoading(false); }
   };
 
-  // 500ms debounce + 2-char minimum so we don't fire a search on every
-  // single keystroke (Render free tier cold-starts make the first request
-  // feel like the input is locked up).
+  // 200ms debounce + 1-char minimum. Previously this required 2 chars +
+  // 500ms which felt like the input was frozen after typing a single letter.
   useEffect(() => {
     const q = patientSearch.trim();
-    if (q.length < 2) { setPatients([]); return; }
-    const t = setTimeout(() => searchPatients(q), 500);
+    if (q.length < 1) { setPatients([]); setPatientLoading(false); return; }
+    setPatientLoading(true);
+    const t = setTimeout(() => searchPatients(q), 200);
     return () => clearTimeout(t);
   }, [patientSearch]);
+
+  // Patients with unpaid balances — shown in the dropdown the moment the
+  // billing user focuses the picker, before they type anything, so they can
+  // pick a debtor without having to remember the name.
+  useEffect(() => {
+    if (!showNew) return;
+    api.get('/billing/patients/outstanding', { params: { limit: 10 } })
+      .then(r => setOutstandingPatients(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setOutstandingPatients([]));
+  }, [showNew]);
 
   const addItem = () => setItems(it => [...it, { ...EMPTY_ITEM }]);
   const removeItem = (i: number) => setItems(it => it.filter((_, idx) => idx !== i));
@@ -1150,17 +1162,44 @@ export default function BillingPage() {
                 <div className="relative">
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input value={patientSearch} onChange={e => setPatientSearch(e.target.value)}
+                    onFocus={() => setPatientFocused(true)}
+                    onBlur={() => setTimeout(() => setPatientFocused(false), 150)}
                     placeholder="Search by name, phone or patient ID…"
                     className="w-full pl-8 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
-                  {patients.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-200 shadow-lg z-10 max-h-48 overflow-y-auto">
-                      {patientLoading ? <div className="p-3 text-sm text-gray-400">Searching…</div> : patients.map(p => (
-                        <button key={p.id} type="button" onClick={() => { setForm(f => ({ ...f, patientId: p.id })); setSelectedPatient(p); setPatients([]); setPatientSearch(''); }}
-                          className="w-full text-left px-4 py-2.5 hover:bg-gray-50 text-sm">
-                          <span className="font-medium">{p.firstName} {p.lastName}</span>
-                          <span className="text-gray-400 ml-2">{p.patientId} · {p.phone}</span>
-                        </button>
-                      ))}
+                  {(patientSearch.trim() !== '' || (patientFocused && outstandingPatients.length > 0)) && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-200 shadow-lg z-10 max-h-72 overflow-y-auto">
+                      {patientSearch.trim() === '' ? (
+                        <>
+                          <div className="px-4 py-1.5 text-[10px] font-bold text-amber-700 uppercase tracking-wider bg-amber-50/60 border-b border-amber-100 sticky top-0">
+                            Patients with unpaid bills
+                          </div>
+                          {outstandingPatients.map(p => (
+                            <button key={p.id} type="button" onClick={() => { setForm(f => ({ ...f, patientId: p.id })); setSelectedPatient(p); setPatients([]); setPatientSearch(''); setPatientFocused(false); }}
+                              className="w-full text-left px-4 py-2.5 hover:bg-amber-50/40 text-sm flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="font-medium text-gray-900 truncate">{p.firstName} {p.lastName}</div>
+                                <div className="text-gray-400 text-xs">{p.patientId}{p.mobile ? ` · ${p.mobile}` : ''}</div>
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <div className="text-amber-700 font-bold text-sm">₹{Number(p.outstanding).toLocaleString('en-IN')}</div>
+                                <div className="text-[10px] text-gray-400">{p.unpaidBills} bill{p.unpaidBills > 1 ? 's' : ''}</div>
+                              </div>
+                            </button>
+                          ))}
+                        </>
+                      ) : patientLoading ? (
+                        <div className="p-3 text-sm text-gray-400">Searching…</div>
+                      ) : patients.length === 0 ? (
+                        <div className="p-3 text-sm text-gray-400">No patients found</div>
+                      ) : (
+                        patients.map(p => (
+                          <button key={p.id} type="button" onClick={() => { setForm(f => ({ ...f, patientId: p.id })); setSelectedPatient(p); setPatients([]); setPatientSearch(''); setPatientFocused(false); }}
+                            className="w-full text-left px-4 py-2.5 hover:bg-gray-50 text-sm">
+                            <span className="font-medium">{p.firstName} {p.lastName}</span>
+                            <span className="text-gray-400 ml-2">{p.patientId}{p.phone ? ` · ${p.phone}` : ''}</span>
+                          </button>
+                        ))
+                      )}
                     </div>
                   )}
                 </div>

@@ -31,6 +31,14 @@ export class BillingController {
     return this.svc.getPatientBillingSummary(tid, pid);
   }
 
+  // Patients with unpaid balances, sorted by amount owed. Surfaces in the
+  // New Invoice modal when the patient picker is focused but empty so the
+  // billing user can pick a debtor without typing.
+  @Get('patients/outstanding')
+  outstandingPatients(@CurrentUser('tenantId') tid: string, @Query('limit') limit?: string) {
+    return this.svc.getOutstandingPatients(tid, limit ? Number(limit) : 10);
+  }
+
   // Revenue split by service category (Doctor Fee / Lab / Pharmacy / etc).
   // Drives the "Revenue by Service Line" report.
   @Get('reports/revenue-by-category')
