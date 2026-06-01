@@ -42,9 +42,13 @@ const EMPTY_FORM = {
   locationScope: 'SINGLE' as 'SINGLE' | 'MULTI',
   allowedLocations: [] as string[],
   crossLocationAccess: false,
+  // String for now (matches the schema's free-text departmentName field).
+  // When the FK departmentId column is added later, this becomes an id.
+  departmentName: '' as string,
 };
 
 type TenantLoc = { id: string; name: string; city?: string };
+type TenantDept = { id: string; name: string; type?: string };
 
 export default function DoctorAvailabilityPage() {
   const [rows, setRows] = useState<Affiliation[]>([]);
@@ -54,6 +58,7 @@ export default function DoctorAvailabilityPage() {
   const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState('');
   const [locations, setLocations] = useState<TenantLoc[]>([]);
+  const [departments, setDepartments] = useState<TenantDept[]>([]);
 
   useEscapeClose(!!editing, () => setEditing(null));
 
@@ -75,7 +80,18 @@ export default function DoctorAvailabilityPage() {
     } catch { /* non-fatal — the picker just shows empty */ }
   };
 
-  useEffect(() => { fetchRows(); fetchLocations(); }, []);
+  const fetchDepartments = async () => {
+    try {
+      const { data } = await api.get('/org/departments');
+      const list: TenantDept[] = Array.isArray(data?.data ?? data) ? (data?.data ?? data) : [];
+      // Only clinical departments are valid for a doctor's affiliation.
+      // Admin / Diagnostic / Support departments are filtered out so the
+      // dropdown doesn't offer "Reception" as a clinical specialty.
+      setDepartments(list.filter(d => !d.type || d.type === 'CLINICAL'));
+    } catch { /* non-fatal — the picker falls back to free text */ }
+  };
+
+  useEffect(() => { fetchRows(); fetchLocations(); fetchDepartments(); }, []);
 
   const openEdit = (a: Affiliation) => {
     setEditing(a);
@@ -89,6 +105,7 @@ export default function DoctorAvailabilityPage() {
       locationScope: scope,
       allowedLocations: Array.isArray(a.allowedLocations) ? a.allowedLocations : [],
       crossLocationAccess: !!a.crossLocationAccess,
+      departmentName: a.departmentName || '',
     });
   };
 
@@ -118,6 +135,10 @@ export default function DoctorAvailabilityPage() {
         // send the current list so toggling MULTI→SINGLE→MULTI preserves it.
         allowedLocations: form.locationScope === 'MULTI' ? form.allowedLocations : [],
         crossLocationAccess: form.crossLocationAccess,
+        // departmentName stays a free-text string for now (matches the
+        // schema). When the FK departmentId column is added later this
+        // becomes a UUID; the backend already has tenant-scoped fallback.
+        departmentName: form.departmentName || undefined,
       });
       toast.success('Availability updated');
       setEditing(null);
@@ -232,6 +253,35 @@ export default function DoctorAvailabilityPage() {
             </div>
 
             <div className="px-5 py-4 space-y-4">
+              {/* Department picker — sourced from /org/departments where type=CLINICAL.
+                  Falls back to a free-text field when departments aren't set up yet,
+                  so the page stays usable even on a fresh tenant. */}
+              <div>
+                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Department</label>
+                {departments.length > 0 ? (
+                  <select value={form.departmentName}
+                    onChange={e => setForm({ ...form, departmentName: e.target.value })}
+                    className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                    <option value="">— No department —</option>
+                    {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                    {/* Preserve the existing free-text value even if it's not a current dept name */}
+                    {form.departmentName && !departments.some(d => d.name === form.departmentName) && (
+                      <option value={form.departmentName}>{form.departmentName} (legacy)</option>
+                    )}
+                  </select>
+                ) : (
+                  <>
+                    <input value={form.departmentName}
+                      onChange={e => setForm({ ...form, departmentName: e.target.value })}
+                      placeholder="e.g. Cardiology"
+                      className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                    <p className="text-[11px] text-gray-400 mt-1">
+                      Tip: configure clinical departments under Admin → Departments to get a picker here instead of free text.
+                    </p>
+                  </>
+                )}
+              </div>
+
               <div>
                 <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Working Days</label>
                 <div className="mt-2 flex flex-wrap gap-2">
