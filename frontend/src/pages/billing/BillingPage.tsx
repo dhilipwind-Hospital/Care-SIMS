@@ -67,6 +67,37 @@ export default function BillingPage() {
     return () => { cancelled = true; };
   }, [selectedPatient?.id]);
 
+  // Pre-fill line items with the patient's recent consultations / lab tests
+  // / pharmacy items so the billing user doesn't have to retype them. Only
+  // overwrites when the form is still on its default empty row so we don't
+  // wipe out work the user has already typed.
+  const [unbilledLoaded, setUnbilledLoaded] = useState(false);
+  useEffect(() => {
+    if (!selectedPatient?.id) { setUnbilledLoaded(false); return; }
+    let cancelled = false;
+    api.get(`/billing/patients/${selectedPatient.id}/unbilled`)
+      .then(r => {
+        if (cancelled) return;
+        const unbilled = r.data?.items || [];
+        if (unbilled.length === 0) { setUnbilledLoaded(true); return; }
+        setItems(prev => {
+          // Only auto-populate if the form is still the untouched default row.
+          const isDefault = prev.length === 1 && !prev[0].description && !prev[0].unitPrice;
+          if (!isDefault) return prev;
+          return unbilled.map((u: any) => ({
+            description: u.description,
+            category: u.category,
+            quantity: u.quantity || 1,
+            unitPrice: '',
+            discountPercent: 0,
+          }));
+        });
+        setUnbilledLoaded(true);
+      })
+      .catch(() => { if (!cancelled) setUnbilledLoaded(true); });
+    return () => { cancelled = true; };
+  }, [selectedPatient?.id]);
+
   // Doctors list for the New Invoice modal's optional Doctor picker.
   // Fetched once on mount so the dropdown is populated the instant the modal
   // opens — previously this fired on showNew change, leaving the dropdown
@@ -1240,6 +1271,12 @@ export default function BillingPage() {
                 <label className="text-xs font-semibold text-gray-600">Line Items <span className="text-red-500">*</span></label>
                 <button type="button" onClick={addItem} className="flex items-center gap-1 text-xs text-teal-600 hover:text-teal-700 font-semibold"><Plus size={12} /> Add Item</button>
               </div>
+              {unbilledLoaded && selectedPatient && items.some(it => it.description) && (
+                <div className="mb-2 px-3 py-2 bg-teal-50 border border-teal-100 rounded-lg text-[11px] text-teal-800 flex items-start gap-2">
+                  <span className="font-semibold">Pre-filled</span>
+                  <span>from recent consultations, lab orders, and prescriptions in the last 30 days. Enter prices and remove anything that shouldn't be billed.</span>
+                </div>
+              )}
               <div className="space-y-2">
                 {items.map((item, i) => (
                   <div key={i} className="grid grid-cols-12 gap-2 items-center">

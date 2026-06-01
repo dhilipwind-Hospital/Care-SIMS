@@ -193,6 +193,85 @@ export class BillingService {
     };
   }
 
+  // Recent consultations, lab orders, and prescriptions for a patient,
+  // surfaced as candidate invoice line items so the billing user can add
+  // them with one click instead of retyping. The data model has no link
+  // back from invoice line items to source records, so we can't strictly
+  // exclude items that have already been billed — instead we cap at the
+  // last `days` days and let the user remove anything they don't want.
+  async getPatientUnbilledItems(tenantId: string, patientId: string, days = 30) {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    const [consultations, labOrders, prescriptions] = await Promise.all([
+      this.prisma.consultation.findMany({
+        where: { tenantId, patientId, status: 'COMPLETED', completedAt: { gte: since } },
+        orderBy: { completedAt: 'desc' },
+        select: { id: true, completedAt: true, chiefComplaint: true, doctorId: true },
+      }),
+      this.prisma.labOrder.findMany({
+        where: { tenantId, patientId, orderedAt: { gte: since } },
+        orderBy: { orderedAt: 'desc' },
+        select: { id: true, orderNumber: true, orderedAt: true, items: { select: { testName: true, testCode: true } } },
+      }),
+      this.prisma.prescription.findMany({
+        where: {
+          tenantId, patientId,
+          issuedAt: { gte: since },
+          status: { notIn: ['CANCELLED'] },
+        },
+        orderBy: { issuedAt: 'desc' },
+        select: { id: true, rxNumber: true, issuedAt: true, items: { select: { drugName: true, quantity: true, strength: true } } },
+      }),
+    ]);
+
+    const items: Array<{
+      sourceType: 'CONSULTATION' | 'LAB' | 'PHARMACY';
+      sourceId: string;
+      description: string;
+      category: string;
+      quantity: number;
+      occurredAt: Date | null;
+    }> = [];
+
+    for (const c of consultations) {
+      items.push({
+        sourceType: 'CONSULTATION',
+        sourceId: c.id,
+        description: `Consultation${c.chiefComplaint ? ` — ${c.chiefComplaint}` : ''}`,
+        category: 'CONSULTATION',
+        quantity: 1,
+        occurredAt: c.completedAt,
+      });
+    }
+    for (const lo of labOrders) {
+      for (const li of lo.items) {
+        items.push({
+          sourceType: 'LAB',
+          sourceId: lo.id,
+          description: `Lab: ${li.testName}${li.testCode ? ` (${li.testCode})` : ''}`,
+          category: 'LAB',
+          quantity: 1,
+          occurredAt: lo.orderedAt,
+        });
+      }
+    }
+    for (const rx of prescriptions) {
+      for (const it of rx.items) {
+        items.push({
+          sourceType: 'PHARMACY',
+          sourceId: rx.id,
+          description: `${it.drugName}${it.strength ? ` ${it.strength}` : ''}`,
+          category: 'PHARMACY',
+          quantity: it.quantity ? Number(it.quantity) : 1,
+          occurredAt: rx.issuedAt,
+        });
+      }
+    }
+
+    return { items, since };
+  }
+
   // Patients with at least one non-cancelled invoice whose paidAmount < netTotal.
   // Used by the New Invoice modal to surface "who still owes us money" the
   // moment the patient picker is focused — before the user types anything.

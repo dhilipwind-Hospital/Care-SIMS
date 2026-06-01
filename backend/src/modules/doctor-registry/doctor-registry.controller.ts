@@ -23,7 +23,7 @@ export class DoctorRegistryController {
   register(@Body() body: any) { return this.svc.register(body); }
 
   @Get('affiliations/tenant')
-  @Roles('SYS_ORG_ADMIN', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_RECEPTIONIST')
+  @Roles('SYS_ORG_ADMIN', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_RECEPTIONIST', 'SYS_FRONT_OFFICE', 'SYS_BILLING', 'SYS_BILLING_MANAGER', 'SYS_NURSE', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE')
   getAffiliations(@CurrentUser('tenantId') tid: string) { return this.svc.getAffiliations(tid); }
 
   // Doctor self-service: only the rows for the logged-in doctor in this tenant.

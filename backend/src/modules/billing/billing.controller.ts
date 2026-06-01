@@ -39,6 +39,14 @@ export class BillingController {
     return this.svc.getOutstandingPatients(tid, limit ? Number(limit) : 10);
   }
 
+  // Patient's recent unbilled activity (consultations + lab orders + prescriptions)
+  // surfaced as candidate line items so the billing user doesn't have to retype
+  // the patient's services. Defaults to last 30 days.
+  @Get('patients/:patientId/unbilled')
+  unbilledItems(@CurrentUser('tenantId') tid: string, @Param('patientId') pid: string, @Query('days') days?: string) {
+    return this.svc.getPatientUnbilledItems(tid, pid, days ? Number(days) : 30);
+  }
+
   // Revenue split by service category (Doctor Fee / Lab / Pharmacy / etc).
   // Drives the "Revenue by Service Line" report.
   @Get('reports/revenue-by-category')
