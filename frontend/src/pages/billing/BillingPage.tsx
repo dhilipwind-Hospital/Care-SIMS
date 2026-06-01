@@ -48,6 +48,7 @@ export default function BillingPage() {
   const [patients, setPatients] = useState<any[]>([]);
   const [patientLoading, setPatientLoading] = useState(false);
   const [outstandingPatients, setOutstandingPatients] = useState<any[]>([]);
+  const [outstandingLoading, setOutstandingLoading] = useState(false);
   const [patientFocused, setPatientFocused] = useState(false);
   // Keep the selected patient object so the chip can render name + PID even
   // after the search results dropdown is cleared.
@@ -196,9 +197,11 @@ export default function BillingPage() {
   // pick a debtor without having to remember the name.
   useEffect(() => {
     if (!showNew) return;
+    setOutstandingLoading(true);
     api.get('/billing/patients/outstanding', { params: { limit: 10 } })
       .then(r => setOutstandingPatients(Array.isArray(r.data) ? r.data : []))
-      .catch(() => setOutstandingPatients([]));
+      .catch(() => setOutstandingPatients([]))
+      .finally(() => setOutstandingLoading(false));
   }, [showNew]);
 
   const addItem = () => setItems(it => [...it, { ...EMPTY_ITEM }]);
@@ -1197,15 +1200,19 @@ export default function BillingPage() {
                     onBlur={() => setTimeout(() => setPatientFocused(false), 150)}
                     placeholder="Search by name, phone or patient ID…"
                     className="w-full pl-8 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
-                  {(patientSearch.trim() !== '' || (patientFocused && outstandingPatients.length > 0)) && (
+                  {(patientSearch.trim() !== '' || patientFocused) && (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-200 shadow-lg z-10 max-h-72 overflow-y-auto">
                       {patientSearch.trim() === '' ? (
                         <>
                           <div className="px-4 py-1.5 text-[10px] font-bold text-amber-700 uppercase tracking-wider bg-amber-50/60 border-b border-amber-100 sticky top-0">
                             Patients with unpaid bills
                           </div>
-                          {outstandingPatients.map(p => (
-                            <button key={p.id} type="button" onClick={() => { setForm(f => ({ ...f, patientId: p.id })); setSelectedPatient(p); setPatients([]); setPatientSearch(''); setPatientFocused(false); }}
+                          {outstandingLoading ? (
+                            <div className="p-3 text-sm text-gray-400">Loading…</div>
+                          ) : outstandingPatients.length === 0 ? (
+                            <div className="p-3 text-xs text-gray-500">No outstanding balances right now. Start typing to search any patient.</div>
+                          ) : outstandingPatients.map(p => (
+                            <button key={p.id} type="button" onMouseDown={e => e.preventDefault()} onClick={() => { setForm(f => ({ ...f, patientId: p.id })); setSelectedPatient(p); setPatients([]); setPatientSearch(''); setPatientFocused(false); }}
                               className="w-full text-left px-4 py-2.5 hover:bg-amber-50/40 text-sm flex items-center justify-between gap-3">
                               <div className="min-w-0">
                                 <div className="font-medium text-gray-900 truncate">{p.firstName} {p.lastName}</div>
