@@ -179,7 +179,6 @@ body {
     border-top: 1px solid var(--hms-table-row-border);
   }
   .hms-card {
-    overflow: hidden;
     background: var(--hms-card-bg);
     border: 1px solid var(--hms-border);
     border-radius: var(--radius-card);

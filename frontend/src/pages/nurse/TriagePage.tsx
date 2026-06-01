@@ -101,14 +101,14 @@ export default function TriagePage() {
   });
 
   useEffect(() => {
-    if (!patSearch.trim()) { setPatResults([]); return; }
+    if (!patSearch.trim()) { setPatResults([]); setPatLoading(false); return; }
+    setPatLoading(true);
     const t = setTimeout(async () => {
-      setPatLoading(true);
       try {
         const { data } = await api.get('/patients', { params: { q: patSearch, limit: 8 } });
         setPatResults(data.data || []);
       } catch (err) { toast.error('Failed to load data'); } finally { setPatLoading(false); }
-    }, 300);
+    }, 150);
     return () => clearTimeout(t);
   }, [patSearch]);
 
@@ -332,7 +332,7 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
         <div className="flex-1 space-y-4">
 
           {/* Patient Banner */}
-          <div className="hms-card p-5">
+          <div className="hms-card p-5 overflow-visible relative z-30">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
                 <span className="text-gray-500 text-sm font-semibold">
@@ -366,18 +366,22 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
                       placeholder="Search patient by name or ID…"
                       className="w-full pl-8 border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                     />
-                    {patResults.length > 0 && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-44 overflow-y-auto">
-                        {patLoading
-                          ? <div className="p-2 text-xs text-gray-400">Searching…</div>
-                          : patResults.map(p => (
+                    {patSearch.trim() !== '' && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-44 overflow-y-auto">
+                        {patLoading ? (
+                          <div className="p-2 text-xs text-gray-400">Searching…</div>
+                        ) : patResults.length === 0 ? (
+                          <div className="p-2 text-xs text-gray-400">No patients found</div>
+                        ) : (
+                          patResults.map(p => (
                             <button key={p.id} type="button"
                               onClick={() => { setSelectedPat(p); setForm(f => ({ ...f, patientId: p.id })); setPatSearch(''); setPatResults([]); }}
                               className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm">
                               <span className="font-medium">{p.firstName} {p.lastName}</span>
                               <span className="text-gray-400 ml-2 text-xs">{p.patientId}</span>
                             </button>
-                          ))}
+                          ))
+                        )}
                       </div>
                     )}
                   </div>
