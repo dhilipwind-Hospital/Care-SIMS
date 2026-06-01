@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Search, X, ChevronRight, Printer, UserCheck, FlaskConical, SkipForward, Plus, Trash2 } from 'lucide-react';
 import EmptyState from '../../components/ui/EmptyState';
-import Pagination from '../../components/ui/Pagination';
 import api from '../../lib/api';
 import { getUser } from '../../lib/auth';
 
@@ -17,8 +16,6 @@ const PRIORITY_LEVELS = [
 export default function TriagePage() {
   const [triages,    setTriages]    = useState<any[]>([]);
   const [loading,    setLoading]    = useState(true);
-  const [triagePage, setTriagePage] = useState(1);
-  const [triageTotal, setTriageTotal] = useState(0);
   const [saving,     setSaving]     = useState(false);
   const [saved,      setSaved]      = useState(false);
   const [currentToken, setCurrentToken] = useState<string | null>(null);
@@ -115,14 +112,18 @@ export default function TriagePage() {
   const fetchTriages = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get('/triage', { params: { page: triagePage, limit: 20 } });
+      const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
+      const { data } = await api.get('/triage', { params: { dateFrom: startOfDay.toISOString(), limit: 100 } });
       setTriages(data.data || []);
-      setTriageTotal(data.meta?.total || 0);
       if (data.data?.length) setCurrentToken(data.data[0]?.tokenNumber || null);
     } catch (err) { toast.error('Failed to load data'); } finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchTriages(); }, [triagePage]);
+  useEffect(() => { fetchTriages(); }, []);
+
+  // IDs of patients already triaged today — used to filter the search dropdown
+  // so a nurse can't re-pick someone whose triage is already done.
+  const triagedTodayPatientIds = new Set(triages.map(t => t.patientId).filter(Boolean));
 
   const handleTokenLookup = async () => {
     if (!tokenLookup.trim()) { toast.error('Enter a token ID'); return; }
@@ -366,24 +367,37 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
                       placeholder="Search patient by name or ID…"
                       className="w-full pl-8 border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                     />
-                    {patSearch.trim() !== '' && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-44 overflow-y-auto">
-                        {patLoading ? (
-                          <div className="p-2 text-xs text-gray-400">Searching…</div>
-                        ) : patResults.length === 0 ? (
-                          <div className="p-2 text-xs text-gray-400">No patients found</div>
-                        ) : (
-                          patResults.map(p => (
-                            <button key={p.id} type="button"
-                              onClick={() => { setSelectedPat(p); setForm(f => ({ ...f, patientId: p.id })); setPatSearch(''); setPatResults([]); }}
-                              className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm">
-                              <span className="font-medium">{p.firstName} {p.lastName}</span>
-                              <span className="text-gray-400 ml-2 text-xs">{p.patientId}</span>
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    )}
+                    {patSearch.trim() !== '' && (() => {
+                      const untriaged = patResults.filter(p => !triagedTodayPatientIds.has(p.id));
+                      const hiddenCount = patResults.length - untriaged.length;
+                      return (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-44 overflow-y-auto">
+                          {patLoading ? (
+                            <div className="p-2 text-xs text-gray-400">Searching…</div>
+                          ) : untriaged.length === 0 ? (
+                            <div className="p-2 text-xs text-gray-400">
+                              {patResults.length === 0 ? 'No patients found' : 'All matches already triaged today'}
+                            </div>
+                          ) : (
+                            <>
+                              {untriaged.map(p => (
+                                <button key={p.id} type="button"
+                                  onClick={() => { setSelectedPat(p); setForm(f => ({ ...f, patientId: p.id })); setPatSearch(''); setPatResults([]); }}
+                                  className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm">
+                                  <span className="font-medium">{p.firstName} {p.lastName}</span>
+                                  <span className="text-gray-400 ml-2 text-xs">{p.patientId}</span>
+                                </button>
+                              ))}
+                              {hiddenCount > 0 && (
+                                <div className="px-3 py-1.5 text-[11px] text-gray-400 border-t border-gray-100 bg-gray-50">
+                                  {hiddenCount} already triaged today (hidden)
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -644,22 +658,27 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
             )}
           </div>
 
-          {/* Recent Triage Records */}
+          {/* Triaged Today */}
           {!loading && (
             <div className="hms-card p-4">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Recent Triage Records</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Triaged Today</p>
+                <span className="text-xs font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full">{triages.length}</span>
+              </div>
               {triages.length === 0 ? (
-                <EmptyState title="No triage records" description="No triage records found." />
+                <EmptyState title="No patients triaged yet" description="Today's triage list will appear here." />
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-80 overflow-y-auto">
                   {triages.map(t => {
                     const lvl = PRIORITY_LEVELS.find(p => p.key === t.triageLevel);
+                    const time = t.triageTime ? new Date(t.triageTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
                     return (
                       <div key={t.id} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${lvl?.bg || 'bg-gray-50'}`}>
                         <div className={`w-2 h-2 rounded-full flex-shrink-0 ${lvl?.dot || 'bg-gray-400'}`} />
                         <div className="min-w-0 flex-1">
                           <div className="text-xs font-semibold text-gray-800 truncate">
                             {t.patient?.firstName} {t.patient?.lastName}
+                            {time && <span className="text-gray-400 font-normal ml-1.5">· {time}</span>}
                           </div>
                           <div className="text-xs text-gray-400 truncate">{t.chiefComplaint}</div>
                         </div>
@@ -669,7 +688,6 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
                   })}
                 </div>
               )}
-              <Pagination page={triagePage} totalPages={Math.ceil(triageTotal / 20)} onPageChange={setTriagePage} totalItems={triageTotal} pageSize={20} />
             </div>
           )}
 

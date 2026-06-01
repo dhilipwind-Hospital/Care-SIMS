@@ -9,6 +9,11 @@ export class TriageService {
     const where: any = { tenantId };
     if (query.triageLevel) where.triageLevel = query.triageLevel;
     if (query.patientId) where.patientId = query.patientId;
+    if (query.dateFrom || query.dateTo) {
+      where.triageTime = {};
+      if (query.dateFrom) where.triageTime.gte = new Date(query.dateFrom);
+      if (query.dateTo) where.triageTime.lte = new Date(query.dateTo);
+    }
     const page = Math.max(1, parseInt(query.page || '1', 10));
     const limit = Math.min(100, parseInt(query.limit || '20', 10));
     const skip = (page - 1) * limit;
