@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../lib/api';
+import { SPECIALTIES } from '../../lib/specialties';
 import {
   Heart, ChevronRight, ChevronLeft, CheckCircle,
   User, GraduationCap, FileText, Shield, MapPin, Stethoscope
@@ -12,14 +13,6 @@ const STEPS = [
   { id: 3, label: 'Council Reg.', icon: FileText },
   { id: 4, label: 'Identity', icon: Shield },
   { id: 5, label: 'Contact', icon: MapPin },
-];
-
-const SPECIALTIES = [
-  'Cardiology', 'Neurology', 'Orthopedics', 'Dermatology', 'Pediatrics',
-  'Gynecology', 'Oncology', 'Psychiatry', 'Radiology', 'Anesthesiology',
-  'Gastroenterology', 'Nephrology', 'Pulmonology', 'Ophthalmology',
-  'ENT', 'Urology', 'Endocrinology', 'Rheumatology', 'General Surgery',
-  'Internal Medicine', 'Emergency Medicine', 'Family Medicine',
 ];
 
 const PRIMARY_DEGREES = ['MBBS', 'BDS', 'BAMS', 'BHMS', 'BPT', 'BSMS', 'BUMS'];
@@ -261,7 +254,7 @@ export default function DoctorRegisterPage() {
                 <InputField label="PG Specialization" name="pgSpecialization" value={form.pgSpecialization} onChange={set('pgSpecialization')} placeholder="Cardiology" />
               </div>
               <InputField label="Years of Experience" name="experienceYears" type="number" required value={form.experienceYears} onChange={set('experienceYears')} placeholder="24" />
-              <MultiSelect label="Specialties (select up to 3)" options={SPECIALTIES} selected={form.specialties} onChange={v => setArr('specialties')(v.slice(0, 3))} />
+              <MultiSelect label="Specialties (select up to 3)" options={[...SPECIALTIES]} selected={form.specialties} onChange={v => setArr('specialties')(v.slice(0, 3))} />
             </div>
           )}
 

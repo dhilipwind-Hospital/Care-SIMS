@@ -6,6 +6,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
 import ExportButton from '../../components/ui/ExportButton';
 import api from '../../lib/api';
+import { SPECIALTIES } from '../../lib/specialties';
 import { LineChart, Line, ResponsiveContainer, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend } from 'recharts';
 
 const EMPTY_FORM = {
@@ -309,7 +310,7 @@ export default function PatientsPage() {
                 </div>
                 <div><label className={lbl}>Department *</label>
                   <select value={form.department} onChange={sf('department')} className={inp}>
-                    {['General Medicine','Cardiology','Orthopedics','Neurology','Dermatology','Pediatrics','Gynecology','ENT'].map(d => <option key={d}>{d}</option>)}
+                    {SPECIALTIES.map(d => <option key={d}>{d}</option>)}
                   </select>
                 </div>
                 <div><label className={lbl}>Preferred Doctor</label><input placeholder="Dr. Rajesh Kumar" value={form.preferredDoctor} onChange={sf('preferredDoctor')} className={inp} /></div>
