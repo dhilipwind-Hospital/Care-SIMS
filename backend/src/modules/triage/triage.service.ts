@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { WsGateway } from '../ws-gateway/ws-gateway.gateway';
 
 @Injectable()
 export class TriageService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private ws: WsGateway) {}
 
   async list(tenantId: string, query: any) {
     const where: any = { tenantId };
@@ -65,20 +66,91 @@ export class TriageService {
     if (dto.notes) notesParts.push(dto.notes);
     const notes = notesParts.length ? notesParts.join('\n') : undefined;
 
-    return this.prisma.triageRecord.create({
-      data: {
-        tenantId, locationId, patientId: dto.patientId,
-        queueTokenId: dto.queueTokenId, chiefComplaint: dto.chiefComplaint,
-        triageLevel: dto.triageLevel,
-        symptoms: dto.symptoms || [],
-        vitalsOnArrival,
-        painScore: dto.painScore !== undefined && dto.painScore !== null ? Number(dto.painScore) : undefined,
-        gcs: dto.gcs,
-        assignedDoctorId: dto.assignedDoctorId,
-        assignedDeptId: dto.assignedDeptId,
-        notes, triagedById,
-      },
+    // Map triage acuity to queue priority so callNext picks the sickest patient first.
+    const priority =
+      dto.triageLevel === 'RED'    ? 'EMERGENCY' :
+      dto.triageLevel === 'ORANGE' ? 'EMERGENCY' :
+      dto.triageLevel === 'YELLOW' ? 'URGENT'    :
+      'NORMAL';
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Resolve a queue token for the doctor's "Call Next" to find:
+      //   1. If the nurse triaged off an existing token, use that.
+      //   2. Else if the patient already has a live token today at this location, reuse it.
+      //   3. Else mint a fresh one.
+      let queueTokenId: string | undefined = dto.queueTokenId;
+      let queueTokenChanged = false;
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+
+      if (!queueTokenId && locationId) {
+        const existing = await tx.queueToken.findFirst({
+          where: {
+            tenantId, locationId, patientId: dto.patientId, queueDate: today,
+            status: { in: ['WAITING', 'CALLED', 'IN_CONSULTATION'] },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (existing) {
+          queueTokenId = existing.id;
+          await tx.queueToken.update({
+            where: { id: existing.id },
+            data: {
+              priority,
+              ...(dto.assignedDoctorId ? { doctorId: dto.assignedDoctorId } : {}),
+              ...(dto.assignedDeptId ? { departmentId: dto.assignedDeptId } : {}),
+              ...(existing.status === 'WAITING' ? {} : { status: 'WAITING' }),
+            },
+          });
+          queueTokenChanged = true;
+        } else {
+          const last = await tx.queueToken.findFirst({
+            where: { tenantId, locationId, queueDate: today },
+            orderBy: { tokenNumber: 'desc' },
+          });
+          const created = await tx.queueToken.create({
+            data: {
+              tenantId,
+              tokenNumber: (last?.tokenNumber || 0) + 1,
+              locationId,
+              queueDate: today,
+              patientId: dto.patientId,
+              doctorId: dto.assignedDoctorId,
+              departmentId: dto.assignedDeptId,
+              visitType: 'NEW',
+              priority,
+              status: 'WAITING',
+              notes: dto.chiefComplaint,
+              createdById: triagedById,
+            },
+          });
+          queueTokenId = created.id;
+          queueTokenChanged = true;
+        }
+      }
+
+      const triage = await tx.triageRecord.create({
+        data: {
+          tenantId, locationId, patientId: dto.patientId,
+          queueTokenId, chiefComplaint: dto.chiefComplaint,
+          triageLevel: dto.triageLevel,
+          symptoms: dto.symptoms || [],
+          vitalsOnArrival,
+          painScore: dto.painScore !== undefined && dto.painScore !== null ? Number(dto.painScore) : undefined,
+          gcs: dto.gcs,
+          assignedDoctorId: dto.assignedDoctorId,
+          assignedDeptId: dto.assignedDeptId,
+          notes, triagedById,
+        },
+      });
+      return { triage, queueTokenChanged };
     });
+
+    // Nudge any listening doctor queue pages to refresh — otherwise they only
+    // pick up the new token on their next 30s poll.
+    if (result.queueTokenChanged) {
+      this.ws.emitToTenant(tenantId, 'queue:updated', { action: 'triage_completed', patientId: dto.patientId });
+    }
+    return result.triage;
   }
 
   async getByToken(tenantId: string, tokenId: string) {
