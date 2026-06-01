@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import { Search, X, ChevronRight, Printer, UserCheck, FlaskConical, SkipForward, Plus, Trash2 } from 'lucide-react';
 import EmptyState from '../../components/ui/EmptyState';
@@ -24,6 +25,27 @@ export default function TriagePage() {
   const [patResults,  setPatResults]  = useState<any[]>([]);
   const [selectedPat, setSelectedPat] = useState<any>(null);
   const [patLoading,  setPatLoading]  = useState(false);
+  const patSearchRef = useRef<HTMLInputElement>(null);
+  const [patDropdownRect, setPatDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  // Keep the portal-mounted dropdown anchored under the search input
+  // even when the user scrolls or resizes the window.
+  useEffect(() => {
+    if (!patSearch.trim()) { setPatDropdownRect(null); return; }
+    const update = () => {
+      const el = patSearchRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setPatDropdownRect({ top: r.bottom + 4, left: r.left, width: r.width });
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [patSearch]);
 
   const [form, setForm] = useState({
     patientId: '', chiefComplaint: '', briefHistory: '', knownAllergies: '', currentMedications: '',
@@ -362,42 +384,49 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
                   <div className="relative">
                     <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
+                      ref={patSearchRef}
                       value={patSearch}
                       onChange={e => setPatSearch(e.target.value)}
                       placeholder="Search patient by name or ID…"
                       className="w-full pl-8 border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                     />
-                    {patSearch.trim() !== '' && (() => {
-                      const untriaged = patResults.filter(p => !triagedTodayPatientIds.has(p.id));
-                      const hiddenCount = patResults.length - untriaged.length;
-                      return (
-                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-44 overflow-y-auto">
-                          {patLoading ? (
-                            <div className="p-2 text-xs text-gray-400">Searching…</div>
-                          ) : untriaged.length === 0 ? (
-                            <div className="p-2 text-xs text-gray-400">
-                              {patResults.length === 0 ? 'No patients found' : 'All matches already triaged today'}
-                            </div>
-                          ) : (
-                            <>
-                              {untriaged.map(p => (
-                                <button key={p.id} type="button"
-                                  onClick={() => { setSelectedPat(p); setForm(f => ({ ...f, patientId: p.id })); setPatSearch(''); setPatResults([]); }}
-                                  className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm">
-                                  <span className="font-medium">{p.firstName} {p.lastName}</span>
-                                  <span className="text-gray-400 ml-2 text-xs">{p.patientId}</span>
-                                </button>
-                              ))}
-                              {hiddenCount > 0 && (
-                                <div className="px-3 py-1.5 text-[11px] text-gray-400 border-t border-gray-100 bg-gray-50">
-                                  {hiddenCount} already triaged today (hidden)
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      );
-                    })()}
+                    {patSearch.trim() !== '' && patDropdownRect && createPortal(
+                      (() => {
+                        const untriaged = patResults.filter(p => !triagedTodayPatientIds.has(p.id));
+                        const hiddenCount = patResults.length - untriaged.length;
+                        return (
+                          <div
+                            style={{ position: 'fixed', top: patDropdownRect.top, left: patDropdownRect.left, width: patDropdownRect.width, zIndex: 9999 }}
+                            className="bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                          >
+                            {patLoading ? (
+                              <div className="p-2 text-xs text-gray-400">Searching…</div>
+                            ) : untriaged.length === 0 ? (
+                              <div className="p-2 text-xs text-gray-400">
+                                {patResults.length === 0 ? 'No patients found' : 'All matches already triaged today'}
+                              </div>
+                            ) : (
+                              <>
+                                {untriaged.map(p => (
+                                  <button key={p.id} type="button"
+                                    onClick={() => { setSelectedPat(p); setForm(f => ({ ...f, patientId: p.id })); setPatSearch(''); setPatResults([]); }}
+                                    className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm">
+                                    <span className="font-medium">{p.firstName} {p.lastName}</span>
+                                    <span className="text-gray-400 ml-2 text-xs">{p.patientId}</span>
+                                  </button>
+                                ))}
+                                {hiddenCount > 0 && (
+                                  <div className="px-3 py-1.5 text-[11px] text-gray-400 border-t border-gray-100 bg-gray-50">
+                                    {hiddenCount} already triaged today (hidden)
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        );
+                      })(),
+                      document.body,
+                    )}
                   </div>
                 )}
               </div>
