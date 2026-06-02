@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { CreditCard, DollarSign, Clock, FileText, Plus, X, Search, Trash2, Printer, Eye, ChevronDown, ChevronUp } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -28,6 +28,39 @@ const LINE_CATEGORIES: Array<{ value: string; label: string; cls: string }> = [
   { value: 'OTHER',        label: 'Other',          cls: 'bg-gray-100 text-gray-600' },
 ];
 const categoryStyle = (cat?: string) => LINE_CATEGORIES.find(c => c.value === (cat || 'OTHER')) || LINE_CATEGORIES[LINE_CATEGORIES.length - 1];
+
+// Memoised row so editing one line item doesn't re-render the other 50.
+// Without this the whole BillingPage (revenue chart, invoice table, KPIs)
+// re-renders on every keystroke, which is why typing felt frozen once the
+// modal auto-filled a long list of unbilled charges.
+interface LineItemRowProps {
+  index: number;
+  description: string;
+  category: string;
+  quantity: number | string;
+  unitPrice: number | string;
+  disabled: boolean;
+  onChange: (i: number, field: string, val: any) => void;
+  onRemove: (i: number) => void;
+}
+const LineItemRow = memo(function LineItemRow({ index, description, category, quantity, unitPrice, disabled, onChange, onRemove }: LineItemRowProps) {
+  return (
+    <div className="grid grid-cols-12 gap-2 items-center">
+      <input value={description} onChange={e => onChange(index, 'description', e.target.value)}
+        placeholder="Description" className="col-span-4 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+      <select value={category} onChange={e => onChange(index, 'category', e.target.value)}
+        className="col-span-3 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+        {LINE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+      </select>
+      <input type="number" min="1" value={quantity} onChange={e => onChange(index, 'quantity', e.target.value)}
+        className="col-span-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+      <input type="number" value={unitPrice} onChange={e => onChange(index, 'unitPrice', e.target.value)}
+        placeholder="₹ Price" className="col-span-3 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+      <button type="button" onClick={() => onRemove(index)} disabled={disabled}
+        className="col-span-1 p-1 text-gray-400 hover:text-red-500 disabled:opacity-30"><Trash2 size={14} /></button>
+    </div>
+  );
+});
 
 export default function BillingPage() {
   const { user } = useAuth();
@@ -204,10 +237,12 @@ export default function BillingPage() {
       .finally(() => setOutstandingLoading(false));
   }, [showNew]);
 
-  const addItem = () => setItems(it => [...it, { ...EMPTY_ITEM }]);
-  const removeItem = (i: number) => setItems(it => it.filter((_, idx) => idx !== i));
-  const updateItem = (i: number, field: string, val: any) =>
-    setItems(it => it.map((item, idx) => idx === i ? { ...item, [field]: val } : item));
+  const addItem = useCallback(() => setItems(it => [...it, { ...EMPTY_ITEM }]), []);
+  const removeItem = useCallback((i: number) => setItems(it => it.filter((_, idx) => idx !== i)), []);
+  // Stable identity so memoised LineItemRow only re-renders when its row data
+  // actually changes — typing into one row no longer re-renders the others.
+  const updateItem = useCallback((i: number, field: string, val: any) =>
+    setItems(it => it.map((item, idx) => idx === i ? { ...item, [field]: val } : item)), []);
 
   const subtotal = items.reduce((s, it) => s + (Number(it.unitPrice) || 0) * Number(it.quantity), 0);
 
@@ -1197,7 +1232,8 @@ export default function BillingPage() {
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input value={patientSearch} onChange={e => setPatientSearch(e.target.value)}
                     onFocus={() => setPatientFocused(true)}
-                    onBlur={() => setTimeout(() => setPatientFocused(false), 150)}
+                    onClick={() => setPatientFocused(true)}
+                    onBlur={() => setTimeout(() => setPatientFocused(false), 200)}
                     placeholder="Search by name, phone or patient ID…"
                     className="w-full pl-8 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                   {(patientSearch.trim() !== '' || patientFocused) && (
@@ -1286,20 +1322,17 @@ export default function BillingPage() {
               )}
               <div className="space-y-2">
                 {items.map((item, i) => (
-                  <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                    <input value={item.description} onChange={e => updateItem(i, 'description', e.target.value)}
-                      placeholder="Description" className="col-span-4 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
-                    <select value={item.category} onChange={e => updateItem(i, 'category', e.target.value)}
-                      className="col-span-3 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
-                      {LINE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                    </select>
-                    <input type="number" min="1" value={item.quantity} onChange={e => updateItem(i, 'quantity', e.target.value)}
-                      className="col-span-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
-                    <input type="number" value={item.unitPrice} onChange={e => updateItem(i, 'unitPrice', e.target.value)}
-                      placeholder="₹ Price" className="col-span-3 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
-                    <button type="button" onClick={() => removeItem(i)} disabled={items.length === 1}
-                      className="col-span-1 p-1 text-gray-400 hover:text-red-500 disabled:opacity-30"><Trash2 size={14} /></button>
-                  </div>
+                  <LineItemRow
+                    key={i}
+                    index={i}
+                    description={item.description}
+                    category={item.category}
+                    quantity={item.quantity}
+                    unitPrice={item.unitPrice}
+                    disabled={items.length === 1}
+                    onChange={updateItem}
+                    onRemove={removeItem}
+                  />
                 ))}
               </div>
 
