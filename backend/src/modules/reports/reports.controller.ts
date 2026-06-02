@@ -12,7 +12,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
 @RequireFeature('MOD_REPORTS')
-@Roles('SYS_ORG_ADMIN', 'SYS_BILLING_MANAGER', 'SYS_HOD', 'SYS_SENIOR_DOCTOR', 'SYS_LAB_SUPERVISOR', 'SYS_PHARMACY_INCHARGE', 'SYS_COMPLIANCE_OFFICER')
+@Roles('SYS_ORG_ADMIN', 'SYS_BILLING', 'SYS_BILLING_MANAGER', 'SYS_HOD', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_LAB_SUPERVISOR', 'SYS_LAB_TECH', 'SYS_PHARMACY_INCHARGE', 'SYS_PHARMACIST', 'SYS_COMPLIANCE_OFFICER')
 @Controller('reports')
 export class ReportsController {
   constructor(private svc: ReportsService) {}
