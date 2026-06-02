@@ -499,7 +499,7 @@ export default function BillingPage() {
   };
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#F5F7FA' }}>
+    <div className="flex flex-col min-h-full" style={{ background: '#F5F7FA' }}>
       {/* Header */}
       <div className="bg-white border-b border-gray-100 px-3 sm:px-6 py-4">
         <div className="flex items-center justify-between">
@@ -649,10 +649,10 @@ export default function BillingPage() {
       )}
 
       {/* Split content area */}
-      <div className="flex flex-1 gap-5 px-3 sm:px-6 py-5 overflow-auto">
+      <div className="flex flex-col lg:flex-row gap-5 px-3 sm:px-6 py-5">
 
         {/* Left: Invoice Table */}
-        <div className="flex-1 hms-card flex flex-col">
+        <div className="flex-1 hms-card flex flex-col min-w-0">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-wrap gap-3">
             <h3 className="font-semibold text-gray-800">Invoice Line Items</h3>
             <div className="flex gap-2">
@@ -665,7 +665,7 @@ export default function BillingPage() {
               </select>
             </div>
           </div>
-          <div className="overflow-auto flex-1">
+          <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr>
