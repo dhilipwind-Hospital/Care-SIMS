@@ -741,163 +741,6 @@ export default function BillingPage() {
           </div>
         </div>
 
-        {/* Patient Details + Payment — full-width below the invoice table */}
-        <div className="space-y-4">
-          {/* Patient Details */}
-          <div className="hms-card">
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-              <span className="font-semibold text-gray-800">Patient Details</span>
-              {selected && <StatusBadge status={selected.status} />}
-            </div>
-            <div className="p-5 space-y-3">
-              {selected ? (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      ['Patient', `${selected.patient?.firstName || ''} ${selected.patient?.lastName || ''}`],
-                      ['Patient ID', selected.patient?.patientId || '—'],
-                      ['Doctor', selected.doctor ? `Dr. ${selected.doctor.firstName} ${selected.doctor.lastName}` : '—'],
-                      ['Department', selected.department?.name || '—'],
-                      ['Visit Date', selected.createdAt ? new Date(selected.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'],
-                    ].map(([lbl, val]) => (
-                      <div key={lbl} className={lbl === 'Patient' || lbl === 'Visit Date' ? 'col-span-2' : ''}>
-                        <p className="text-xs text-gray-400">{lbl}</p>
-                        <p className="text-sm font-semibold text-gray-900 mt-0.5">{val}</p>
-                      </div>
-                    ))}
-                  </div>
-                  {/* Category breakdown chips — show how this invoice splits
-                      across Doctor Fee / Lab / Pharmacy / etc. */}
-                  {selected.lineItems?.length > 0 && (() => {
-                    const byCat: Record<string, number> = {};
-                    for (const it of selected.lineItems) {
-                      const amt = Number(it.amount || (Number(it.unitPrice) * Number(it.quantity)));
-                      byCat[it.category || 'OTHER'] = (byCat[it.category || 'OTHER'] || 0) + amt;
-                    }
-                    const rows = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
-                    return (
-                      <div className="pt-2 border-t border-gray-100">
-                        <div className="text-[10px] uppercase text-gray-400 tracking-wide font-semibold mb-1.5">By Service</div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {rows.map(([cat, amt]) => {
-                            const st = categoryStyle(cat);
-                            return (
-                              <span key={cat} className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold ${st.cls}`}>
-                                {st.label}: ₹{amt.toLocaleString('en-IN')}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                  {/* Line items summary */}
-                  {selected.lineItems?.length > 0 && (
-                    <div className="space-y-1.5 pt-2 border-t border-gray-100">
-                      {selected.lineItems.map((it: any) => {
-                        const st = categoryStyle(it.category);
-                        return (
-                          <div key={it.id} className="flex justify-between items-center text-sm gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${st.cls}`}>{st.label}</span>
-                              <span className="text-gray-700 truncate">{it.description}</span>
-                            </div>
-                            <span className="font-medium text-gray-900 flex-shrink-0">₹{Number(it.amount || (it.unitPrice * it.quantity)).toLocaleString()}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="py-8 text-center text-sm text-gray-400">
-                  Click an invoice to view patient details
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Payment Section */}
-          <div className="hms-card">
-            <div className="px-5 py-4 border-b border-gray-100">
-              <span className="font-semibold text-gray-800">Payment</span>
-            </div>
-            <div className="p-5 space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Payment Method</label>
-                <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
-                  {['CASH','CARD','UPI','INSURANCE','CHEQUE','NEFT'].map(m => <option key={m}>{m}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Discount Applied</label>
-                <input readOnly value={selected?.discountAmount ? `₹${Number(selected.discountAmount).toLocaleString()}` : '—'}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-600" />
-              </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-sm font-semibold text-gray-700">Amount Due</span>
-                <span className="text-2xl font-black text-gray-900">₹{selected ? balance.toLocaleString() : '0'}</span>
-              </div>
-              {/* Editable amount to collect — defaults to the full balance. */}
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Amount to Collect</label>
-                <div className="flex gap-2">
-                  <input
-                    type="number" min={0} step={1}
-                    value={payAmount}
-                    onChange={e => setPayAmount(e.target.value)}
-                    placeholder={selected ? String(balance) : '0'}
-                    className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
-                  <button
-                    type="button"
-                    onClick={() => setPayAmount(String(balance))}
-                    disabled={!selected || balance <= 0}
-                    className="text-xs px-3 py-2 rounded-lg border border-teal-200 text-teal-700 hover:bg-teal-50 disabled:opacity-50">
-                    Full
-                  </button>
-                </div>
-              </div>
-              <button
-                onClick={() => selected && handlePay(selected.id)}
-                disabled={paying || !selected || balance <= 0}
-                className="w-full py-3 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50 transition-all hover:opacity-90"
-                style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
-                {paying ? 'Processing…' : '✓ Collect Payment'}
-              </button>
-              <div className="grid grid-cols-2 gap-2">
-                {selected?.status === 'DRAFT' && (
-                  <button onClick={() => handleFinalize(selected.id)}
-                    className="py-2 rounded-lg border border-blue-200 text-blue-700 text-sm font-medium hover:bg-blue-50 transition-all">
-                    Finalize
-                  </button>
-                )}
-                <button
-                  onClick={async () => {
-                    if (!selected) return;
-                    const email = selected.patient?.email;
-                    if (!email) { toast.error('Patient does not have an email on file'); return; }
-                    const t = toast.loading('Sending invoice...');
-                    try {
-                      const { data } = await api.post(`/billing/invoices/${selected.id}/email`);
-                      toast.success(`Invoice sent to ${data.to}`, { id: t });
-                    } catch (err: any) {
-                      toast.error(err.response?.data?.message || 'Failed to send invoice email', { id: t });
-                    }
-                  }}
-                  className="py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 transition-all">
-                  Email Invoice
-                </button>
-                {selected && !['PAID','CANCELLED'].includes(selected.status) && (
-                  <button onClick={() => handleCancel(selected.id)}
-                    className="py-2 rounded-lg border border-red-200 text-red-600 text-sm font-medium hover:bg-red-50 transition-all">
-                    Mark Pending
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       <InvoiceDetailModal />
@@ -1112,6 +955,42 @@ export default function BillingPage() {
                 <p className="text-sm text-gray-700">{selected.notes}</p>
               </div>
             )}
+
+            {/* Collect Payment — only when there's a balance to settle */}
+            {detailBalance > 0 && selected.status !== 'CANCELLED' && (
+              <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-gray-700">Collect Payment</span>
+                  <span className="text-xl font-black text-gray-900">₹{detailBalance.toLocaleString()}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Payment Method</label>
+                    <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+                      {['CASH','CARD','UPI','INSURANCE','CHEQUE','NEFT'].map(m => <option key={m}>{m}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Amount</label>
+                    <div className="flex gap-2">
+                      <input type="number" min={0} step={1} value={payAmount} onChange={e => setPayAmount(e.target.value)}
+                        placeholder={String(detailBalance)}
+                        className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                      <button type="button" onClick={() => setPayAmount(String(detailBalance))}
+                        className="text-xs px-3 py-2 rounded-lg border border-teal-200 text-teal-700 hover:bg-teal-50">
+                        Full
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <button onClick={() => handlePay(selected.id)} disabled={paying}
+                  className="w-full py-2.5 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50 transition-all hover:opacity-90"
+                  style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
+                  {paying ? 'Processing…' : '✓ Collect Payment'}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Footer actions */}
@@ -1126,6 +1005,12 @@ export default function BillingPage() {
               className="flex items-center gap-2 px-4 py-2 rounded-xl border border-teal-200 text-teal-700 text-sm font-semibold hover:bg-teal-50 transition-all">
               <Printer size={14} /> Print
             </button>
+            {!['PAID','CANCELLED'].includes(selected.status) && (
+              <button onClick={() => { handleCancel(selected.id); setShowDetailModal(false); }}
+                className="px-4 py-2 rounded-xl border border-red-200 text-red-600 text-sm font-medium hover:bg-red-50 transition-all">
+                Cancel Invoice
+              </button>
+            )}
             <button onClick={() => setShowDetailModal(false)}
               className="px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">
               Close
