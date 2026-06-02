@@ -499,7 +499,7 @@ export default function BillingPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-full" style={{ background: '#F5F7FA' }}>
+    <div className="flex flex-col" style={{ background: '#F5F7FA' }}>
       {/* Header */}
       <div className="bg-white border-b border-gray-100 px-3 sm:px-6 py-4">
         <div className="flex items-center justify-between">
@@ -649,7 +649,7 @@ export default function BillingPage() {
       )}
 
       {/* Split content area */}
-      <div className="flex flex-col lg:flex-row gap-5 px-3 sm:px-6 py-5">
+      <div className="flex flex-col lg:flex-row gap-5 px-3 sm:px-6 py-5 pb-12">
 
         {/* Left: Invoice Table */}
         <div className="flex-1 hms-card flex flex-col min-w-0">
