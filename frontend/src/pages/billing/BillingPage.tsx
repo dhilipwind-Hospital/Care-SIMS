@@ -648,11 +648,12 @@ export default function BillingPage() {
         </div>
       )}
 
-      {/* Split content area */}
-      <div className="flex flex-col lg:flex-row gap-5 px-3 sm:px-6 py-5 pb-12">
+      {/* Single-column content — every section stacks vertically and the
+          page is one continuous scroll, no nested scroll regions. */}
+      <div className="flex flex-col gap-5 px-3 sm:px-6 py-5 pb-12">
 
-        {/* Left: Invoice Table */}
-        <div className="flex-1 hms-card flex flex-col min-w-0">
+        {/* Invoice Table */}
+        <div className="hms-card flex flex-col min-w-0">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-wrap gap-3">
             <h3 className="font-semibold text-gray-800">Invoice Line Items</h3>
             <div className="flex gap-2">
@@ -740,8 +741,8 @@ export default function BillingPage() {
           </div>
         </div>
 
-        {/* Right: Patient Details + Payment Panel */}
-        <div className="hidden lg:block w-96 flex-shrink-0 space-y-4">
+        {/* Patient Details + Payment — full-width below the invoice table */}
+        <div className="space-y-4">
           {/* Patient Details */}
           <div className="hms-card">
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
