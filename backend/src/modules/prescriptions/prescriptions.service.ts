@@ -2,11 +2,12 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { generateSequentialId } from '../../common/utils/id-generator';
 import { sendEmail } from '../../common/utils/mailer';
+import { BillingService } from '../billing/billing.service';
 
 @Injectable()
 export class PrescriptionsService {
   private readonly logger = new Logger(PrescriptionsService.name);
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private billing: BillingService) {}
 
   async create(tenantId: string, dto: any) {
     const validity = new Date(); validity.setDate(validity.getDate() + 30);
@@ -92,19 +93,43 @@ export class PrescriptionsService {
   }
 
   async sendToPharmacy(tenantId: string, id: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const rx = await tx.prescription.findFirst({ where: { id, tenantId } });
       if (!rx) throw new NotFoundException('Prescription not found');
       return tx.prescription.update({ where: { id }, data: { status: 'SENT_TO_PHARMACY', sentToPharmacyAt: new Date() } });
     });
+
+    // "Send to Pharmacy" is the commitment moment — bill the Rx now so it
+    // doesn't slip through if the pharmacist never dispenses. Idempotent via
+    // referenceId, so a later dispense() call won't double-charge. Billing
+    // failures must not block the status update.
+    try {
+      await this.billing.billPrescription(tenantId, id);
+    } catch (err) {
+      this.logger.error(`Failed to auto-bill prescription ${id} on send-to-pharmacy`, err as any);
+    }
+    return updated;
   }
 
   async cancel(tenantId: string, id: string, reason: string, cancelledById: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const rx = await tx.prescription.findFirst({ where: { id, tenantId } });
       if (!rx) throw new NotFoundException('Prescription not found');
       return tx.prescription.update({ where: { id }, data: { status: 'CANCELLED', cancelledAt: new Date(), cancelledById, cancellationReason: reason } });
     });
+
+    // Reverse any pharmacy line items already added for this Rx on open
+    // invoices. Locked (FINALIZED/PAID) invoices keep their lines and the
+    // billing desk handles the refund manually.
+    try {
+      const r = await this.billing.voidPrescriptionCharges(tenantId, id);
+      if (r.locked > 0) {
+        this.logger.warn(`Rx ${id} cancelled but ${r.locked} line item(s) sit on finalized invoices — manual refund required`);
+      }
+    } catch (err) {
+      this.logger.error(`Failed to reverse charges for cancelled prescription ${id}`, err as any);
+    }
+    return updated;
   }
 
   async updatePrescriptionStatus(tenantId: string, id: string, status: string) {

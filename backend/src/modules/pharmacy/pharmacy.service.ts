@@ -3,12 +3,6 @@ import { PrismaService } from '../../database/prisma.service';
 import { generateSequentialId } from '../../common/utils/id-generator';
 import { BillingService } from '../billing/billing.service';
 
-// Markup applied to DrugBatch.unitCost when generating a sale price. When
-// unitCost is null on the batch, fall back to DEFAULT_DRUG_PRICE per unit.
-// Reception/billing can edit the line item before finalizing.
-const DRUG_MARKUP_FACTOR = 1.3;
-const DEFAULT_DRUG_PRICE = 50;
-
 @Injectable()
 export class PharmacyService {
   constructor(private prisma: PrismaService, private billing: BillingService) {}
@@ -101,36 +95,21 @@ export class PharmacyService {
       await tx.prescription.update({ where: { id: prescriptionId }, data: { status: 'DISPENSED' } });
     });
 
-    // Roll pharmacy charges into the patient's open OPD invoice — one line
-    // per dispensed batch. Idempotent via batchId. Failure must not block
-    // the dispense itself.
+    // Route billing through the shared Rx-level helper. If the doctor already
+    // hit "Send to Pharmacy", those charges are on the open invoice; the
+    // helper's referenceId dedup makes this call a no-op. If they dispensed
+    // straight from PENDING without a send step, this is where the bill is
+    // created. Either way the patient is charged exactly once per Rx item.
+    //
+    // The per-batch unitCost data is no longer reflected in the bill — the
+    // bill is now driven by the catalog price (cheapest active batch ×
+    // markup, captured at commitment time). Batch substitutions are an
+    // inventory concern, not a billing one.
     try {
-      for (const d of dispensedDetails) {
-        const unitPrice = d.unitCost != null
-          ? Math.round(d.unitCost * DRUG_MARKUP_FACTOR * 100) / 100
-          : DEFAULT_DRUG_PRICE;
-        await this.billing.addChargeToOpenVisit(
-          tenantId,
-          (rx as any).patientId,
-          {
-            description: `Pharmacy — ${d.drugName}`,
-            category: 'PHARMACY',
-            quantity: d.quantity,
-            unitPrice,
-            // referenceId = rx id + batch id keeps it idempotent and tied
-            // back to both the prescription and the specific dispense lot.
-            referenceId: `${prescriptionId}:${d.batchId}`,
-          },
-          {
-            locationId: (rx as any).locationId,
-            doctorId: (rx as any).doctorId,
-            consultationId: (rx as any).consultationId,
-          },
-        );
-      }
+      await this.billing.billPrescription(tenantId, prescriptionId);
       if (dispensedDetails.length > 0) {
         // eslint-disable-next-line no-console
-        console.log(`[pharmacy→billing] Rx ${(rx as any).rxNumber}: billed ${dispensedDetails.length} item(s)`);
+        console.log(`[pharmacy→billing] Rx ${(rx as any).rxNumber}: dispensed ${dispensedDetails.length} batch(es)`);
       }
     } catch (err) {
       // eslint-disable-next-line no-console

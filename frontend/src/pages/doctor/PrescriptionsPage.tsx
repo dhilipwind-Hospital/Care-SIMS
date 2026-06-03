@@ -90,6 +90,10 @@ export default function PrescriptionsPage() {
   // Prevents the Save button being mashed twice while the POST is in flight,
   // which previously created 5+ duplicate prescriptions.
   const [submitting, setSubmitting] = useState(false);
+  // Confirmation modal for Send to Pharmacy. Sending now bills the patient,
+  // so we want one tap of confirmation before the charges land on the bill.
+  const [sendConfirmRx, setSendConfirmRx] = useState<any>(null);
+  const [sending, setSending] = useState(false);
 
   const searchDrugs = (idx: number, q: string) => {
     setDrugSearches(prev => { const a = [...prev]; a[idx] = q; return a; });
@@ -165,9 +169,19 @@ export default function PrescriptionsPage() {
     }
   };
 
-  const sendToPharmacy = async (id: string) => {
-    await api.post(`/prescriptions/${id}/send-pharmacy`);
-    fetchRx();
+  const confirmSendToPharmacy = async () => {
+    if (!sendConfirmRx) return;
+    setSending(true);
+    try {
+      await api.post(`/prescriptions/${sendConfirmRx.id}/send-pharmacy`);
+      toast.success('Sent to pharmacy — charges added to patient bill');
+      setSendConfirmRx(null);
+      fetchRx();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to send to pharmacy');
+    } finally {
+      setSending(false);
+    }
   };
 
   const handlePrintRx = (rx: any) => {
@@ -422,7 +436,7 @@ export default function PrescriptionsPage() {
                   <td className="px-4 py-3">
                     <div className="flex gap-1.5">
                       {rx.status === 'DRAFT' && (
-                        <button onClick={() => sendToPharmacy(rx.id)}
+                        <button onClick={() => setSendConfirmRx(rx)}
                           className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">
                           Send to Pharmacy
                         </button>
@@ -439,6 +453,38 @@ export default function PrescriptionsPage() {
           </table>
         </div>
       </div>
+
+      {/* Send-to-Pharmacy confirmation — Send now bills the patient, so we
+          gate it behind one confirmation tap. */}
+      {sendConfirmRx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !sending && setSendConfirmRx(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-bold text-gray-900">Send to Pharmacy?</h3>
+              <button onClick={() => setSendConfirmRx(null)} disabled={sending} className="text-gray-400 hover:text-red-500 disabled:opacity-50"><X size={16} /></button>
+            </div>
+            <div className="p-6 space-y-3 text-sm text-gray-700">
+              <p>
+                <strong>{sendConfirmRx.rxNumber}</strong> — {sendConfirmRx.items?.length || 0} medication{(sendConfirmRx.items?.length || 0) !== 1 ? 's' : ''} for {sendConfirmRx.patient?.firstName} {sendConfirmRx.patient?.lastName}.
+              </p>
+              <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 text-amber-800 text-xs leading-relaxed">
+                Sending will add pharmacy charges to the patient's open invoice immediately. If the prescription is later cancelled, charges on draft invoices are reversed automatically; charges on finalized invoices need a manual refund.
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+              <button onClick={() => setSendConfirmRx(null)} disabled={sending}
+                className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                Cancel
+              </button>
+              <button onClick={confirmSendToPharmacy} disabled={sending}
+                className="px-4 py-2 rounded-lg text-white text-sm font-semibold disabled:opacity-60"
+                style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
+                {sending ? 'Sending…' : 'Send & Bill'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

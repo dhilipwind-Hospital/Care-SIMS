@@ -584,4 +584,100 @@ export class BillingService {
     // Append the line item to the existing invoice and recompute totals.
     return this.addLineItem(tenantId, invoice.id, lineItem);
   }
+
+  // Bill a prescription as a single unit — one line item per PrescriptionItem,
+  // priced from an available DrugBatch (unitCost × 1.3) or the default if no
+  // batch exists. Idempotent via referenceId so it's safe to call from both
+  // sendToPharmacy and dispensePrescription — whichever fires first commits
+  // the charges, the other becomes a no-op.
+  //
+  // Shared `${rxId}:item:${itemId}` referenceId scheme lets cancel() find
+  // and reverse the same charges by prefix scan.
+  async billPrescription(tenantId: string, prescriptionId: string) {
+    const DEFAULT_DRUG_PRICE = 50;
+    const MARKUP = 1.3;
+
+    const rx = await this.prisma.prescription.findFirst({
+      where: { id: prescriptionId, tenantId },
+      include: { items: true },
+    });
+    if (!rx) return { skipped: true, reason: 'rx-not-found' };
+    if (rx.status === 'CANCELLED') return { skipped: true, reason: 'rx-cancelled' };
+
+    // Pull a price hint per drugId in one query so we don't N+1 the catalog.
+    const drugIds = Array.from(new Set(rx.items.map(i => i.drugId).filter((id): id is string => !!id)));
+    const drugBatchPrices: Record<string, number> = {};
+    if (drugIds.length) {
+      const batches = await this.prisma.drugBatch.findMany({
+        where: { tenantId, drugId: { in: drugIds }, unitCost: { not: null }, quantityInStock: { gt: 0 } },
+        select: { drugId: true, unitCost: true },
+      });
+      for (const b of batches) {
+        if (!drugBatchPrices[b.drugId] && b.unitCost != null) {
+          drugBatchPrices[b.drugId] = Math.round(Number(b.unitCost) * MARKUP * 100) / 100;
+        }
+      }
+    }
+
+    const results: Array<{ itemId: string; result: any }> = [];
+    for (const it of rx.items) {
+      const unitPrice = it.drugId && drugBatchPrices[it.drugId] != null
+        ? drugBatchPrices[it.drugId]
+        : DEFAULT_DRUG_PRICE;
+      const r = await this.addChargeToOpenVisit(
+        tenantId,
+        rx.patientId,
+        {
+          description: `Pharmacy — ${it.drugName}${it.strength ? ` ${it.strength}` : ''}`,
+          category: 'PHARMACY',
+          quantity: it.quantity ? Number(it.quantity) : 1,
+          unitPrice,
+          referenceId: `${rx.id}:item:${it.id}`,
+        },
+        { locationId: rx.locationId, doctorId: rx.doctorId, consultationId: rx.consultationId || undefined },
+      );
+      results.push({ itemId: it.id, result: r });
+    }
+    return { billed: results.length, results };
+  }
+
+  // Reverse all line items billed for a prescription. Only touches DRAFT/PENDING
+  // invoices — once an invoice is FINALIZED the line items stay and the
+  // refund is handled manually at the billing desk.
+  async voidPrescriptionCharges(tenantId: string, prescriptionId: string) {
+    const prefix = `${prescriptionId}:item:`;
+    const lines = await this.prisma.invoiceLineItem.findMany({
+      where: {
+        referenceId: { startsWith: prefix },
+        invoice: { tenantId, status: { in: ['DRAFT', 'PENDING'] } },
+      },
+      select: { id: true, invoiceId: true, amount: true },
+    });
+    if (!lines.length) return { voided: 0, locked: 0 };
+
+    // Group by invoice so we recompute each invoice's totals once.
+    const byInvoice: Record<string, typeof lines> = {};
+    for (const l of lines) (byInvoice[l.invoiceId] ||= []).push(l);
+
+    let voided = 0;
+    for (const [invoiceId, group] of Object.entries(byInvoice)) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.invoiceLineItem.deleteMany({ where: { id: { in: group.map(g => g.id) } } });
+        const remaining = await tx.invoiceLineItem.findMany({ where: { invoiceId } });
+        const subtotal = remaining.reduce((s, i) => s + Number(i.amount), 0);
+        await tx.invoice.update({ where: { id: invoiceId }, data: { subtotal, netTotal: subtotal } });
+      });
+      voided += group.length;
+    }
+
+    // Count how many other lines exist for this rx on locked invoices, just
+    // so the caller can warn the user that a manual refund is needed.
+    const lockedCount = await this.prisma.invoiceLineItem.count({
+      where: {
+        referenceId: { startsWith: prefix },
+        invoice: { tenantId, status: { notIn: ['DRAFT', 'PENDING'] } },
+      },
+    });
+    return { voided, locked: lockedCount };
+  }
 }
