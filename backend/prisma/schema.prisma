@@ -852,11 +852,22 @@ model InvoiceLineItem {
   discountPct Decimal @default(0) @map("discount_pct") @db.Decimal(5, 2)
   taxPct      Decimal @default(0) @map("tax_pct") @db.Decimal(5, 2)
   amount      Decimal @db.Decimal(10, 2)
+  // Opaque idempotency key the integrations use to avoid double-billing the
+  // same source event. Kept for backwards compatibility; new code should
+  // read source_type + source_id instead because they're indexed and don't
+  // require string surgery to filter by.
   referenceId String? @map("reference_id")
+  // Strongly-typed pointer back to the originating record so unbilled-item
+  // queries and revenue-by-source reports become indexed joins instead of
+  // string-prefix scans. sourceType is the kind of source (PHARMACY / LAB /
+  // CONSULTATION / OT / OTHER); sourceId is that record's primary key.
+  sourceType  String? @map("source_type")
+  sourceId    String? @map("source_id")
   sortOrder   Int     @default(0) @map("sort_order")
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
+  @@index([sourceType, sourceId])
   @@map("invoice_line_items")
 }
 

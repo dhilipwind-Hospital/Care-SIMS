@@ -65,7 +65,7 @@ export class BillingService {
               paidAmount: 0, status: 'DRAFT',
               insuranceProvider: dto.insuranceProvider, policyNumber: dto.policyNumber,
               createdById,
-              lineItems: { create: dto.lineItems.map((i: any, idx: number) => ({ description: i.description, category: i.category, quantity: Number(i.quantity), unitPrice: Number(i.unitPrice), discountPct: Number(i.discountPct || 0), taxPct: Number(i.taxPct || 0), amount: Number(i.quantity) * Number(i.unitPrice), referenceId: i.referenceId, sortOrder: idx })) },
+              lineItems: { create: dto.lineItems.map((i: any, idx: number) => ({ description: i.description, category: i.category, quantity: Number(i.quantity), unitPrice: Number(i.unitPrice), discountPct: Number(i.discountPct || 0), taxPct: Number(i.taxPct || 0), amount: Number(i.quantity) * Number(i.unitPrice), referenceId: i.referenceId, sourceType: i.sourceType, sourceId: i.sourceId, sortOrder: idx })) },
             },
             include: { lineItems: true },
           });
@@ -202,10 +202,13 @@ export class BillingService {
     const since = new Date();
     since.setDate(since.getDate() - days);
 
-    const [billedRefs, consultations, labOrders, prescriptions] = await Promise.all([
+    const [billedLines, consultations, labOrders, prescriptions] = await Promise.all([
+      // Pull both the indexed (sourceType, sourceId) tuple AND the legacy
+      // referenceId so rows backfilled but new and rows still on the old
+      // scheme are both detected.
       this.prisma.invoiceLineItem.findMany({
         where: { invoice: { tenantId, patientId } },
-        select: { referenceId: true },
+        select: { referenceId: true, sourceType: true, sourceId: true },
       }),
       this.prisma.consultation.findMany({
         where: { tenantId, patientId, status: 'COMPLETED', completedAt: { gte: since } },
@@ -228,9 +231,26 @@ export class BillingService {
       }),
     ]);
 
-    // refSet: exact match for lab (item id) and consultation (id).
-    // refPrefixSet: pharmacy uses `${rxId}:${batchId}` so we match by prefix.
-    const refSet = new Set(billedRefs.map(r => r.referenceId).filter((x): x is string => !!x));
+    // Build indexed lookup sets keyed by (sourceType, sourceId), plus a
+    // legacy referenceId set used as a fallback for line items written
+    // before backfill ran.
+    const billedSourceKeys = new Set(
+      billedLines
+        .filter(l => l.sourceType && l.sourceId)
+        .map(l => `${l.sourceType}:${l.sourceId}`),
+    );
+    const billedRefIds = new Set(
+      billedLines.map(l => l.referenceId).filter((x): x is string => !!x),
+    );
+    const isBilled = (sourceType: string, sourceId: string, fallbackRefPrefix?: string) => {
+      if (billedSourceKeys.has(`${sourceType}:${sourceId}`)) return true;
+      // Legacy fallback: pharmacy historically stored `${rxId}:...` referenceIds.
+      // Once backfill runs in prod this branch is dead.
+      if (fallbackRefPrefix) {
+        for (const r of billedRefIds) if (r.startsWith(fallbackRefPrefix)) return true;
+      }
+      return billedRefIds.has(sourceId);
+    };
 
     // Pull selling-price hints for the drugs in these prescriptions so the
     // pharmacy lines land with a price already filled in instead of ₹0.
@@ -259,7 +279,7 @@ export class BillingService {
     }> = [];
 
     for (const c of consultations) {
-      if (refSet.has(c.id)) continue;
+      if (isBilled('CONSULTATION', c.id)) continue;
       items.push({
         sourceType: 'CONSULTATION',
         sourceId: c.id,
@@ -272,7 +292,7 @@ export class BillingService {
     }
     for (const lo of labOrders) {
       for (const li of lo.items) {
-        if (refSet.has(li.id)) continue;
+        if (isBilled('LAB', li.id)) continue;
         items.push({
           sourceType: 'LAB',
           sourceId: li.id,
@@ -285,13 +305,14 @@ export class BillingService {
       }
     }
     for (const rx of prescriptions) {
-      // Pharmacy billing uses `${rxId}:item:${itemId}` (current) and historically
-      // used `${rxId}:${batchId}` — both share the `${rx.id}:` prefix, so if any
-      // line on a patient invoice starts with it, the Rx has already been billed
-      // and shouldn't show up as a candidate again.
-      const billedRefPrefix = `${rx.id}:`;
-      const alreadyBilled = Array.from(refSet).some(r => r.startsWith(billedRefPrefix));
-      if (alreadyBilled) continue;
+      // Rx is "billed" if (a) any PrescriptionItem of it shows up under
+      // sourceType=PHARMACY (indexed query, post-backfill) OR (b) any legacy
+      // referenceId still on this patient starts with `${rx.id}:`.
+      const itemIds = rx.items.map(i => i.id);
+      const anyItemBilled = itemIds.some(iid => billedSourceKeys.has(`PHARMACY:${iid}`));
+      const legacyPrefix = `${rx.id}:`;
+      const legacyBilled = !anyItemBilled && Array.from(billedRefIds).some(r => r.startsWith(legacyPrefix));
+      if (anyItemBilled || legacyBilled) continue;
       for (const it of rx.items) {
         const unitPrice = it.drugId && drugBatchPrices[it.drugId] != null
           ? drugBatchPrices[it.drugId]
@@ -498,7 +519,7 @@ export class BillingService {
       const inv = await tx.invoice.findFirst({ where: { id: invoiceId, tenantId }, include: { lineItems: true, payments: true, patient: true } });
       if (!inv) throw new NotFoundException('Invoice not found');
       const item = await tx.invoiceLineItem.create({
-        data: { invoiceId, description: dto.description, category: dto.category, quantity: dto.quantity, unitPrice: dto.unitPrice, discountPct: dto.discountPct || 0, taxPct: dto.taxPct || 0, amount: Number(dto.quantity) * Number(dto.unitPrice), referenceId: dto.referenceId },
+        data: { invoiceId, description: dto.description, category: dto.category, quantity: dto.quantity, unitPrice: dto.unitPrice, discountPct: dto.discountPct || 0, taxPct: dto.taxPct || 0, amount: Number(dto.quantity) * Number(dto.unitPrice), referenceId: dto.referenceId, sourceType: dto.sourceType, sourceId: dto.sourceId },
       });
       const allItems = await tx.invoiceLineItem.findMany({ where: { invoiceId } });
       const subtotal = allItems.reduce((s, i) => s + Number(i.amount), 0);
@@ -522,11 +543,13 @@ export class BillingService {
   async addChargeToOpenVisit(
     tenantId: string,
     patientId: string,
-    lineItem: { description: string; category: string; quantity: number; unitPrice: number; referenceId: string },
+    lineItem: { description: string; category: string; quantity: number; unitPrice: number; referenceId: string; sourceType?: string; sourceId?: string },
     opts?: { locationId?: string; doctorId?: string; consultationId?: string },
   ) {
-    // Idempotency: skip if any line item with this referenceId already exists
-    // for this patient at this tenant.
+    // Idempotency check stays on referenceId because it's unique per line.
+    // sourceType+sourceId is intentionally coarser (e.g. an OT booking emits
+    // 4 lines that all share the same (OT, bookingId)) — collapsing on it
+    // would drop legitimate line items.
     const existing = await this.prisma.invoiceLineItem.findFirst({
       where: {
         referenceId: lineItem.referenceId,
@@ -576,6 +599,8 @@ export class BillingService {
             quantity: lineItem.quantity,
             unitPrice: lineItem.unitPrice,
             referenceId: lineItem.referenceId,
+            sourceType: lineItem.sourceType,
+            sourceId: lineItem.sourceId,
           }],
         },
         opts?.doctorId || 'system',
@@ -634,7 +659,13 @@ export class BillingService {
           category: 'PHARMACY',
           quantity: it.quantity ? Number(it.quantity) : 1,
           unitPrice,
+          // referenceId still encodes both rx + item for backwards compatibility
+          // with the legacy prefix-scan filter. New code reads sourceType+sourceId.
           referenceId: `${rx.id}:item:${it.id}`,
+          // sourceId is the PrescriptionItem.id so each Rx-item maps 1:1 with a
+          // billed line. Rx-level lookups join through prescription_items.
+          sourceType: 'PHARMACY',
+          sourceId: it.id,
         },
         { locationId: rx.locationId, doctorId: rx.doctorId, consultationId: rx.consultationId || undefined },
       );
@@ -646,16 +677,40 @@ export class BillingService {
   // Reverse all line items billed for a prescription. Only touches DRAFT/PENDING
   // invoices — once an invoice is FINALIZED the line items stay and the
   // refund is handled manually at the billing desk.
+  //
+  // Query strategy: each line is stamped with sourceType=PHARMACY and
+  // sourceId=PrescriptionItem.id (indexed). Look up the Rx's item ids and
+  // delete by `sourceType=PHARMACY AND sourceId IN (itemIds)`. Also fall
+  // back to the legacy `${rxId}:` referenceId prefix so rows written before
+  // the migration are still cleaned up.
   async voidPrescriptionCharges(tenantId: string, prescriptionId: string) {
-    const prefix = `${prescriptionId}:item:`;
+    const rx = await this.prisma.prescription.findFirst({
+      where: { id: prescriptionId, tenantId },
+      select: { items: { select: { id: true } } },
+    });
+    const itemIds = rx?.items.map(i => i.id) || [];
+    const legacyPrefix = `${prescriptionId}:`;
+
+    const sourceFilter = {
+      OR: [
+        ...(itemIds.length ? [{ sourceType: 'PHARMACY' as const, sourceId: { in: itemIds } }] : []),
+        { referenceId: { startsWith: legacyPrefix } },
+      ],
+    };
+
     const lines = await this.prisma.invoiceLineItem.findMany({
       where: {
-        referenceId: { startsWith: prefix },
+        ...sourceFilter,
         invoice: { tenantId, status: { in: ['DRAFT', 'PENDING'] } },
       },
       select: { id: true, invoiceId: true, amount: true },
     });
-    if (!lines.length) return { voided: 0, locked: 0 };
+    if (!lines.length) {
+      const lockedCount = await this.prisma.invoiceLineItem.count({
+        where: { ...sourceFilter, invoice: { tenantId, status: { notIn: ['DRAFT', 'PENDING'] } } },
+      });
+      return { voided: 0, locked: lockedCount };
+    }
 
     // Group by invoice so we recompute each invoice's totals once.
     const byInvoice: Record<string, typeof lines> = {};
@@ -675,10 +730,7 @@ export class BillingService {
     // Count how many other lines exist for this rx on locked invoices, just
     // so the caller can warn the user that a manual refund is needed.
     const lockedCount = await this.prisma.invoiceLineItem.count({
-      where: {
-        referenceId: { startsWith: prefix },
-        invoice: { tenantId, status: { notIn: ['DRAFT', 'PENDING'] } },
-      },
+      where: { ...sourceFilter, invoice: { tenantId, status: { notIn: ['DRAFT', 'PENDING'] } } },
     });
     return { voided, locked: lockedCount };
   }

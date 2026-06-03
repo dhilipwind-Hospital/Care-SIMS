@@ -58,6 +58,10 @@ export class LabService {
             quantity: 1,
             unitPrice: DEFAULT_LAB_TEST_PRICE,
             referenceId: item.id,
+            // Indexed pointer back to the LabOrderItem so revenue-by-test and
+            // void-on-cancel become single-where queries.
+            sourceType: 'LAB',
+            sourceId: item.id,
           },
           { locationId: o.locationId, doctorId: o.doctorId, consultationId: o.consultationId },
         );

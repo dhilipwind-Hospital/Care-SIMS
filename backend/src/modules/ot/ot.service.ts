@@ -779,13 +779,18 @@ export class OTService {
     }
     const facilityCharge = mins * FACILITY_RATE_PER_MIN;
 
-    const lineItems: Array<{ description: string; category: string; quantity: number; unitPrice: number; referenceId: string }> = [
+    // All four lines share (sourceType=OT, sourceId=booking.id) so "revenue
+    // from this booking" is a single indexed query; referenceId stays per-line
+    // unique so the per-line idempotency check still works.
+    const lineItems: Array<{ description: string; category: string; quantity: number; unitPrice: number; referenceId: string; sourceType: string; sourceId: string }> = [
       {
         description: `OT Procedure — ${booking.procedureName} (${booking.bookingNumber})`,
         category: 'PROCEDURE',
         quantity: 1,
         unitPrice: PROCEDURE_FEE,
-        referenceId: booking.id, // unchanged from previous behavior — preserves idempotency for already-completed bookings
+        referenceId: booking.id,
+        sourceType: 'OT',
+        sourceId: booking.id,
       },
       {
         description: `Surgeon Professional Fee (${booking.bookingNumber})`,
@@ -793,6 +798,8 @@ export class OTService {
         quantity: 1,
         unitPrice: SURGEON_FEE,
         referenceId: `${booking.id}-surgeon`,
+        sourceType: 'OT',
+        sourceId: booking.id,
       },
       {
         description: `OT Facility Charge — ${mins} min @ ₹${FACILITY_RATE_PER_MIN}/min (${booking.bookingNumber})`,
@@ -800,6 +807,8 @@ export class OTService {
         quantity: 1,
         unitPrice: facilityCharge,
         referenceId: `${booking.id}-facility`,
+        sourceType: 'OT',
+        sourceId: booking.id,
       },
     ];
     if (booking.anesthetistId) {
@@ -809,6 +818,8 @@ export class OTService {
         quantity: 1,
         unitPrice: ANESTHETIST_FEE,
         referenceId: `${booking.id}-anesthetist`,
+        sourceType: 'OT',
+        sourceId: booking.id,
       });
     }
 
