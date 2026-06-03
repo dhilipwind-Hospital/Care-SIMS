@@ -285,11 +285,13 @@ export class BillingService {
       }
     }
     for (const rx of prescriptions) {
-      // Pharmacy auto-bill uses `${rxId}:${batchId}` — if ANY ref starts with
-      // `${rx.id}:`, dispensing already happened and we don't surface this Rx.
-      const dispensedRefPrefix = `${rx.id}:`;
-      const alreadyDispensed = Array.from(refSet).some(r => r.startsWith(dispensedRefPrefix));
-      if (alreadyDispensed) continue;
+      // Pharmacy billing uses `${rxId}:item:${itemId}` (current) and historically
+      // used `${rxId}:${batchId}` — both share the `${rx.id}:` prefix, so if any
+      // line on a patient invoice starts with it, the Rx has already been billed
+      // and shouldn't show up as a candidate again.
+      const billedRefPrefix = `${rx.id}:`;
+      const alreadyBilled = Array.from(refSet).some(r => r.startsWith(billedRefPrefix));
+      if (alreadyBilled) continue;
       for (const it of rx.items) {
         const unitPrice = it.drugId && drugBatchPrices[it.drugId] != null
           ? drugBatchPrices[it.drugId]

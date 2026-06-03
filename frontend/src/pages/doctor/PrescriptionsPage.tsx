@@ -152,11 +152,21 @@ export default function PrescriptionsPage() {
         items: form.items.map(it => ({ ...it, durationDays: Number(it.durationDays) })),
       });
       // Auto-route to pharmacy so it appears in the dispense queue immediately.
-      // Doesn't block the toast if the secondary call fails.
+      // Send-to-pharmacy now also bills the patient — if the call fails,
+      // surface it so the doctor knows the Rx is saved but not billed/queued
+      // (instead of silently swallowing the error like before).
+      let sentOk = true;
       if (created?.id) {
-        api.post(`/prescriptions/${created.id}/send-pharmacy`).catch(() => {});
+        try {
+          await api.post(`/prescriptions/${created.id}/send-pharmacy`);
+        } catch (err: any) {
+          sentOk = false;
+          toast.error(err.response?.data?.message || 'Saved, but failed to send to pharmacy — retry from the list');
+        }
       }
-      toast.success('Prescription saved & sent to pharmacy');
+      if (sentOk) {
+        toast.success('Prescription saved, sent to pharmacy, and charges added to bill');
+      }
       setShowForm(false);
       setForm({ patientId: '', consultationId: '', prescriptionType: 'OPD', items: [{ ...EMPTY_ITEM }] });
       setSelectedPat(null); setPatSearch('');

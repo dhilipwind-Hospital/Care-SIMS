@@ -132,11 +132,37 @@ export class PrescriptionsService {
     return updated;
   }
 
+  // Generic status setter used by the pharmacy queue (ON_HOLD / REJECTED).
+  // Status transitions that affect the bill route through the same billing
+  // helpers as the dedicated send/cancel/dispense paths so the patient's
+  // charges stay consistent no matter which endpoint the FE called.
   async updatePrescriptionStatus(tenantId: string, id: string, status: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const rx = await tx.prescription.findFirst({ where: { id, tenantId } });
       if (!rx) throw new NotFoundException('Prescription not found');
       return tx.prescription.update({ where: { id }, data: { status } });
     });
+
+    try {
+      // REJECTED == "we will not dispense this", so charges already added at
+      // Send-to-Pharmacy time must come off open invoices.
+      if (status === 'REJECTED' || status === 'CANCELLED') {
+        const r = await this.billing.voidPrescriptionCharges(tenantId, id);
+        if (r.locked > 0) {
+          this.logger.warn(`Rx ${id} set to ${status} but ${r.locked} line item(s) sit on finalized invoices — manual refund required`);
+        }
+      }
+      // If someone flips status forward (SENT_TO_PHARMACY or DISPENSED) via
+      // the generic setter instead of the dedicated endpoint, still bill —
+      // billPrescription is idempotent so this is safe even if the dedicated
+      // path also fires.
+      if (status === 'SENT_TO_PHARMACY' || status === 'DISPENSED') {
+        await this.billing.billPrescription(tenantId, id);
+      }
+      // ON_HOLD / READY / URGENT / PENDING — no billing change.
+    } catch (err) {
+      this.logger.error(`Failed billing side-effect for Rx ${id} status=${status}`, err as any);
+    }
+    return updated;
   }
 }
