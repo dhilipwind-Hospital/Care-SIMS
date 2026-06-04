@@ -1353,6 +1353,9 @@ model StoreItem {
   unit            String   @default("PCS") // PCS, KG, LTR, BOX, ROLL, SET
   reorderLevel    Int      @default(10) @map("reorder_level")
   currentStock    Int      @default(0) @map("current_stock")
+  // Last known unit price — set/updated whenever a RECEIPT transaction
+  // includes a unitPrice, used to compute on-hand inventory value.
+  unitPrice       Decimal? @map("unit_price") @db.Decimal(10, 2)
   locationId      String?  @map("location_id")
   isActive        Boolean  @default(true) @map("is_active")
   createdAt       DateTime @default(now()) @map("created_at")
@@ -1370,10 +1373,14 @@ model StoreTransaction {
   itemId          String   @map("item_id")
   transactionType String   @map("transaction_type") // RECEIPT, ISSUE, RETURN, ADJUSTMENT, DAMAGE
   quantity        Int
+  unitPrice       Decimal? @map("unit_price") @db.Decimal(10, 2)
   departmentId    String?  @map("department_id")
   indentId        String?  @map("indent_id")
   requestedById   String?  @map("requested_by")
   issuedById      String?  @map("issued_by")
+  // Free-text recipient (ward/department/staff) for ISSUE transactions —
+  // captured by the FE but was being dropped because there was no column.
+  issuedTo        String?  @map("issued_to")
   notes           String?
   createdAt       DateTime @default(now()) @map("created_at")
 

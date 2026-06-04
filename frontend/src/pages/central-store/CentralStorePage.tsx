@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import {
-  Package, Plus, X, Loader2, ArrowDownUp, AlertTriangle,
+  Package, Plus, X, Loader2, ArrowDownUp, AlertTriangle, IndianRupee,
   Printer, Pencil, Search, RefreshCw,
 } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
@@ -15,7 +15,7 @@ import { formatDate } from '../../lib/format';
 const CATEGORIES = ['GENERAL', 'SURGICAL_CONSUMABLES', 'STATIONERY', 'CLEANING', 'LINEN'];
 const UNITS = ['PCS', 'KG', 'LTR', 'BOX', 'ROLL', 'SET', 'PAIR', 'GM', 'ML'];
 const TX_TYPES = ['RECEIPT', 'ISSUE', 'RETURN', 'DAMAGE', 'ADJUSTMENT'];
-const BLANK_FORM = { itemCode: '', name: '', category: 'GENERAL', unit: 'PCS', reorderLevel: '10' };
+const BLANK_FORM = { itemCode: '', name: '', category: 'GENERAL', unit: 'PCS', reorderLevel: '10', unitPrice: '' };
 
 type Tab = 'items' | 'transactions';
 
@@ -37,7 +37,7 @@ export default function CentralStorePage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [showTxForm, setShowTxForm] = useState(false);
-  const [txForm, setTxForm] = useState({ itemId: '', transactionType: 'RECEIPT', quantity: '', notes: '', issuedTo: '' });
+  const [txForm, setTxForm] = useState({ itemId: '', transactionType: 'RECEIPT', quantity: '', unitPrice: '', notes: '', issuedTo: '' });
 
   const PAGE_SIZE = 20;
 
@@ -46,7 +46,7 @@ export default function CentralStorePage() {
     try {
       const [listRes, dashRes] = await Promise.all([
         tab === 'items'
-          ? api.get('/central-store/items', { params: { page, limit: PAGE_SIZE, q: search || undefined, category: catFilter || undefined } })
+          ? api.get('/central-store/items', { params: { page, limit: PAGE_SIZE, q: search || undefined, category: catFilter || undefined, status: statusFilter || undefined } })
           : api.get('/central-store/transactions', { params: { page, limit: PAGE_SIZE } }),
         api.get('/central-store/dashboard'),
       ]);
@@ -56,14 +56,14 @@ export default function CentralStorePage() {
       setDashboard(dashRes.data.data || dashRes.data || {});
     } catch { toast.error('Failed to load data'); }
     finally { setLoading(false); }
-  }, [tab, page, search, catFilter]);
+  }, [tab, page, search, catFilter, statusFilter]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const openAdd = () => { setEditItem(null); setForm(BLANK_FORM); setShowForm(true); };
   const openEdit = (it: any) => {
     setEditItem(it);
-    setForm({ itemCode: it.itemCode || '', name: it.name || '', category: it.category || 'GENERAL', unit: it.unit || 'PCS', reorderLevel: it.reorderLevel?.toString() || '10' });
+    setForm({ itemCode: it.itemCode || '', name: it.name || '', category: it.category || 'GENERAL', unit: it.unit || 'PCS', reorderLevel: it.reorderLevel?.toString() || '10', unitPrice: it.unitPrice?.toString() || '' });
     setShowForm(true);
   };
 
@@ -71,7 +71,11 @@ export default function CentralStorePage() {
     if (!form.itemCode.trim() || !form.name.trim()) { toast.error('Code and name required'); return; }
     setSubmitting(true);
     try {
-      const payload = { ...form, reorderLevel: Number(form.reorderLevel) };
+      const payload = {
+        ...form,
+        reorderLevel: Number(form.reorderLevel),
+        unitPrice: form.unitPrice !== '' ? Number(form.unitPrice) : undefined,
+      };
       if (editItem) {
         await api.patch(`/central-store/items/${editItem.id}`, payload);
         toast.success('Item updated');
@@ -90,10 +94,14 @@ export default function CentralStorePage() {
     if (!txForm.itemId || !txForm.quantity) { toast.error('Select item and quantity'); return; }
     setSubmitting(true);
     try {
-      await api.post('/central-store/transactions', { ...txForm, quantity: Number(txForm.quantity) });
+      await api.post('/central-store/transactions', {
+        ...txForm,
+        quantity: Number(txForm.quantity),
+        unitPrice: txForm.unitPrice !== '' ? Number(txForm.unitPrice) : undefined,
+      });
       toast.success('Transaction recorded');
       setShowTxForm(false);
-      setTxForm({ itemId: '', transactionType: 'RECEIPT', quantity: '', notes: '', issuedTo: '' });
+      setTxForm({ itemId: '', transactionType: 'RECEIPT', quantity: '', unitPrice: '', notes: '', issuedTo: '' });
       fetchData();
     } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); }
     finally { setSubmitting(false); }
@@ -126,9 +134,10 @@ export default function CentralStorePage() {
     win.document.close();
   };
 
-  const filteredItems = statusFilter === 'LOW' ? items.filter(it => it.currentStock > 0 && it.currentStock <= it.reorderLevel)
-    : statusFilter === 'OUT' ? items.filter(it => it.currentStock === 0)
-    : items;
+  // Status filter is now applied server-side (see fetchData) so the table
+  // and pagination stay in sync. Local `filteredItems` was double-filtering
+  // page 1's 20 rows, hiding the rest. Just alias for the existing JSX.
+  const filteredItems = items;
 
   const txTypeColor: Record<string, string> = {
     RECEIPT: 'bg-green-100 text-green-700',
@@ -150,11 +159,12 @@ export default function CentralStorePage() {
         }
       />
 
-      {loading ? <SkeletonKpiRow count={3} /> : (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      {loading ? <SkeletonKpiRow count={4} /> : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard label="Total Items" value={dashboard.totalItems ?? 0} icon={Package} color="#0F766E" />
           <KpiCard label="Low Stock" value={dashboard.lowStock ?? 0} icon={AlertTriangle} color="#F59E0B" />
           <KpiCard label="Out of Stock" value={dashboard.outOfStock ?? 0} icon={AlertTriangle} color="#EF4444" />
+          <KpiCard label="Stock Value" value={`₹${Number(dashboard.totalValue ?? 0).toLocaleString('en-IN')}`} icon={IndianRupee} color="#0EA5E9" />
         </div>
       )}
 
@@ -185,7 +195,7 @@ export default function CentralStorePage() {
           </div>
           <div className="flex gap-2">
             {[['', 'All'], ['LOW', 'Low Stock'], ['OUT', 'Out of Stock']].map(([v, l]) => (
-              <button key={v} onClick={() => setStatusFilter(v)}
+              <button key={v} onClick={() => { setStatusFilter(v); setPage(1); }}
                 className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${statusFilter === v ? (v === 'OUT' ? 'bg-red-600 text-white border-red-600' : v === 'LOW' ? 'bg-amber-500 text-white border-amber-500' : 'bg-teal-600 text-white border-teal-600') : 'border-gray-200 text-gray-600 hover:border-teal-300'}`}>{l}</button>
             ))}
           </div>
@@ -284,6 +294,10 @@ export default function CentralStorePage() {
                 </div>
                 <div><label className="block text-xs font-semibold text-gray-600 mb-1">Reorder Level</label><input type="number" className="hms-input w-full" value={form.reorderLevel} onChange={e => sf('reorderLevel', e.target.value)} /></div>
               </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Unit Price (₹)</label>
+                <input type="number" step="0.01" className="hms-input w-full" placeholder="Optional — used for stock valuation" value={form.unitPrice} onChange={e => sf('unitPrice', e.target.value)} />
+              </div>
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
               <button onClick={() => { setShowForm(false); setEditItem(null); }} className="btn-secondary px-4 py-2">Cancel</button>
@@ -328,6 +342,12 @@ export default function CentralStorePage() {
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Issued To</label>
                   <input className="hms-input w-full" placeholder="Ward / Department / Staff" value={txForm.issuedTo} onChange={e => setTxForm({ ...txForm, issuedTo: e.target.value })} />
+                </div>
+              )}
+              {txForm.transactionType === 'RECEIPT' && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Unit Price (₹)</label>
+                  <input type="number" step="0.01" className="hms-input w-full" placeholder="Optional — updates catalog price" value={txForm.unitPrice} onChange={e => setTxForm({ ...txForm, unitPrice: e.target.value })} />
                 </div>
               )}
               <div>
