@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Pill, Package, TrendingDown, X, Barcode, ClipboardList, CheckCircle, Printer } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
@@ -7,9 +7,12 @@ import EmptyState from '../../components/ui/EmptyState';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import Pagination from '../../components/ui/Pagination';
 import ExportButton from '../../components/ui/ExportButton';
-import BarcodeScanner from '../../components/ui/BarcodeScanner';
 import api from '../../lib/api';
 import { formatTime, formatDate } from '../../lib/format';
+
+// @zxing/library is ~250KB and only loads when the user opens the scanner
+// modal — lazy-loading keeps it out of the initial pharmacy bundle.
+const BarcodeScanner = lazy(() => import('../../components/ui/BarcodeScanner'));
 
 const STATUS_BADGE: Record<string, string> = {
   SENT_TO_PHARMACY: 'bg-amber-100 text-amber-700',
@@ -488,7 +491,9 @@ export default function PharmacyPage() {
         </div>
       )}
       {showScanner && (
-        <BarcodeScanner onDetected={handleBarcodeScan} onClose={() => setShowScanner(false)} />
+        <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"><div className="text-white text-sm">Loading scanner…</div></div>}>
+          <BarcodeScanner onDetected={handleBarcodeScan} onClose={() => setShowScanner(false)} />
+        </Suspense>
       )}
 
       {/* Drug detail panel */}

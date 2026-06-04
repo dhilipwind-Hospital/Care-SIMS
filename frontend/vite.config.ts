@@ -36,6 +36,23 @@ export default defineConfig({
     }),
   ],
   resolve: { alias: { '@': path.resolve(__dirname, './src') } },
+  build: {
+    // Split big vendor deps into named chunks so they cache independently
+    // of app code. The default behaviour bundles everything react-adjacent
+    // into the main entry, which is why first-paint was 445KB+.
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'recharts-vendor': ['recharts'],
+          'icons-vendor': ['lucide-react'],
+          'ui-vendor': ['react-hot-toast'],
+          'barcode-vendor': ['@zxing/library'],
+          'socket-vendor': ['socket.io-client'],
+        },
+      },
+    },
+  },
   server: {
     port: 5555,
     host: true,
