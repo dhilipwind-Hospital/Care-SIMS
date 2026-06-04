@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import {
   FileText, Plus, X, Loader2, CheckCircle, XCircle, Printer, Eye,
-  Clock, AlertTriangle, Package,
+  Clock, AlertTriangle, Package, PackagePlus,
 } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -35,6 +35,14 @@ export default function PurchaseIndentPage() {
   const [rejectTarget, setRejectTarget] = useState<any | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [rejecting, setRejecting] = useState(false);
+
+  // Receive flow: maps each indent line to a Central Store item with a
+  // quantity received and optional unit price. Submitting transitions the
+  // indent to FULFILLED or PARTIALLY_FULFILLED.
+  const [receiveIndent, setReceiveIndent] = useState<any | null>(null);
+  const [storeItems, setStoreItems] = useState<any[]>([]);
+  const [receiveLines, setReceiveLines] = useState<Array<{ storeItemId: string; quantityReceived: string; unitPrice: string }>>([]);
+  const [receiving, setReceiving] = useState(false);
 
   const PAGE_SIZE = 20;
 
@@ -96,6 +104,43 @@ export default function PurchaseIndentPage() {
     setRejectTarget(ind);
     setRejectReason('');
     setShowRejectModal(true);
+  };
+
+  const openReceive = async (ind: any) => {
+    setReceiveIndent(ind);
+    setReceiveLines(((ind.items as any[]) || []).map(it => ({
+      storeItemId: '',
+      quantityReceived: String(it.quantity ?? ''),
+      unitPrice: '',
+    })));
+    try {
+      const { data } = await api.get('/central-store/items', { params: { limit: 200 } });
+      setStoreItems(data?.data || []);
+    } catch { setStoreItems([]); toast.error('Could not load Central Store items'); }
+  };
+
+  const confirmReceive = async () => {
+    if (!receiveIndent) return;
+    const lines = receiveLines
+      .map(l => ({
+        storeItemId: l.storeItemId,
+        quantityReceived: Number(l.quantityReceived),
+        unitPrice: l.unitPrice !== '' ? Number(l.unitPrice) : undefined,
+      }))
+      .filter(l => l.storeItemId && l.quantityReceived > 0);
+    if (!lines.length) { toast.error('Pick at least one store item and quantity'); return; }
+    setReceiving(true);
+    try {
+      await api.patch(`/purchase-indents/${receiveIndent.id}/fulfill`, { lines });
+      toast.success('Receipt recorded — Central Store stock updated');
+      setReceiveIndent(null);
+      setReceiveLines([]);
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to record receipt');
+    } finally {
+      setReceiving(false);
+    }
   };
 
   const handleReject = async () => {
@@ -216,6 +261,9 @@ ${ind.rejectionReason ? `<div style="margin-bottom:16px;padding:10px;background:
                             <button onClick={() => handleAction(ind.id, 'approve')} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium flex items-center gap-1"><CheckCircle size={11} /> Approve</button>
                             <button onClick={() => openReject(ind)} className="text-xs px-2 py-1 bg-red-50 text-red-700 rounded-md hover:bg-red-100 font-medium flex items-center gap-1"><XCircle size={11} /> Reject</button>
                           </>)}
+                          {(ind.status === 'APPROVED' || ind.status === 'PARTIALLY_FULFILLED') && (
+                            <button onClick={() => openReceive(ind)} className="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 font-medium flex items-center gap-1"><PackagePlus size={11} /> Receive</button>
+                          )}
                           {(ind.status === 'APPROVED' || ind.status === 'SUBMITTED') && (
                             <button onClick={() => handlePrint(ind)} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"><Printer size={11} /> Print</button>
                           )}
@@ -383,6 +431,68 @@ ${ind.rejectionReason ? `<div style="margin-bottom:16px;padding:10px;background:
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Receive Goods modal — maps each indent line to a Central Store item */}
+      {receiveIndent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div>
+                <h2 className="font-bold text-gray-900">Receive Goods — {receiveIndent.indentNumber}</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Map each requested item to a Central Store entry. Stock will be incremented and the indent transitioned to FULFILLED / PARTIALLY_FULFILLED.</p>
+              </div>
+              <button onClick={() => setReceiveIndent(null)} disabled={receiving} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 disabled:opacity-50"><X size={18} /></button>
+            </div>
+            <div className="p-6 space-y-3">
+              {((receiveIndent.items as any[]) || []).map((it: any, i: number) => (
+                <div key={i} className="grid grid-cols-12 gap-3 items-center bg-gray-50 border border-gray-100 rounded-xl p-3">
+                  <div className="col-span-4">
+                    <div className="text-xs text-gray-400 uppercase">Requested</div>
+                    <div className="text-sm font-semibold text-gray-900 truncate">{it.itemName}</div>
+                    <div className="text-xs text-gray-500">{it.quantity} {it.unit || 'PCS'}{it.urgency ? ` · ${it.urgency}` : ''}</div>
+                  </div>
+                  <div className="col-span-4">
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Receive into</label>
+                    <select className="hms-input w-full text-sm"
+                      value={receiveLines[i]?.storeItemId || ''}
+                      onChange={e => setReceiveLines(rl => rl.map((l, idx) => idx === i ? { ...l, storeItemId: e.target.value } : l))}>
+                      <option value="">— Select item —</option>
+                      {storeItems.map(si => (
+                        <option key={si.id} value={si.id}>{si.itemCode} · {si.name} (in stock {si.currentStock} {si.unit})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Qty received</label>
+                    <input type="number" min="0" className="hms-input w-full text-sm"
+                      value={receiveLines[i]?.quantityReceived || ''}
+                      onChange={e => setReceiveLines(rl => rl.map((l, idx) => idx === i ? { ...l, quantityReceived: e.target.value } : l))} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Unit ₹</label>
+                    <input type="number" step="0.01" min="0" className="hms-input w-full text-sm" placeholder="optional"
+                      value={receiveLines[i]?.unitPrice || ''}
+                      onChange={e => setReceiveLines(rl => rl.map((l, idx) => idx === i ? { ...l, unitPrice: e.target.value } : l))} />
+                  </div>
+                </div>
+              ))}
+              {storeItems.length === 0 && (
+                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-3">
+                  No items in Central Store yet — add some via the Central Store page first, then come back.
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
+              <button onClick={() => setReceiveIndent(null)} disabled={receiving} className="btn-secondary px-4 py-2">Cancel</button>
+              <button onClick={confirmReceive} disabled={receiving || storeItems.length === 0}
+                className="btn-primary flex items-center gap-2 px-4 py-2">
+                {receiving && <Loader2 size={14} className="animate-spin" />}
+                Record Receipt
+              </button>
             </div>
           </div>
         </div>

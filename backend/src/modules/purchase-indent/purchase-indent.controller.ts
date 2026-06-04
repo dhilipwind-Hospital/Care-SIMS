@@ -17,4 +17,5 @@ export class PurchaseIndentController {
   @Patch(':id/submit') submit(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.submit(tid, id); }
   @Patch(':id/approve') approve(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @CurrentUser('sub') uid: string) { return this.svc.approve(tid, id, uid); }
   @Patch(':id/reject') reject(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @CurrentUser('sub') uid: string, @Body('reason') reason: string) { return this.svc.reject(tid, id, uid, reason); }
+  @Patch(':id/fulfill') fulfill(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.fulfill(tid, id, body, uid); }
 }
