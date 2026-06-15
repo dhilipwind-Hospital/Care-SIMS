@@ -17,6 +17,7 @@ import { QueueModule } from './modules/queue/queue.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { ConsultationsModule } from './modules/consultations/consultations.module';
 import { PrescriptionsModule } from './modules/prescriptions/prescriptions.module';
+import { AiModule } from './modules/ai/ai.module';
 import { LabModule } from './modules/lab/lab.module';
 import { TriageModule } from './modules/triage/triage.module';
 import { VitalsModule } from './modules/vitals/vitals.module';
@@ -98,6 +99,7 @@ import { WsGatewayModule } from './modules/ws-gateway/ws-gateway.module';
     AppointmentsModule,
     ConsultationsModule,
     PrescriptionsModule,
+    AiModule,
     LabModule,
     TriageModule,
     VitalsModule,

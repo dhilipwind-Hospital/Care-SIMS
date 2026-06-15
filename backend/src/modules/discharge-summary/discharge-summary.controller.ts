@@ -47,6 +47,19 @@ export class DischargeSummaryController {
     return this.svc.getByAdmission(tid, aid);
   }
 
+  // Generates a DRAFT discharge summary using Gemini. Returns the structured
+  // fields to the FE so the doctor reviews + edits before saving. Does NOT
+  // create or persist a DischargeSummary row — that happens on the existing
+  // POST endpoint once the doctor clicks Save.
+  @Post('admission/:admissionId/draft-with-ai')
+  draftWithAi(
+    @CurrentUser('tenantId') tid: string,
+    @CurrentUser('sub') uid: string,
+    @Param('admissionId') aid: string,
+  ) {
+    return this.svc.draftWithAi(tid, aid, uid);
+  }
+
   @Get(':id')
   getOne(@CurrentUser('tenantId') tid: string, @Param('id') id: string) {
     return this.svc.getOne(tid, id);

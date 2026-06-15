@@ -57,6 +57,10 @@ model Tenant {
   dateFormat         String    @default("DD/MM/YYYY") @map("date_format")
   allowSelfRegistration Boolean @default(false) @map("allow_self_registration")
   allowPatientPortal Boolean   @default(false) @map("allow_patient_portal")
+  // Master switch for AI features (Gemini-powered summaries / drafts).
+  // Default ON — every endpoint also checks this before calling the LLM,
+  // so org admin can flip it off without redeploying anything.
+  aiEnabled          Boolean   @default(true) @map("ai_enabled")
   maxLocations       Int       @default(1) @map("max_locations")
   maxUsers           Int       @default(10) @map("max_users")
   isActive           Boolean   @default(true) @map("is_active")
@@ -3169,4 +3173,31 @@ model PatientAccount {
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
   @@map("patient_accounts")
+}
+
+// Every Gemini/LLM call gets a row here for audit + cost tracking +
+// debugging. Captures who called, against what record, the model used,
+// and basic token counts. Prompt and response are stored truncated to
+// keep the table size sane — for full re-trace use the source record id.
+model AiAuditLog {
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  feature      String   // e.g. 'DISCHARGE_SUMMARY' | 'PATIENT_HISTORY' | 'TRIAGE_SUGGESTION'
+  userId       String?  @map("user_id")
+  patientId    String?  @map("patient_id")
+  referenceType String? @map("reference_type") // e.g. 'ADMISSION' | 'CONSULTATION'
+  referenceId  String?  @map("reference_id")
+  model        String   // e.g. 'gemini-2.0-flash'
+  promptChars  Int      @map("prompt_chars")
+  responseChars Int     @map("response_chars")
+  durationMs   Int?     @map("duration_ms")
+  status       String   // 'OK' | 'ERROR' | 'DISABLED'
+  errorMessage String?  @map("error_message")
+  promptHead   String?  @map("prompt_head")   // first ~500 chars for spot debugging
+  responseHead String?  @map("response_head") // first ~500 chars
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, feature, createdAt])
+  @@index([tenantId, patientId])
+  @@map("ai_audit_logs")
 }

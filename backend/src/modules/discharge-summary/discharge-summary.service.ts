@@ -1,9 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { AiService } from '../ai/ai.service';
 
 @Injectable()
 export class DischargeSummaryService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(DischargeSummaryService.name);
+  constructor(private prisma: PrismaService, private ai: AiService) {}
 
   async list(tenantId: string, filters: { locationId?: string; status?: string; patientId?: string }) {
     const where: any = { tenantId };
@@ -73,5 +75,134 @@ export class DischargeSummaryService {
     const rec = await this.prisma.dischargeSummary.findFirst({ where: { id, tenantId } });
     if (!rec) throw new NotFoundException('Discharge summary not found');
     return rec;
+  }
+
+  // Gather admission + clinical context and ask Gemini to draft a
+  // structured discharge summary. Returns the fields ready to drop into the
+  // existing form; the doctor reviews/edits/saves via the normal create
+  // endpoint. No row is written by this method.
+  async draftWithAi(tenantId: string, admissionId: string, userId: string) {
+    const admission = await this.prisma.admission.findFirst({
+      where: { id: admissionId, tenantId },
+      include: {
+        patient: { select: { firstName: true, lastName: true, gender: true, dateOfBirth: true, allergies: true, ageYears: true } },
+      },
+    });
+    if (!admission) throw new NotFoundException('Admission not found');
+
+    // Pull the clinical context that happened during the admission window.
+    const since = admission.admissionDate;
+    const until = admission.dischargeDate || new Date();
+    const [consultations, prescriptions, labOrders] = await Promise.all([
+      this.prisma.consultation.findMany({
+        where: { tenantId, patientId: admission.patientId, startedAt: { gte: since, lte: until } },
+        orderBy: { startedAt: 'asc' },
+        select: { chiefComplaint: true, assessment: true, plan: true, startedAt: true, completedAt: true,
+                  diagnoses: { select: { description: true, icdCode: true, type: true } } },
+      }),
+      this.prisma.prescription.findMany({
+        where: { tenantId, patientId: admission.patientId, issuedAt: { gte: since, lte: until } },
+        orderBy: { issuedAt: 'asc' },
+        select: { rxNumber: true, status: true, notes: true,
+                  items: { select: { drugName: true, strength: true, dosage: true, frequency: true, durationDays: true, route: true } } },
+      }),
+      this.prisma.labOrder.findMany({
+        where: { tenantId, patientId: admission.patientId, orderedAt: { gte: since, lte: until } },
+        orderBy: { orderedAt: 'asc' },
+        select: { orderNumber: true, items: { select: { testName: true } },
+                  results: { select: { items: true, status: true } } },
+      }),
+    ]);
+
+    const patient = admission.patient as any;
+    const patientLine = `${patient?.firstName || ''} ${patient?.lastName || ''}, ${patient?.gender || ''}${patient?.ageYears ? `, ${patient.ageYears}y` : ''}`.trim();
+    const allergies = Array.isArray(patient?.allergies) && patient.allergies.length ? patient.allergies.join(', ') : 'None known';
+
+    const consultLines = consultations.map((c) => {
+      const diag = (c.diagnoses || []).map((d) => `${d.icdCode || ''} ${d.description}`.trim()).join('; ');
+      return `- ${c.startedAt?.toISOString().slice(0, 10)}: CC=${c.chiefComplaint || '—'}; Diagnoses=${diag || '—'}; Assessment=${c.assessment || '—'}; Plan=${c.plan || '—'}`;
+    }).join('\n') || '(no consultations recorded)';
+
+    const rxLines = prescriptions.flatMap((rx) =>
+      (rx.items || []).map((it) => `- ${it.drugName}${it.strength ? ` ${it.strength}` : ''}: ${it.dosage || ''} ${it.frequency || ''}${it.durationDays ? ` x ${it.durationDays}d` : ''}${it.route ? ` ${it.route}` : ''}`),
+    ).join('\n') || '(no prescriptions recorded)';
+
+    const labLines = labOrders.map((lo) => {
+      const tests = (lo.items || []).map((i) => i.testName).join(', ');
+      return `- Order ${lo.orderNumber}: ${tests}`;
+    }).join('\n') || '(no lab orders recorded)';
+
+    const systemInstruction = `You are a senior physician drafting a hospital discharge summary in clinical English used in India. Produce ONLY valid JSON matching this exact shape:
+{
+  "diagnosisOnAdmission": string,
+  "diagnosisOnDischarge": string,
+  "treatmentGiven": string,
+  "investigationSummary": string,
+  "conditionAtDischarge": string,                  // one of: STABLE, IMPROVED, UNCHANGED, WORSENED, DAMA, EXPIRED
+  "followUpInstructions": string,
+  "dietaryAdvice": string,
+  "activityRestrictions": string,
+  "dischargeMedications": [{ "drug": string, "dosage": string, "frequency": string, "duration": string }]
+}
+Be concise. Use only information present in the data below. If a field is unknown, write "To be reviewed by treating doctor". Do NOT invent diagnoses, drugs, or test results. The doctor will edit and approve before this is finalised.`;
+
+    const prompt = `PATIENT: ${patientLine}
+ALLERGIES: ${allergies}
+ADMISSION DATE: ${admission.admissionDate.toISOString().slice(0, 10)}
+DISCHARGE DATE: ${(admission.dischargeDate || new Date()).toISOString().slice(0, 10)}
+
+CONSULTATIONS DURING STAY:
+${consultLines}
+
+PRESCRIPTIONS DURING STAY:
+${rxLines}
+
+LAB ORDERS:
+${labLines}
+
+Return the JSON only.`;
+
+    const result = await this.ai.complete({
+      tenantId,
+      feature: 'DISCHARGE_SUMMARY',
+      userId,
+      patientId: admission.patientId,
+      referenceType: 'ADMISSION',
+      referenceId: admission.id,
+      systemInstruction,
+      prompt,
+      maxOutputTokens: 2048,
+    });
+
+    // Strip code fences if Gemini wraps the JSON in ```json ... ```
+    let text = result.text.trim();
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      this.logger.warn(`AI returned non-JSON for discharge draft ${admissionId}; returning raw text`);
+      return {
+        draft: null,
+        rawText: result.text,
+        model: result.model,
+        durationMs: result.durationMs,
+        warning: 'AI response was not valid JSON; please review the raw text and fill the form manually.',
+      };
+    }
+
+    return {
+      draft: {
+        admissionId: admission.id,
+        patientId: admission.patientId,
+        doctorId: admission.admittingDoctorId,
+        admissionDate: admission.admissionDate,
+        dischargeDate: admission.dischargeDate,
+        ...parsed,
+      },
+      model: result.model,
+      durationMs: result.durationMs,
+    };
   }
 }

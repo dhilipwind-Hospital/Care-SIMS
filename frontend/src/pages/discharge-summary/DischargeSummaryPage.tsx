@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { FileText, CheckCircle, Clock, AlertTriangle, Eye, Edit2, X, Printer } from 'lucide-react';
+import { FileText, CheckCircle, Clock, AlertTriangle, Eye, Edit2, X, Printer, Sparkles, Loader2 } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import EmptyState from '../../components/ui/EmptyState';
@@ -18,6 +18,49 @@ export default function DischargeSummaryPage() {
     followUpDate: '', dietaryAdvice: '', activityRestrictions: '',
   });
   const [formError, setFormError] = useState('');
+
+  // AI draft: gemini fills the form fields based on admission data; doctor
+  // reviews + edits before clicking Create Draft. Button only shows once
+  // an admission has been picked.
+  const [aiDrafting, setAiDrafting] = useState(false);
+  const aiFillFromAdmission = async () => {
+    if (!form.admissionId) { toast.error('Pick an admission first'); return; }
+    setAiDrafting(true);
+    try {
+      const { data } = await api.post(`/discharge-summary/admission/${form.admissionId}/draft-with-ai`);
+      const d = data?.draft;
+      if (!d) {
+        toast.error(data?.warning || 'AI could not produce a structured draft');
+        return;
+      }
+      // Merge AI fields into the form. Dates from BE come as ISO strings;
+      // <input type="date"> wants YYYY-MM-DD.
+      const isoDate = (v: any) => v ? new Date(v).toISOString().slice(0, 10) : '';
+      const meds = Array.isArray(d.dischargeMedications)
+        ? d.dischargeMedications.map((m: any) => `${m.drug || ''} — ${m.dosage || ''} ${m.frequency || ''}${m.duration ? ' x ' + m.duration : ''}`).join('\n')
+        : '';
+      setForm(f => ({
+        ...f,
+        patientId: d.patientId || f.patientId,
+        doctorId: d.doctorId || f.doctorId,
+        admissionDate: isoDate(d.admissionDate) || f.admissionDate,
+        dischargeDate: isoDate(d.dischargeDate) || f.dischargeDate,
+        diagnosisOnAdmission: d.diagnosisOnAdmission || f.diagnosisOnAdmission,
+        diagnosisOnDischarge: d.diagnosisOnDischarge || f.diagnosisOnDischarge,
+        treatmentGiven: d.treatmentGiven || f.treatmentGiven,
+        investigationSummary: d.investigationSummary || f.investigationSummary,
+        conditionAtDischarge: d.conditionAtDischarge || f.conditionAtDischarge,
+        followUpInstructions: [d.followUpInstructions, meds && `\n\nDischarge medications:\n${meds}`].filter(Boolean).join('') || f.followUpInstructions,
+        dietaryAdvice: d.dietaryAdvice || f.dietaryAdvice,
+        activityRestrictions: d.activityRestrictions || f.activityRestrictions,
+      }));
+      toast.success('AI draft applied — review every field before saving');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'AI draft failed');
+    } finally {
+      setAiDrafting(false);
+    }
+  };
 
   // View detail modal
   const [viewDetail, setViewDetail] = useState<any>(null);
@@ -247,7 +290,26 @@ export default function DischargeSummaryPage() {
 
       {showForm && (
         <div className="hms-card p-5 space-y-4">
-          <h3 className="font-semibold text-gray-900">Create Discharge Summary</h3>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <h3 className="font-semibold text-gray-900">Create Discharge Summary</h3>
+            {form.admissionId && (
+              <button
+                type="button"
+                onClick={aiFillFromAdmission}
+                disabled={aiDrafting}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-60"
+                style={{ background: 'linear-gradient(135deg,#7C3AED,#2563EB)' }}
+              >
+                {aiDrafting ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                {aiDrafting ? 'Drafting with AI…' : 'Generate Draft with AI'}
+              </button>
+            )}
+          </div>
+          {form.admissionId && !aiDrafting && (
+            <div className="text-[11px] text-gray-500 bg-purple-50 border border-purple-100 rounded-lg px-3 py-2">
+              AI uses the patient's consultations, prescriptions and lab orders during this admission to draft the fields. Review every field — the doctor is responsible for the final content.
+            </div>
+          )}
           {formError && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{formError}</div>}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <SearchableSelect value={form.admissionId} onChange={(id) => setForm({ ...form, admissionId: id })} placeholder="Search admission *" endpoint="/admissions" searchParam="q" mapOption={(a: any) => ({ id: a.id, label: a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : a.id, sub: `Bed ${a.bed?.bedNumber || '?'}` })} />
