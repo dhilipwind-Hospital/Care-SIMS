@@ -1,10 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { WsGateway } from '../ws-gateway/ws-gateway.gateway';
+import { AiService } from '../ai/ai.service';
 
 @Injectable()
 export class TriageService {
-  constructor(private prisma: PrismaService, private ws: WsGateway) {}
+  private readonly logger = new Logger(TriageService.name);
+  constructor(private prisma: PrismaService, private ws: WsGateway, private ai: AiService) {}
 
   async list(tenantId: string, query: any) {
     const where: any = { tenantId };
@@ -187,5 +189,112 @@ export class TriageService {
       if (dto.notes !== undefined) data.notes = dto.notes;
       return tx.triageRecord.update({ where: { id }, data });
     });
+  }
+
+  // AI triage suggestion. Returns priority, differential, recommended
+  // specialty, and recommended diagnostics. INTENTIONALLY does NOT suggest
+  // drugs in v1 — drug suggestions need dose/allergy/interaction checks
+  // we don't model yet. Nurse sees the suggestion + a disclaimer; doctor
+  // confirms before any action.
+  //
+  // Inputs are sanity-checked to keep token costs low and prevent prompt
+  // injection via long free-form fields.
+  async aiSuggest(
+    tenantId: string,
+    userId: string,
+    dto: {
+      chiefComplaint: string;
+      briefHistory?: string;
+      knownAllergies?: string;
+      currentMedications?: string;
+      ageYears?: number;
+      gender?: string;
+      systolicBp?: number;
+      diastolicBp?: number;
+      heartRate?: number;
+      temperatureC?: number;
+      spo2?: number;
+      respiratoryRate?: number;
+      painScore?: number;
+      patientId?: string;
+    },
+  ) {
+    if (!dto?.chiefComplaint || dto.chiefComplaint.trim().length < 3) {
+      throw new BadRequestException('Chief complaint is required (min 3 characters)');
+    }
+    const cap = (s: string | undefined, n: number) => (s ? s.slice(0, n) : '');
+    const v = (n: number | undefined) => (n !== undefined && n !== null ? String(n) : '—');
+
+    const systemInstruction = `You are a senior emergency physician helping a triage nurse. Produce ONLY valid JSON in this exact shape:
+{
+  "suggestedPriority": "RED" | "ORANGE" | "YELLOW" | "GREEN" | "BLACK",
+  "priorityRationale": string,                  // one sentence, ≤ 30 words
+  "differentialConditions": [string],            // 3 most likely conditions, most likely first
+  "recommendedSpecialty": string,                // single specialty name
+  "recommendedDiagnostics": [string],             // 2-4 short, concrete tests/exams
+  "redFlags": [string],                           // 0-3 worrying findings to verify now
+  "disclaimer": "AI suggestion only — verify and confirm with attending doctor."
+}
+
+Triage priority rules (Indian OPD context):
+  - RED:    Life-threatening, immediate (e.g. cardiac arrest, severe airway compromise)
+  - ORANGE: Critical, requires intervention within 10 minutes
+  - YELLOW: Urgent, requires evaluation within 30 minutes
+  - GREEN:  Semi-urgent, can wait up to 1 hour
+  - BLACK:  Routine, non-urgent (or deceased)
+
+Hard rules:
+  - Never invent a diagnosis as certainty — only differentials.
+  - Never suggest drugs, doses, or prescriptions.
+  - If information is insufficient for a confident call, lean conservative (higher priority).
+  - Output ONLY the JSON object, no preamble.`;
+
+    const prompt = `PATIENT: ${dto.gender || '?'}${dto.ageYears ? `, ${dto.ageYears} yrs` : ''}
+CHIEF COMPLAINT: ${cap(dto.chiefComplaint, 500)}
+BRIEF HISTORY: ${cap(dto.briefHistory, 1000) || '—'}
+KNOWN ALLERGIES: ${cap(dto.knownAllergies, 300) || 'None'}
+CURRENT MEDICATIONS: ${cap(dto.currentMedications, 500) || 'None'}
+
+VITALS ON ARRIVAL:
+  BP:   ${v(dto.systolicBp)}/${v(dto.diastolicBp)} mmHg
+  HR:   ${v(dto.heartRate)} bpm
+  Temp: ${v(dto.temperatureC)} °C
+  SpO2: ${v(dto.spo2)} %
+  RR:   ${v(dto.respiratoryRate)} /min
+  Pain: ${v(dto.painScore)} / 10
+
+Return the JSON only.`;
+
+    const result = await this.ai.complete({
+      tenantId,
+      feature: 'TRIAGE_SUGGESTION',
+      userId,
+      patientId: dto.patientId,
+      referenceType: 'TRIAGE',
+      systemInstruction,
+      prompt,
+      maxOutputTokens: 600,
+    });
+
+    let text = result.text.trim();
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+    try {
+      const parsed = JSON.parse(text);
+      return {
+        suggestion: parsed,
+        model: result.model,
+        durationMs: result.durationMs,
+        warning: 'AI suggestion only. Nurse must review and doctor must confirm before acting. No drug suggestions are provided by this feature.',
+      };
+    } catch {
+      this.logger.warn(`Triage AI returned non-JSON: ${text.slice(0, 200)}`);
+      return {
+        suggestion: null,
+        rawText: result.text,
+        model: result.model,
+        durationMs: result.durationMs,
+        warning: 'AI response was not structured — please review the raw text and set priority manually.',
+      };
+    }
   }
 }

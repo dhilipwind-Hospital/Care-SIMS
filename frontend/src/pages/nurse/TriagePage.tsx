@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
-import { Search, X, ChevronRight, Printer, UserCheck, FlaskConical, SkipForward, Plus, Trash2 } from 'lucide-react';
+import { Search, X, ChevronRight, Printer, UserCheck, FlaskConical, SkipForward, Plus, Trash2, Sparkles, Loader2, AlertTriangle } from 'lucide-react';
 import EmptyState from '../../components/ui/EmptyState';
 import api from '../../lib/api';
 import { getUser } from '../../lib/auth';
@@ -54,6 +54,54 @@ export default function TriagePage() {
     respiratoryRate: '', weightKg: '', heightCm: '', painScore: '',
   });
   const [nurseNotes, setNurseNotes] = useState('');
+
+  // AI triage suggestion. Nurse clicks Get AI Suggestion after entering at
+  // least the chief complaint; AI returns priority + differential + specialty
+  // + diagnostics. No drug suggestions in v1. Doctor must confirm before
+  // acting — disclaimer rendered with the card.
+  const [aiSuggestLoading, setAiSuggestLoading] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState<any>(null);
+  const [aiSuggestionWarning, setAiSuggestionWarning] = useState<string>('');
+  const getAiSuggestion = async () => {
+    if (!form.chiefComplaint || form.chiefComplaint.trim().length < 3) {
+      toast.error('Enter the chief complaint first');
+      return;
+    }
+    setAiSuggestLoading(true);
+    setAiSuggestion(null);
+    setAiSuggestionWarning('');
+    try {
+      const { data } = await api.post('/triage/ai-suggest', {
+        chiefComplaint: form.chiefComplaint,
+        briefHistory: form.briefHistory,
+        knownAllergies: form.knownAllergies,
+        currentMedications: form.currentMedications,
+        ageYears: selectedPat?.dateOfBirth
+          ? (new Date().getFullYear() - new Date(selectedPat.dateOfBirth).getFullYear())
+          : undefined,
+        gender: selectedPat?.gender,
+        systolicBp: form.systolicBp ? Number(form.systolicBp) : undefined,
+        diastolicBp: form.diastolicBp ? Number(form.diastolicBp) : undefined,
+        heartRate: form.heartRate ? Number(form.heartRate) : undefined,
+        temperatureC: form.temperatureC ? Number(form.temperatureC) : undefined,
+        spo2: form.spo2 ? Number(form.spo2) : undefined,
+        respiratoryRate: form.respiratoryRate ? Number(form.respiratoryRate) : undefined,
+        painScore: form.painScore !== '' ? Number(form.painScore) : undefined,
+        patientId: form.patientId || undefined,
+      });
+      setAiSuggestion(data?.suggestion || null);
+      setAiSuggestionWarning(data?.warning || '');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'AI suggestion failed');
+    } finally {
+      setAiSuggestLoading(false);
+    }
+  };
+  const applyAiPriority = () => {
+    if (!aiSuggestion?.suggestedPriority) return;
+    setForm(f => ({ ...f, triageLevel: aiSuggestion.suggestedPriority }));
+    toast.success(`Priority applied: ${aiSuggestion.suggestedPriority}`);
+  };
 
   // Triage lookup state
   const [tokenLookup, setTokenLookup] = useState('');
@@ -459,9 +507,21 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
 
           {/* Chief Complaint & History */}
           <div className="hms-card p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-4 h-4 rounded border border-gray-300" />
-              <span className="text-sm font-semibold text-gray-800">Chief Complaint &amp; History</span>
+            <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded border border-gray-300" />
+                <span className="text-sm font-semibold text-gray-800">Chief Complaint &amp; History</span>
+              </div>
+              <button
+                type="button"
+                onClick={getAiSuggestion}
+                disabled={aiSuggestLoading || !form.chiefComplaint.trim()}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md text-white font-semibold disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg,#7C3AED,#2563EB)' }}
+              >
+                {aiSuggestLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                {aiSuggestLoading ? 'Thinking…' : 'Get AI Suggestion'}
+              </button>
             </div>
             <div className="space-y-3">
               <div>
@@ -505,6 +565,103 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
               </div>
             </div>
           </div>
+
+          {/* AI Triage Suggestion result card. Only renders after a successful
+              call. Nurse uses it as a hint; doctor must confirm before any
+              clinical action. Drug suggestions intentionally excluded in v1. */}
+          {aiSuggestion && (
+            <div className="hms-card p-5 border-l-4" style={{ borderColor: '#7C3AED' }}>
+              <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={15} className="text-purple-600" />
+                  <span className="font-semibold text-sm text-gray-800">AI Triage Suggestion</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAiSuggestion(null)}
+                  className="text-xs text-gray-400 hover:text-red-500"
+                  aria-label="Dismiss"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="space-y-3 text-sm">
+                {/* Priority chip + apply button */}
+                {aiSuggestion.suggestedPriority && (() => {
+                  const lvl = PRIORITY_LEVELS.find(p => p.key === aiSuggestion.suggestedPriority);
+                  return (
+                    <div className="flex items-center justify-between gap-3 flex-wrap bg-gray-50 rounded-lg p-3 border border-gray-100">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-3 h-3 rounded-full flex-shrink-0 ${lvl?.dot || 'bg-gray-400'}`} />
+                        <div className="min-w-0">
+                          <div className={`font-bold ${lvl?.text || 'text-gray-700'}`}>
+                            Suggested: {lvl?.label || aiSuggestion.suggestedPriority}
+                          </div>
+                          {aiSuggestion.priorityRationale && (
+                            <div className="text-xs text-gray-600 mt-0.5">{aiSuggestion.priorityRationale}</div>
+                          )}
+                        </div>
+                      </div>
+                      {form.triageLevel !== aiSuggestion.suggestedPriority && (
+                        <button
+                          type="button"
+                          onClick={applyAiPriority}
+                          className="text-xs px-3 py-1.5 rounded-md bg-purple-600 text-white hover:bg-purple-700 flex-shrink-0"
+                        >
+                          Apply Priority
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Red flags — surface first because they're the most urgent */}
+                {Array.isArray(aiSuggestion.redFlags) && aiSuggestion.redFlags.length > 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <AlertTriangle size={13} className="text-red-600" />
+                      <span className="text-xs font-bold text-red-700 uppercase tracking-wide">Red Flags to Verify</span>
+                    </div>
+                    <ul className="list-disc list-inside text-sm text-red-700 space-y-0.5">
+                      {aiSuggestion.redFlags.map((rf: string, i: number) => <li key={i}>{rf}</li>)}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Two-column: differential + diagnostics */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {Array.isArray(aiSuggestion.differentialConditions) && aiSuggestion.differentialConditions.length > 0 && (
+                    <div>
+                      <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">Differential</div>
+                      <ul className="list-disc list-inside text-sm text-gray-700 space-y-0.5">
+                        {aiSuggestion.differentialConditions.map((c: string, i: number) => <li key={i}>{c}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  {Array.isArray(aiSuggestion.recommendedDiagnostics) && aiSuggestion.recommendedDiagnostics.length > 0 && (
+                    <div>
+                      <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">Recommended Diagnostics</div>
+                      <ul className="list-disc list-inside text-sm text-gray-700 space-y-0.5">
+                        {aiSuggestion.recommendedDiagnostics.map((d: string, i: number) => <li key={i}>{d}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                {aiSuggestion.recommendedSpecialty && (
+                  <div className="text-xs text-gray-600">
+                    <span className="font-semibold text-gray-500">Suggested specialty:</span> {aiSuggestion.recommendedSpecialty}
+                  </div>
+                )}
+              </div>
+
+              {/* Disclaimer — always visible, always last */}
+              <div className="mt-3 pt-3 border-t border-gray-100 text-[11px] text-gray-500 leading-relaxed">
+                {aiSuggestionWarning || 'AI suggestion only. Nurse must review and the attending doctor must confirm before any clinical action. No drug suggestions are provided.'}
+              </div>
+            </div>
+          )}
 
         </div>
 

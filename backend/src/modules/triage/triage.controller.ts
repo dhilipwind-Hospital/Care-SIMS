@@ -21,4 +21,11 @@ export class TriageController {
   @Get('by-token/:tokenId') byToken(@CurrentUser('tenantId') tid: string, @Param('tokenId') id: string) { return this.svc.getByToken(tid, id); }
   @Get('by-patient/:patientId') byPatient(@CurrentUser('tenantId') tid: string, @Param('patientId') pid: string) { return this.svc.getByPatient(tid, pid); }
   @Put(':id') update(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.update(tid, id, body); }
+
+  // AI suggestion endpoint — chief complaint + vitals -> priority + differential
+  // + recommended diagnostics. No drug suggestions in v1. Nurse-callable.
+  @Post('ai-suggest')
+  aiSuggest(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string, @Body() body: any) {
+    return this.svc.aiSuggest(tid, uid, body);
+  }
 }
