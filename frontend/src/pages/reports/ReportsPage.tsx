@@ -720,6 +720,23 @@ function OpdTab({ from, to }: { from: string; to: string }) {
   const [data, setData] = useState<OpdData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // AI Seasonal Trends — "this month last year vs this month so far".
+  const [trends, setTrends] = useState<string | null>(null);
+  const [trendsAt, setTrendsAt] = useState<string | null>(null);
+  const [trendsLoading, setTrendsLoading] = useState(false);
+  const [trendsMeta, setTrendsMeta] = useState<{ currentMonth?: string; thisYearVolume?: number; lastYearVolume?: number }>({});
+  const fetchTrends = useCallback(() => {
+    setTrendsLoading(true);
+    api.get('/reports/ai-seasonal-trends')
+      .then(r => {
+        setTrends(r.data?.insights || null);
+        setTrendsAt(r.data?.generatedAt || null);
+        setTrendsMeta({ currentMonth: r.data?.currentMonth, thisYearVolume: r.data?.thisYearVolume, lastYearVolume: r.data?.lastYearVolume });
+      })
+      .catch(() => setTrends(null))
+      .finally(() => setTrendsLoading(false));
+  }, []);
+
   const fetch = useCallback(() => {
     setLoading(true);
     api.get('/reports/opd', { params: { from, to } })
@@ -732,6 +749,44 @@ function OpdTab({ from, to }: { from: string; to: string }) {
 
   return (
     <div className="space-y-6">
+      {/* AI Seasonal Trends card — top of the OPD tab. Lookback, not forecast. */}
+      <div className="hms-card p-5 border-l-4" style={{ borderColor: '#7C3AED' }}>
+        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Sparkles size={15} className="text-purple-600" />
+            <span className="font-semibold text-sm text-gray-800">AI Seasonal Trends</span>
+            {trendsMeta.currentMonth && (
+              <span className="text-[10px] text-gray-400">{trendsMeta.currentMonth} this year vs last year</span>
+            )}
+            {typeof trendsMeta.thisYearVolume === 'number' && typeof trendsMeta.lastYearVolume === 'number' && (
+              <span className="text-[10px] text-gray-400">· {trendsMeta.thisYearVolume} this year, {trendsMeta.lastYearVolume} last year</span>
+            )}
+            {trendsAt && !trendsLoading && (
+              <span className="text-[10px] text-gray-400">· Generated {new Date(trendsAt).toLocaleString()}</span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={fetchTrends}
+            disabled={trendsLoading}
+            className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-purple-200 text-purple-700 hover:bg-purple-50 disabled:opacity-50"
+          >
+            {trendsLoading ? <Loader2 size={12} className="animate-spin" /> : trends ? <RefreshCw size={12} /> : <Sparkles size={12} />}
+            {trendsLoading ? 'Analysing…' : trends ? 'Refresh' : 'Generate'}
+          </button>
+        </div>
+        {trendsLoading ? (
+          <div className="text-xs text-gray-400 italic">Looking at this month vs last year…</div>
+        ) : trends ? (
+          <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{trends}</div>
+        ) : (
+          <div className="text-xs text-gray-400 italic">Click Generate to see what conditions are trending this month vs the same month last year.</div>
+        )}
+        <div className="mt-3 text-[10px] text-gray-400">
+          Lookback only — what we saw, not what's coming. Use as a hint for stocking and rostering, not a forecast.
+        </div>
+      </div>
+
       {loading ? (
         <SkeletonKpiRow count={3} />
       ) : !data ? (

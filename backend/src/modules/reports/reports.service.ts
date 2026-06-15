@@ -329,4 +329,119 @@ Write the 4-6 bullet commentary now.`;
       durationMs: result.durationMs,
     };
   }
+
+  // AI Seasonal Trends — what conditions/complaints we saw this month last
+  // year vs what we're seeing this month so far. Used to inform stocking
+  // and staffing decisions. NOT a forecast — explicitly labelled as a
+  // lookback so admins don't treat it as prediction.
+  async getAiSeasonalTrends(tenantId: string, userId: string) {
+    const today = new Date();
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const sameMonthLastYearStart = new Date(today.getFullYear() - 1, today.getMonth(), 1);
+    const sameMonthLastYearEnd = new Date(today.getFullYear() - 1, today.getMonth() + 1, 0, 23, 59, 59);
+    const monthLabel = today.toLocaleString('en-IN', { month: 'long' });
+
+    // Two queries each per window: triage complaints (free text) +
+    // consultation diagnoses (semi-structured). Both have practical signal
+    // for "what's coming through the door".
+    const [thisYearTriages, lastYearTriages, thisYearDiagnoses, lastYearDiagnoses] = await Promise.all([
+      this.prisma.triageRecord.findMany({
+        where: { tenantId, triageTime: { gte: monthStart, lte: today } },
+        select: { chiefComplaint: true, triageLevel: true },
+        take: 1000,
+      }),
+      this.prisma.triageRecord.findMany({
+        where: { tenantId, triageTime: { gte: sameMonthLastYearStart, lte: sameMonthLastYearEnd } },
+        select: { chiefComplaint: true, triageLevel: true },
+        take: 1000,
+      }),
+      this.prisma.consultationDiagnosis.findMany({
+        where: { consultation: { tenantId, startedAt: { gte: monthStart, lte: today } } },
+        select: { description: true, icdCode: true },
+        take: 1000,
+      }),
+      this.prisma.consultationDiagnosis.findMany({
+        where: { consultation: { tenantId, startedAt: { gte: sameMonthLastYearStart, lte: sameMonthLastYearEnd } } },
+        select: { description: true, icdCode: true },
+        take: 1000,
+      }),
+    ]);
+
+    // Count by lowercase-trimmed description so casing/whitespace don't
+    // fragment counts. Take the top N for the prompt.
+    const tally = (rows: Array<{ chiefComplaint?: string | null; description?: string | null }>) => {
+      const counts: Record<string, number> = {};
+      for (const r of rows) {
+        const raw = r.chiefComplaint ?? r.description ?? '';
+        const key = raw.trim().toLowerCase().slice(0, 80);
+        if (!key) continue;
+        counts[key] = (counts[key] || 0) + 1;
+      }
+      return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 12)
+        .map(([k, v]) => `${k} (${v})`).join(', ') || '(none)';
+    };
+
+    const thisYearComplaints = tally(thisYearTriages);
+    const lastYearComplaints = tally(lastYearTriages);
+    const thisYearDx = tally(thisYearDiagnoses);
+    const lastYearDx = tally(lastYearDiagnoses);
+
+    const totalThisYear = thisYearTriages.length + thisYearDiagnoses.length;
+    const totalLastYear = lastYearTriages.length + lastYearDiagnoses.length;
+
+    if (totalLastYear === 0 && totalThisYear === 0) {
+      return {
+        insights: 'Not enough historical data yet to surface seasonal trends. Once a few months of consultations and triages are recorded, this will populate.',
+        cached: false,
+        currentMonth: monthLabel,
+        thisYearVolume: totalThisYear,
+        lastYearVolume: totalLastYear,
+      };
+    }
+
+    const systemInstruction = `You are a senior hospital operations analyst writing 4-6 plain-English bullets about what the hospital is seeing in ${monthLabel} this year vs what it saw in ${monthLabel} last year.
+
+Rules:
+  - This is a LOOKBACK, not a forecast. Never say "we will see" or "expect". Use phrasing like "last ${monthLabel} we saw" or "so far this ${monthLabel}".
+  - Call out the biggest mover: which condition or complaint is up the most, or down the most, compared to last year.
+  - Surface anything new this year that wasn't on the list last year.
+  - Translate the data into one concrete operational suggestion (e.g. "consider stocking extra anti-emetics", "consider rostering a pulmonologist on weekends") — only if the data justifies it.
+  - If volumes are low, say so honestly. Don't extrapolate from 3 patients.
+  - Plain markdown bullets, no headings or preamble.
+  - Each bullet ≤ 25 words.`;
+
+    const prompt = `MONTH: ${monthLabel}
+
+THIS YEAR (${monthLabel} ${today.getFullYear()}, so far):
+  Triage chief complaints (count): ${thisYearComplaints}
+  Consultation diagnoses (count): ${thisYearDx}
+  Total records: ${totalThisYear}
+
+LAST YEAR (${monthLabel} ${today.getFullYear() - 1}, full month):
+  Triage chief complaints (count): ${lastYearComplaints}
+  Consultation diagnoses (count): ${lastYearDx}
+  Total records: ${totalLastYear}
+
+Write the 4-6 bullet commentary now.`;
+
+    const result = await this.ai.complete({
+      tenantId,
+      feature: 'SEASONAL_TRENDS',
+      userId,
+      systemInstruction,
+      prompt,
+      maxOutputTokens: 600,
+    });
+
+    return {
+      insights: result.text.trim(),
+      generatedAt: new Date(),
+      cached: false,
+      currentMonth: monthLabel,
+      thisYearVolume: totalThisYear,
+      lastYearVolume: totalLastYear,
+      model: result.model,
+      durationMs: result.durationMs,
+    };
+  }
 }

@@ -32,4 +32,11 @@ export class ReportsController {
   aiRevenueInsights(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string) {
     return this.svc.getAiRevenueInsights(tid, uid);
   }
+
+  // AI Seasonal Trends — "this month last year vs this month so far". Used
+  // for stocking and staffing planning. Explicitly lookback, not forecast.
+  @Get('ai-seasonal-trends')
+  aiSeasonalTrends(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string) {
+    return this.svc.getAiSeasonalTrends(tid, uid);
+  }
 }
