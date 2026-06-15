@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { AiService } from '../ai/ai.service';
 
 @Injectable()
 export class ReportsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private ai: AiService) {}
 
   async getDashboardSummary(tenantId: string, locationId?: string) {
     const where: any = { tenantId };
@@ -203,5 +204,129 @@ export class ReportsService {
       }),
     ]);
     return { totalItems, lowStock, stockValue, stockInCount, stockOutCount, expiryAlerts };
+  }
+
+  // AI Revenue Insights — qualitative natural-language commentary on what
+  // changed in the last 30 days vs the prior 30 days. NOT a forecast: LLMs
+  // are bad at numeric prediction. This is "what does the data say about
+  // last month vs the month before" written by Gemini.
+  async getAiRevenueInsights(tenantId: string, userId: string) {
+    const today = new Date();
+    const day = 86400000;
+    const start30 = new Date(today.getTime() - 30 * day);
+    const start60 = new Date(today.getTime() - 60 * day);
+
+    // Pull both windows in parallel. Cap rows; for tenants with sparse data
+    // we still need enough context, but a 10K-row prompt would be wasteful.
+    const [currWindow, prevWindow] = await Promise.all([
+      this.prisma.invoice.findMany({
+        where: { tenantId, createdAt: { gte: start30 }, status: { not: 'CANCELLED' } },
+        select: { createdAt: true, netTotal: true, paidAmount: true, status: true, invoiceType: true,
+                  lineItems: { select: { category: true, amount: true } } },
+        take: 5000,
+      }),
+      this.prisma.invoice.findMany({
+        where: { tenantId, createdAt: { gte: start60, lt: start30 }, status: { not: 'CANCELLED' } },
+        select: { createdAt: true, netTotal: true, paidAmount: true, status: true, invoiceType: true,
+                  lineItems: { select: { category: true, amount: true } } },
+        take: 5000,
+      }),
+    ]);
+
+    const aggregate = (rows: typeof currWindow) => {
+      let invoices = 0, gross = 0, collected = 0, outstanding = 0;
+      const byCategory: Record<string, number> = {};
+      const byType: Record<string, number> = {};
+      for (const inv of rows) {
+        invoices++;
+        gross += Number(inv.netTotal);
+        collected += Number(inv.paidAmount);
+        outstanding += Math.max(Number(inv.netTotal) - Number(inv.paidAmount), 0);
+        byType[inv.invoiceType] = (byType[inv.invoiceType] || 0) + Number(inv.netTotal);
+        for (const li of inv.lineItems) {
+          const k = li.category || 'OTHER';
+          byCategory[k] = (byCategory[k] || 0) + Number(li.amount);
+        }
+      }
+      return { invoices, gross, collected, outstanding, byCategory, byType };
+    };
+
+    const curr = aggregate(currWindow);
+    const prev = aggregate(prevWindow);
+
+    // If both windows are empty, skip the LLM call.
+    if (curr.invoices === 0 && prev.invoices === 0) {
+      return {
+        insights: 'No invoice activity in the last 60 days yet.',
+        cached: false,
+        windowFrom: start30,
+        windowTo: today,
+        previousFrom: start60,
+        previousTo: start30,
+        summary: { current: curr, previous: prev },
+      };
+    }
+
+    const fmt = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+    const topN = (obj: Record<string, number>, n: number) =>
+      Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, n)
+        .map(([k, v]) => `${k}: ${fmt(v)}`).join(', ') || '(none)';
+
+    const dataPacket = `WINDOW A (last 30 days, ${start30.toISOString().slice(0, 10)} -> today):
+  Invoices: ${curr.invoices}
+  Gross billed: ${fmt(curr.gross)}
+  Collected: ${fmt(curr.collected)}
+  Outstanding: ${fmt(curr.outstanding)}
+  By category: ${topN(curr.byCategory, 6)}
+  By invoice type: ${topN(curr.byType, 4)}
+
+WINDOW B (prior 30 days, ${start60.toISOString().slice(0, 10)} -> ${start30.toISOString().slice(0, 10)}):
+  Invoices: ${prev.invoices}
+  Gross billed: ${fmt(prev.gross)}
+  Collected: ${fmt(prev.collected)}
+  Outstanding: ${fmt(prev.outstanding)}
+  By category: ${topN(prev.byCategory, 6)}
+  By invoice type: ${topN(prev.byType, 4)}`;
+
+    const systemInstruction = `You are a senior hospital revenue analyst writing 4-6 plain-English bullets for a hospital administrator about what changed in the last 30 days versus the 30 days before.
+
+Rules:
+  - Be specific. Use numbers (with INR formatting) and percentage deltas.
+  - Compare like-for-like (gross-to-gross, collection-rate-to-collection-rate).
+  - Call out the single biggest mover (largest absolute change in one category or invoice type).
+  - Surface collection problems if collection rate dropped meaningfully.
+  - If a window has very low volume, say so honestly — don't extrapolate.
+  - This is COMMENTARY on the past, not a forecast. Never write "we will" or "expect".
+  - Plain markdown bullets, no headings or preamble.
+  - Each bullet ≤ 25 words.`;
+
+    const prompt = `${dataPacket}
+
+Write the 4-6 bullet commentary now.`;
+
+    const result = await this.ai.complete({
+      tenantId,
+      feature: 'REVENUE_INSIGHTS',
+      userId,
+      systemInstruction,
+      prompt,
+      maxOutputTokens: 600,
+    });
+
+    return {
+      insights: result.text.trim(),
+      generatedAt: new Date(),
+      cached: false,
+      windowFrom: start30,
+      windowTo: today,
+      previousFrom: start60,
+      previousTo: start30,
+      summary: {
+        current: { invoices: curr.invoices, gross: curr.gross, collected: curr.collected, outstanding: curr.outstanding },
+        previous: { invoices: prev.invoices, gross: prev.gross, collected: prev.collected, outstanding: prev.outstanding },
+      },
+      model: result.model,
+      durationMs: result.durationMs,
+    };
   }
 }

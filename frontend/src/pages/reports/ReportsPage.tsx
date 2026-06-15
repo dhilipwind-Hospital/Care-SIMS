@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import {
   Users, DollarSign, Activity, TrendingUp, BedDouble,
   Clock, CalendarRange, FileText, Stethoscope, HeartPulse, Download, Printer, FlaskConical,
-  Pill, Package, CalendarCheck,
+  Pill, Package, CalendarCheck, Sparkles, Loader2, RefreshCw,
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -546,6 +546,19 @@ function RevenueTab({ from, to }: { from: string; to: string }) {
   const [data, setData] = useState<RevenueData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // AI Revenue Insights — qualitative commentary on the last 30 vs prior
+  // 30 days. Independent of the date filter above; always looks at "now".
+  const [insights, setInsights] = useState<string | null>(null);
+  const [insightsAt, setInsightsAt] = useState<string | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const fetchInsights = useCallback(() => {
+    setInsightsLoading(true);
+    api.get('/reports/ai-revenue-insights')
+      .then(r => { setInsights(r.data?.insights || null); setInsightsAt(r.data?.generatedAt || null); })
+      .catch(() => setInsights(null))
+      .finally(() => setInsightsLoading(false));
+  }, []);
+
   const fetch = useCallback(() => {
     setLoading(true);
     api.get('/reports/revenue', { params: { from, to } })
@@ -558,6 +571,39 @@ function RevenueTab({ from, to }: { from: string; to: string }) {
 
   return (
     <div className="space-y-6">
+      {/* AI Insights card — always at the top, independent of date filter. */}
+      <div className="hms-card p-5 border-l-4" style={{ borderColor: '#7C3AED' }}>
+        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Sparkles size={15} className="text-purple-600" />
+            <span className="font-semibold text-sm text-gray-800">AI Revenue Insights</span>
+            <span className="text-[10px] text-gray-400">Last 30 days vs the 30 days before</span>
+            {insightsAt && !insightsLoading && (
+              <span className="text-[10px] text-gray-400">· Generated {new Date(insightsAt).toLocaleString()}</span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={fetchInsights}
+            disabled={insightsLoading}
+            className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-purple-200 text-purple-700 hover:bg-purple-50 disabled:opacity-50"
+          >
+            {insightsLoading ? <Loader2 size={12} className="animate-spin" /> : insights ? <RefreshCw size={12} /> : <Sparkles size={12} />}
+            {insightsLoading ? 'Analysing…' : insights ? 'Refresh' : 'Generate'}
+          </button>
+        </div>
+        {insightsLoading ? (
+          <div className="text-xs text-gray-400 italic">Looking at the last 60 days of invoices…</div>
+        ) : insights ? (
+          <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{insights}</div>
+        ) : (
+          <div className="text-xs text-gray-400 italic">Click Generate to get AI commentary on what changed in the last month.</div>
+        )}
+        <div className="mt-3 text-[10px] text-gray-400">
+          AI-generated commentary on past data — not a forecast. Verify against the underlying numbers below.
+        </div>
+      </div>
+
       {loading ? (
         <SkeletonKpiRow count={4} />
       ) : !data ? (

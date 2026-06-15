@@ -25,4 +25,11 @@ export class ReportsController {
   @Get('pharmacy') pharmacy(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getPharmacyReport(tid, q); }
   @Get('appointments') appointments(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getAppointmentReport(tid, q); }
   @Get('inventory') inventory(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getInventoryReport(tid, q); }
+
+  // AI Revenue Insights — qualitative commentary on the last 30 vs prior 30
+  // days. Not a forecast. Gemini-generated; caller decides when to invoke.
+  @Get('ai-revenue-insights')
+  aiRevenueInsights(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string) {
+    return this.svc.getAiRevenueInsights(tid, uid);
+  }
 }
