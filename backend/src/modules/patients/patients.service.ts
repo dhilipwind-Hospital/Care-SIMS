@@ -5,11 +5,12 @@ import { v4 as uuidv4 } from 'uuid';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { sendEmail } from '../../common/utils/mailer';
+import { AiService } from '../ai/ai.service';
 
 @Injectable()
 export class PatientsService {
   private readonly logger = new Logger(PatientsService.name);
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private ai: AiService) {}
 
   async findAll(tenantId: string, query: any) {
     const { locationId, q, page = 1, limit = 20 } = query;
@@ -321,6 +322,154 @@ export class PatientsService {
       upcomingAppointmentsCount: upcomingAppointments,
       lastConsultationDate: lastConsultation?.createdAt || null,
     };
+  }
+
+  // AI summary of the patient's history. Returns the cached summary if one
+  // exists and refresh wasn't requested, otherwise regenerates by feeding
+  // Gemini a compact view of past consultations + prescriptions + lab
+  // orders + admissions + triages and saves the result back to the patient.
+  //
+  // Defensive: if the ai_history_summary column doesn't exist yet (migration
+  // hasn't run), still generates fresh on every call — the save just fails
+  // silently. Caller's experience is identical except slower per-visit.
+  async getAiHistorySummary(tenantId: string, patientId: string, userId: string, opts: { refresh?: boolean } = {}) {
+    const patient = await this.prisma.patient.findFirst({
+      where: { id: patientId, tenantId },
+      select: {
+        id: true, firstName: true, lastName: true, gender: true, ageYears: true,
+        dateOfBirth: true, allergies: true, existingConditions: true,
+        currentMedications: true, pastSurgeries: true, familyHistory: true,
+        bloodGroup: true,
+        aiHistorySummary: true, aiHistorySummaryAt: true,
+      },
+    });
+    if (!patient) throw new NotFoundException('Patient not found');
+
+    if (patient.aiHistorySummary && !opts.refresh) {
+      return { summary: patient.aiHistorySummary, generatedAt: patient.aiHistorySummaryAt, cached: true };
+    }
+
+    // Pull last ~12 months of clinical events. Cap at sane row counts so
+    // long-tail patients don't blow out the token budget.
+    const since = new Date(); since.setMonth(since.getMonth() - 12);
+    const [consultations, prescriptions, labOrders, admissions, triages] = await Promise.all([
+      this.prisma.consultation.findMany({
+        where: { tenantId, patientId, startedAt: { gte: since } },
+        orderBy: { startedAt: 'desc' }, take: 20,
+        select: { chiefComplaint: true, assessment: true, plan: true, startedAt: true,
+                  diagnoses: { select: { description: true, icdCode: true } } },
+      }),
+      this.prisma.prescription.findMany({
+        where: { tenantId, patientId, issuedAt: { gte: since } },
+        orderBy: { issuedAt: 'desc' }, take: 20,
+        select: { rxNumber: true, issuedAt: true, status: true,
+                  items: { select: { drugName: true, strength: true, frequency: true, durationDays: true } } },
+      }),
+      this.prisma.labOrder.findMany({
+        where: { tenantId, patientId, orderedAt: { gte: since } },
+        orderBy: { orderedAt: 'desc' }, take: 20,
+        select: { orderNumber: true, orderedAt: true, items: { select: { testName: true } } },
+      }),
+      this.prisma.admission.findMany({
+        where: { tenantId, patientId },
+        orderBy: { admissionDate: 'desc' }, take: 5,
+        select: { admissionDate: true, dischargeDate: true, diagnosisOnAdmission: true, status: true },
+      }),
+      this.prisma.triageRecord.findMany({
+        where: { tenantId, patientId, triageTime: { gte: since } },
+        orderBy: { triageTime: 'desc' }, take: 10,
+        select: { triageTime: true, chiefComplaint: true, triageLevel: true },
+      }),
+    ]);
+
+    const headerLine = `${patient.firstName} ${patient.lastName}, ${patient.gender || '?'}${patient.ageYears ? `, ${patient.ageYears}y` : ''}${patient.bloodGroup ? `, blood ${patient.bloodGroup}` : ''}`;
+    const allergies = Array.isArray(patient.allergies) && patient.allergies.length ? patient.allergies.join(', ') : 'None known';
+    const conditions = Array.isArray(patient.existingConditions) && patient.existingConditions.length ? patient.existingConditions.join(', ') : 'None known';
+
+    const consultLines = consultations.map((c: any) => {
+      const diag = (c.diagnoses || []).map((d: any) => `${d.icdCode || ''} ${d.description}`.trim()).join('; ');
+      return `- ${c.startedAt?.toISOString().slice(0, 10)}: CC=${c.chiefComplaint || '—'}${diag ? `; Dx=${diag}` : ''}`;
+    }).join('\n') || '(none)';
+
+    const rxLines = prescriptions.map((rx: any) => {
+      const meds = (rx.items || []).map((it: any) => `${it.drugName}${it.strength ? ` ${it.strength}` : ''}${it.frequency ? ` ${it.frequency}` : ''}${it.durationDays ? ` x${it.durationDays}d` : ''}`).join(', ');
+      return `- ${rx.issuedAt?.toISOString().slice(0, 10)} [${rx.status}]: ${meds}`;
+    }).join('\n') || '(none)';
+
+    const labLines = labOrders.map((lo: any) =>
+      `- ${lo.orderedAt?.toISOString().slice(0, 10)}: ${(lo.items || []).map((i: any) => i.testName).join(', ')}`,
+    ).join('\n') || '(none)';
+
+    const admLines = admissions.map((a: any) =>
+      `- ${a.admissionDate?.toISOString().slice(0, 10)} → ${a.dischargeDate ? a.dischargeDate.toISOString().slice(0, 10) : 'current'} [${a.status}]: ${a.diagnosisOnAdmission || '—'}`,
+    ).join('\n') || '(none)';
+
+    const triageLines = triages.map((t: any) =>
+      `- ${t.triageTime?.toISOString().slice(0, 10)} [${t.triageLevel}]: ${t.chiefComplaint || '—'}`,
+    ).join('\n') || '(none)';
+
+    const systemInstruction = `You are a senior physician writing a 5–7 bullet history summary for another doctor about to see this patient. Be concise and clinical. Cover ONLY what's clearly present in the data — never invent diagnoses, drug allergies, or test results.
+
+Format: plain markdown bullets, no preamble or sign-off. Each bullet ≤ 20 words. Cover, in this order:
+  • Demographics + allergies + active chronic conditions
+  • Last visit (when + why)
+  • Recurring patterns (e.g. "5 visits for migraine in past 6 months")
+  • Notable diagnoses from past year
+  • Currently active prescriptions
+  • Any inpatient admission in past year
+  • Anything that warrants caution today
+
+If a section has no data, skip the bullet — don't write "no data".`;
+
+    const prompt = `PATIENT: ${headerLine}
+ALLERGIES: ${allergies}
+EXISTING CONDITIONS: ${conditions}
+PAST SURGERIES: ${patient.pastSurgeries || '(none recorded)'}
+FAMILY HISTORY: ${patient.familyHistory || '(none recorded)'}
+
+CONSULTATIONS (last 12 months, newest first):
+${consultLines}
+
+PRESCRIPTIONS (last 12 months):
+${rxLines}
+
+LAB ORDERS (last 12 months):
+${labLines}
+
+ADMISSIONS:
+${admLines}
+
+TRIAGE RECORDS (last 12 months):
+${triageLines}
+
+Write the bullet summary now.`;
+
+    const result = await this.ai.complete({
+      tenantId,
+      feature: 'PATIENT_HISTORY',
+      userId,
+      patientId: patient.id,
+      referenceType: 'PATIENT',
+      referenceId: patient.id,
+      systemInstruction,
+      prompt,
+      maxOutputTokens: 600,
+    });
+
+    const summary = result.text.trim();
+    const now = new Date();
+    // Save the cache. If the column doesn't exist yet (migration pending),
+    // swallow the error — the feature still returns fresh content.
+    try {
+      await this.prisma.patient.update({
+        where: { id: patient.id },
+        data: { aiHistorySummary: summary, aiHistorySummaryAt: now } as any,
+      });
+    } catch (err) {
+      this.logger.warn(`Could not cache AI summary for ${patient.id}: ${(err as any)?.message}`);
+    }
+
+    return { summary, generatedAt: now, cached: false, model: result.model, durationMs: result.durationMs };
   }
 
 }

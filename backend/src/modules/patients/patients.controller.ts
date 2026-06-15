@@ -63,4 +63,18 @@ export class PatientsController {
   @Put(':id') update(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: UpdatePatientDto) { return this.svc.update(tid, id, body); }
   @Get(':id/history') history(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getHistory(tid, id); }
   @Get(':id/access-log') accessLog(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getAccessLog(tid, id); }
+
+  // AI history summary — cached on the patient row. GET returns the cached
+  // version if present; POST refreshes it (regenerates via Gemini).
+  @Get(':id/ai-summary')
+  @Roles('SYS_ORG_ADMIN', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_HOD', 'SYS_NURSE', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE')
+  aiSummary(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @CurrentUser('sub') uid: string) {
+    return this.svc.getAiHistorySummary(tid, id, uid, { refresh: false });
+  }
+
+  @Post(':id/ai-summary/refresh')
+  @Roles('SYS_ORG_ADMIN', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_HOD', 'SYS_NURSE', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE')
+  aiSummaryRefresh(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @CurrentUser('sub') uid: string) {
+    return this.svc.getAiHistorySummary(tid, id, uid, { refresh: true });
+  }
 }

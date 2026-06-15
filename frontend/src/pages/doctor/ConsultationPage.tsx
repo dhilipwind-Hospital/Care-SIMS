@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { FlaskConical, Pill, UserCheck, Calendar, CheckCircle, AlertTriangle, ChevronRight, Plus, X, Clock, Search } from 'lucide-react';
+import { FlaskConical, Pill, UserCheck, Calendar, CheckCircle, AlertTriangle, ChevronRight, Plus, X, Clock, Search, Sparkles, RefreshCw, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
@@ -58,6 +58,45 @@ export default function ConsultationPage() {
   const [labOrders,      setLabOrders]      = useState<any[]>([]);
   const [labOrdersLoading, setLabOrdersLoading] = useState(false);
   const [prescriptions,  setPrescriptions]  = useState<any[]>([]);
+
+  // AI history summary card. Loads cached version on patient pick; doctor
+  // clicks the Refresh button to regenerate.
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiSummaryAt, setAiSummaryAt] = useState<string | null>(null);
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+  const [aiSummaryRefreshing, setAiSummaryRefreshing] = useState(false);
+
+  const fetchAiSummary = async (id: string) => {
+    setAiSummaryLoading(true);
+    try {
+      const { data } = await api.get(`/patients/${id}/ai-summary`);
+      setAiSummary(data?.summary || null);
+      setAiSummaryAt(data?.generatedAt || null);
+    } catch {
+      setAiSummary(null);
+    } finally {
+      setAiSummaryLoading(false);
+    }
+  };
+  const refreshAiSummary = async () => {
+    if (!patientId) return;
+    setAiSummaryRefreshing(true);
+    try {
+      const { data } = await api.post(`/patients/${patientId}/ai-summary/refresh`);
+      setAiSummary(data?.summary || null);
+      setAiSummaryAt(data?.generatedAt || null);
+      toast.success('AI summary refreshed');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'AI summary failed');
+    } finally {
+      setAiSummaryRefreshing(false);
+    }
+  };
+  useEffect(() => {
+    if (patientId) fetchAiSummary(patientId);
+    else { setAiSummary(null); setAiSummaryAt(null); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patientId]);
 
   const [form, setForm] = useState({
     chiefComplaint: '', historyOfPresentIllness: '', pastMedicalHistory: '',
@@ -284,6 +323,42 @@ export default function ConsultationPage() {
 
           {(activeTab === 'Overview' || activeTab === 'SOAP Notes') && (
             <>
+              {/* AI HISTORY SUMMARY — Gemini-generated 5-7 bullet recap pulled
+                  from the patient's last 12 months of clinical events. Cached
+                  on the patient row; doctor clicks Refresh to regenerate. */}
+              {patientId && (
+                <div className="hms-card p-4 border-l-4" style={{ borderColor: '#7C3AED' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={15} className="text-purple-600" />
+                      <span className="font-semibold text-sm text-gray-800">AI History Summary</span>
+                      {aiSummaryAt && !aiSummaryLoading && (
+                        <span className="text-[10px] text-gray-400">Generated {new Date(aiSummaryAt).toLocaleString()}</span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={refreshAiSummary}
+                      disabled={aiSummaryRefreshing || aiSummaryLoading}
+                      className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-purple-200 text-purple-700 hover:bg-purple-50 disabled:opacity-50"
+                    >
+                      {aiSummaryRefreshing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                      {aiSummaryRefreshing ? 'Generating…' : aiSummary ? 'Refresh' : 'Generate'}
+                    </button>
+                  </div>
+                  {aiSummaryLoading ? (
+                    <div className="text-xs text-gray-400 italic">Loading summary…</div>
+                  ) : aiSummary ? (
+                    <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{aiSummary}</div>
+                  ) : (
+                    <div className="text-xs text-gray-400 italic">No summary yet. Click Generate to build one from this patient's history.</div>
+                  )}
+                  <div className="mt-2 text-[10px] text-gray-400">
+                    AI-generated. Verify with the patient and clinical chart before acting.
+                  </div>
+                </div>
+              )}
+
               {/* TRIAGE ASSESSMENT — nurse's pre-consult snapshot */}
               {triage && (() => {
                 const lvl = triage.triageLevel || 'GREEN';
