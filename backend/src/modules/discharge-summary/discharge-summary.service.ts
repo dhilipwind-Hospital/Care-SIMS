@@ -174,9 +174,14 @@ Return the JSON only.`;
       maxOutputTokens: 2048,
     });
 
-    // Strip code fences if Gemini wraps the JSON in ```json ... ```
+    // Strip ```json ... ``` fences; also fall back to scanning for the
+    // first {...} block in case Gemini wraps the JSON in prose.
     let text = result.text.trim();
     text = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+    if (!text.startsWith('{')) {
+      const m = text.match(/\{[\s\S]*\}/);
+      if (m) text = m[0];
+    }
 
     let parsed: any;
     try {

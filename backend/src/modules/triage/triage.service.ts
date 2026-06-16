@@ -273,11 +273,20 @@ Return the JSON only.`;
       referenceType: 'TRIAGE',
       systemInstruction,
       prompt,
-      maxOutputTokens: 600,
+      // 2048 because Gemini 2.5-Flash burns 50-100 output tokens on its
+      // internal "thinking" phase before emitting JSON. 600 was getting
+      // the response cut mid-field.
+      maxOutputTokens: 2048,
     });
 
     let text = result.text.trim();
+    // Strip ```json ... ``` fences; also fall back to scanning for the
+    // first {...} block in case Gemini wraps the JSON in prose.
     text = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+    if (!text.startsWith('{')) {
+      const m = text.match(/\{[\s\S]*\}/);
+      if (m) text = m[0];
+    }
     try {
       const parsed = JSON.parse(text);
       return {
