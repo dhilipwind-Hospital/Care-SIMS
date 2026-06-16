@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { FileText, CheckCircle, Clock, AlertTriangle, Eye, Edit2, X, Printer, Sparkles, Loader2 } from 'lucide-react';
+import { FileText, CheckCircle, Clock, AlertTriangle, Eye, Edit2, X, Printer, Sparkles, Loader2, CheckCircle2 } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import EmptyState from '../../components/ui/EmptyState';
@@ -18,6 +18,37 @@ export default function DischargeSummaryPage() {
     followUpDate: '', dietaryAdvice: '', activityRestrictions: '',
   });
   const [formError, setFormError] = useState('');
+  const [admissionMeta, setAdmissionMeta] = useState<any>(null);
+
+  // When the admission picker changes, fetch the admission and auto-fill
+  // patient/doctor + dates so the user cannot select a mismatched patient.
+  useEffect(() => {
+    let cancelled = false;
+    if (!form.admissionId) {
+      setAdmissionMeta(null);
+      return;
+    }
+    (async () => {
+      try {
+        const { data } = await api.get(`/admissions/${form.admissionId}`);
+        const a = data?.data || data;
+        if (cancelled || !a) return;
+        setAdmissionMeta(a);
+        const isoDate = (v: any) => v ? new Date(v).toISOString().slice(0, 10) : '';
+        setForm(f => ({
+          ...f,
+          patientId: a.patientId || f.patientId,
+          doctorId: a.admittingDoctorId || f.doctorId,
+          admissionDate: isoDate(a.admissionDate) || f.admissionDate,
+          dischargeDate: f.dischargeDate || isoDate(a.dischargeDate),
+          diagnosisOnAdmission: f.diagnosisOnAdmission || a.diagnosisOnAdmission || '',
+        }));
+      } catch (err) {
+        if (!cancelled) setAdmissionMeta(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [form.admissionId]);
 
   // AI draft: gemini fills the form fields based on admission data; doctor
   // reviews + edits before clicking Create Draft. Button only shows once
@@ -206,6 +237,7 @@ export default function DischargeSummaryPage() {
       toast.success('Discharge summary created');
       setShowForm(false);
       setForm({ admissionId: '', patientId: '', doctorId: '', admissionDate: '', dischargeDate: '', diagnosisOnAdmission: '', diagnosisOnDischarge: '', treatmentGiven: '', investigationSummary: '', conditionAtDischarge: '', followUpInstructions: '', followUpDate: '', dietaryAdvice: '', activityRestrictions: '' });
+      setAdmissionMeta(null);
       fetchSummaries();
     } catch (err) { toast.error('Failed to create discharge summary'); }
   };
@@ -313,8 +345,30 @@ export default function DischargeSummaryPage() {
           {formError && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{formError}</div>}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <SearchableSelect value={form.admissionId} onChange={(id) => setForm({ ...form, admissionId: id })} placeholder="Search admission *" endpoint="/admissions" searchParam="q" mapOption={(a: any) => ({ id: a.id, label: a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : a.id, sub: `Bed ${a.bed?.bedNumber || '?'}` })} />
-            <SearchableSelect value={form.patientId} onChange={(id) => setForm({ ...form, patientId: id })} placeholder="Search patient *" endpoint="/patients" searchParam="q" mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })} />
-            <SearchableSelect value={form.doctorId} onChange={(id) => setForm({ ...form, doctorId: id })} placeholder="Search doctor *" endpoint="/doctors/affiliations/tenant" searchParam="q" mapOption={(d: any) => ({ id: d.doctorId || d.id, label: `Dr. ${d.doctor?.firstName || d.firstName || ''} ${d.doctor?.lastName || d.lastName || ''}`, sub: d.doctor?.specialization || d.specialization || '' })} />
+            {admissionMeta ? (
+              <div className="md:col-span-2 bg-teal-50 border border-teal-100 rounded-lg p-3 text-sm">
+                <div className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-purple-700 bg-purple-50 border border-purple-100 rounded px-2 py-0.5 mb-1.5">
+                  <CheckCircle2 size={12} /> Auto-filled from admission
+                </div>
+                <div className="text-gray-800">
+                  <span className="font-medium">Patient:</span>{' '}
+                  {admissionMeta.patient
+                    ? `${admissionMeta.patient.firstName || ''} ${admissionMeta.patient.lastName || ''}`.trim() || '—'
+                    : '—'}
+                  {' '}&nbsp;•&nbsp;{' '}
+                  <span className="font-medium">Admitting Doctor:</span>{' '}
+                  {admissionMeta.admittingDoctor
+                    ? `Dr ${admissionMeta.admittingDoctor.firstName || ''} ${admissionMeta.admittingDoctor.lastName || ''}`.trim()
+                      + (admissionMeta.admittingDoctor.pgSpecialization ? ` · ${admissionMeta.admittingDoctor.pgSpecialization}` : '')
+                    : '(linked to this admission)'}
+                </div>
+              </div>
+            ) : (
+              <>
+                <SearchableSelect value={form.patientId} onChange={(id) => setForm({ ...form, patientId: id })} placeholder="Search patient *" endpoint="/patients" searchParam="q" mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })} />
+                <SearchableSelect value={form.doctorId} onChange={(id) => setForm({ ...form, doctorId: id })} placeholder="Search doctor *" endpoint="/doctors/affiliations/tenant" searchParam="q" mapOption={(d: any) => ({ id: d.doctorId || d.id, label: `Dr. ${d.doctor?.firstName || d.firstName || ''} ${d.doctor?.lastName || d.lastName || ''}`, sub: d.doctor?.specialization || d.specialization || '' })} />
+              </>
+            )}
             <div><label className="text-xs text-gray-500">Admission Date *</label><input className="hms-input w-full" type="date" value={form.admissionDate} onChange={e => setForm({ ...form, admissionDate: e.target.value })} /></div>
             <div><label className="text-xs text-gray-500">Discharge Date</label><input className="hms-input w-full" type="date" value={form.dischargeDate} onChange={e => setForm({ ...form, dischargeDate: e.target.value })} /></div>
             <div><label className="text-xs text-gray-500">Follow-up Date</label><input className="hms-input w-full" type="date" value={form.followUpDate} onChange={e => setForm({ ...form, followUpDate: e.target.value })} /></div>

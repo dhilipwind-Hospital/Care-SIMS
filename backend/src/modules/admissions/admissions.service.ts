@@ -91,7 +91,18 @@ export class AdmissionsService {
   async getAdmission(tenantId: string, id: string) {
     const a = await this.prisma.admission.findFirst({ where: { id, tenantId }, include: { patient: true, ward: true } });
     if (!a) throw new NotFoundException('Admission not found');
-    return a;
+    // Admission has no Prisma relation to DoctorRegistry — fetch the
+    // admitting doctor's name in a side query so the frontend can show it
+    // (used on the discharge-summary form's auto-fill confirmation strip).
+    let admittingDoctor: { id: string; firstName: string; lastName: string; pgSpecialization: string | null } | null = null;
+    if (a.admittingDoctorId) {
+      const doc = await this.prisma.doctorRegistry.findUnique({
+        where: { id: a.admittingDoctorId },
+        select: { id: true, firstName: true, lastName: true, pgSpecialization: true },
+      });
+      if (doc) admittingDoctor = doc;
+    }
+    return { ...a, admittingDoctor };
   }
 
   async updateAdmission(tenantId: string, id: string, dto: any) {
