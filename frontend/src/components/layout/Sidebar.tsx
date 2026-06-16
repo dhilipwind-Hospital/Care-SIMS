@@ -112,6 +112,7 @@ export const navByRole: Record<string, NavItem[]> = {
     { label: 'Appointments',        icon: Calendar,        path: '/app/appointments',         module: 'MOD_APPT' },
     { label: 'Consultations',       icon: Stethoscope,     path: '/app/doctor/consultations', module: 'MOD_CONSULT' },
     { label: 'Admissions',          icon: Bed,             path: '/app/nurse/admissions',     module: 'MOD_ADMISSION' },
+    { label: 'Discharge Summary',   icon: FileBadge,       path: '/app/discharge-summary',    module: 'MOD_DISCHARGE' },
     { label: 'Billing',             icon: CreditCard,      path: '/app/billing',              module: 'MOD_BILL_OPD' },
     { label: 'Pharmacy',            icon: Pill,            path: '/app/pharmacy',             module: 'MOD_PHARMACY' },
     { label: 'Lab',                 icon: FlaskConical,    path: '/app/lab',                  module: 'MOD_LAB' },
