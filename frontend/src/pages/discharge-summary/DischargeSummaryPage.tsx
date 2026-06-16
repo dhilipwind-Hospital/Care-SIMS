@@ -283,7 +283,7 @@ export default function DischargeSummaryPage() {
       </div>
 
       <div className="flex justify-end">
-        <button onClick={() => setShowForm(!showForm)} className="px-4 py-2 rounded-lg text-white font-medium" style={{ background: 'var(--accent)' }}>
+        <button onClick={() => setShowForm(!showForm)} className="px-4 py-2 rounded-lg text-white font-medium" style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
           + New Discharge Summary
         </button>
       </div>
@@ -334,7 +334,7 @@ export default function DischargeSummaryPage() {
             <textarea className="hms-input" placeholder="Activity Restrictions" rows={2} value={form.activityRestrictions} onChange={e => setForm({ ...form, activityRestrictions: e.target.value })} />
           </div>
           <div className="flex gap-2">
-            <button onClick={handleCreate} className="px-4 py-2 rounded-lg text-white font-medium" style={{ background: 'var(--accent)' }}>Create Draft</button>
+            <button onClick={handleCreate} className="px-4 py-2 rounded-lg text-white font-medium" style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>Create Draft</button>
             <button onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg border text-gray-600">Cancel</button>
           </div>
         </div>
@@ -599,7 +599,7 @@ export default function DischargeSummaryPage() {
                 <button onClick={() => setEditItem(null)} className="px-4 py-2 rounded-lg border text-gray-600 text-sm">Cancel</button>
                 <button onClick={handleUpdate} disabled={editSubmitting}
                   className="px-4 py-2 rounded-lg text-white font-medium text-sm disabled:opacity-60"
-                  style={{ background: 'var(--accent)' }}>
+                  style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
                   {editSubmitting ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
