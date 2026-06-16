@@ -1,6 +1,24 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { AiService } from '../ai/ai.service';
+import { sendEmail } from '../../common/utils/mailer';
+
+// Same shell as the admissions module — kept inline to avoid a circular
+// dependency between admissions and discharge-summary services.
+function emailTemplate(title: string, body: string, orgName?: string): string {
+  return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+  <div style="background:linear-gradient(135deg,#0F766E,#14B8A6);padding:20px;border-radius:12px 12px 0 0;">
+    <h1 style="color:white;margin:0;font-size:20px;">${orgName || 'Ayphen HMS'}</h1>
+  </div>
+  <div style="padding:24px;background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
+    <h2 style="color:#1f2937;margin:0 0 16px;">${title}</h2>
+    <p style="color:#4b5563;line-height:1.6;">${body}</p>
+  </div>
+  <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:16px;">
+    This is an automated message from ${orgName || 'Ayphen HMS'}. Do not reply.
+  </p>
+</div>`;
+}
 
 @Injectable()
 export class DischargeSummaryService {
@@ -57,12 +75,99 @@ export class DischargeSummaryService {
   }
 
   async approve(tenantId: string, id: string, userId: string) {
-    const rec = await this.prisma.dischargeSummary.findFirst({ where: { id, tenantId } });
-    if (!rec) throw new NotFoundException('Discharge summary not found');
-    return this.prisma.dischargeSummary.update({
-      where: { id },
-      data: { status: 'APPROVED', approvedById: userId, approvedAt: new Date() },
+    // Approving a discharge summary is the canonical "the patient is leaving" event.
+    // It must atomically: mark the summary APPROVED, flip the admission to DISCHARGED
+    // (if not already), free the bed (OCCUPIED → CLEANING + housekeeping task), and
+    // queue the patient email. Whole thing runs in a transaction so we can't end up
+    // half-discharged on a partial failure.
+    const result = await this.prisma.$transaction(async (tx) => {
+      const rec = await tx.dischargeSummary.findFirst({ where: { id, tenantId } });
+      if (!rec) throw new NotFoundException('Discharge summary not found');
+
+      // Idempotent: re-approving an already-approved summary returns it without
+      // re-running side effects.
+      if (rec.status === 'APPROVED') {
+        return { approved: rec, sendEmailTo: null as null | { patient: any; admission: any; orgName: string } };
+      }
+
+      const approved = await tx.dischargeSummary.update({
+        where: { id },
+        data: { status: 'APPROVED', approvedById: userId, approvedAt: new Date() },
+      });
+
+      const admission = await tx.admission.findFirst({
+        where: { id: rec.admissionId, tenantId },
+        include: { patient: true, ward: true, bed: true },
+      });
+
+      if (!admission || admission.status === 'DISCHARGED') {
+        // No admission or already discharged via Flow A — just record the approval.
+        return { approved, sendEmailTo: null };
+      }
+
+      // Cascade the discharge onto the admission.
+      const admissionUpdate: any = {
+        status: 'DISCHARGED',
+        dischargeDate: rec.dischargeDate || new Date(),
+      };
+      if (!admission.dischargeDiagnosis && rec.diagnosisOnDischarge) {
+        admissionUpdate.dischargeDiagnosis = rec.diagnosisOnDischarge;
+      }
+      await tx.admission.update({ where: { id: admission.id }, data: admissionUpdate });
+
+      // Free the bed (mirrors admissions.service.discharge — set CLEANING and book housekeeping).
+      if (admission.bedId) {
+        const bed = await tx.bed.findUnique({ where: { id: admission.bedId } });
+        if (bed && bed.status === 'OCCUPIED') {
+          await tx.bed.update({ where: { id: admission.bedId }, data: { status: 'CLEANING' } });
+          await tx.housekeepingTask.create({
+            data: {
+              tenantId,
+              locationId: admission.locationId,
+              wardId: admission.wardId,
+              bedId: admission.bedId,
+              roomOrArea: `${(admission as any).ward?.name || 'Ward'} — Bed ${(admission as any).bed?.bedNumber || admission.bedId}`,
+              taskType: 'BED_CLEANING',
+              priority: 'HIGH',
+              status: 'PENDING',
+              description: `Post-discharge bed cleaning for ${(admission as any).patient?.firstName || ''} ${(admission as any).patient?.lastName || ''} (${admission.admissionNumber})`.trim(),
+            },
+          });
+        }
+      }
+
+      const tenant = await tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: { tradeName: true, legalName: true },
+      });
+      const orgName = tenant?.tradeName || tenant?.legalName || 'Hospital';
+
+      return {
+        approved,
+        sendEmailTo: admission.patient?.email
+          ? { patient: admission.patient, admission, orgName }
+          : null,
+      };
     });
+
+    // Side effect (post-commit): non-blocking patient email.
+    if (result.sendEmailTo) {
+      const { patient, admission, orgName } = result.sendEmailTo;
+      const dischargeDate = new Date().toLocaleDateString('en-IN', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      });
+      sendEmail(
+        patient.email,
+        `Discharge Summary - ${orgName}`,
+        emailTemplate(
+          'Discharge Summary',
+          `Dear ${patient.firstName} ${patient.lastName},<br><br>You have been discharged from <strong>${orgName}</strong>.<br><br><strong>Discharge Date:</strong> ${dischargeDate}<br><strong>Admission Number:</strong> ${admission.admissionNumber}<br>${result.approved.diagnosisOnDischarge ? `<strong>Diagnosis:</strong> ${result.approved.diagnosisOnDischarge}<br>` : ''}${result.approved.followUpInstructions ? `<br><strong>Follow-up Instructions:</strong><br>${result.approved.followUpInstructions}<br>` : ''}<br>Please follow the prescribed medications and attend all follow-up appointments. We wish you a speedy recovery.`,
+          orgName,
+        ),
+      ).catch((err) => this.logger.error(`Failed to send discharge email: ${err?.message || err}`));
+    }
+
+    return result.approved;
   }
 
   async getByAdmission(tenantId: string, admissionId: string) {
