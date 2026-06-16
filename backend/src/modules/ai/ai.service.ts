@@ -15,7 +15,10 @@ import { PrismaService } from '../../database/prisma.service';
  * table can be filtered / costed per feature.
  */
 
-const DEFAULT_MODEL = 'gemini-2.0-flash';
+// gemini-2.0-flash has limit=0 on the free tier as of mid-2026 — Google
+// moved it to paid-only. gemini-2.5-flash is the current free-tier flash
+// model. Override via GOOGLE_AI_MODEL env var if Google rotates again.
+const DEFAULT_MODEL = process.env.GOOGLE_AI_MODEL || 'gemini-2.5-flash';
 const HEAD_CHARS = 500; // amount of prompt/response stored in audit log
 
 export interface AiCompleteOptions {
