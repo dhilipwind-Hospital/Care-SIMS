@@ -159,8 +159,10 @@ BEGIN
       (gen_random_uuid()::text, v_lab_id, 'BC',   'Blood Culture',        'MICROBIOLOGY', 'STAT', 'COMPLETED');
 
     v_result_id := gen_random_uuid()::text;
+    -- NB: the Prisma field is validatedById but the actual column is
+    -- `validated_by` (per `@map("validated_by")` in the schema).
     INSERT INTO lab_results (
-      id, tenant_id, lab_order_id, location_id, validated_by_id, validated_at,
+      id, tenant_id, lab_order_id, location_id, validated_by, validated_at,
       is_critical, notes, status, created_at
     ) VALUES (
       v_result_id, v_tenant, v_lab_id, v_location, v_doctor, v_adm_date + INTERVAL '4 hours',
