@@ -121,16 +121,16 @@ export class DischargeSummaryService {
     const consultLines = consultations.map((c) => {
       const diag = (c.diagnoses || []).map((d) => `${d.icdCode || ''} ${d.description}`.trim()).join('; ');
       return `- ${c.startedAt?.toISOString().slice(0, 10)}: CC=${c.chiefComplaint || '—'}; Diagnoses=${diag || '—'}; Assessment=${c.assessment || '—'}; Plan=${c.plan || '—'}`;
-    }).join('\n') || '(no consultations recorded)';
+    }).join('\n') || '(no consultations recorded — use admission diagnosis and standard care plan)';
 
     const rxLines = prescriptions.flatMap((rx) =>
       (rx.items || []).map((it) => `- ${it.drugName}${it.strength ? ` ${it.strength}` : ''}: ${it.dosage || ''} ${it.frequency || ''}${it.durationDays ? ` x ${it.durationDays}d` : ''}${it.route ? ` ${it.route}` : ''}`),
-    ).join('\n') || '(no prescriptions recorded)';
+    ).join('\n') || '(no prescriptions recorded during stay)';
 
     const labLines = labOrders.map((lo) => {
       const tests = (lo.items || []).map((i) => i.testName).join(', ');
       return `- Order ${lo.orderNumber}: ${tests}`;
-    }).join('\n') || '(no lab orders recorded)';
+    }).join('\n') || '(no lab orders recorded during stay)';
 
     const systemInstruction = `You are a senior physician drafting a hospital discharge summary in clinical English used in India. Produce ONLY valid JSON matching this exact shape:
 {
@@ -144,12 +144,28 @@ export class DischargeSummaryService {
   "activityRestrictions": string,
   "dischargeMedications": [{ "drug": string, "dosage": string, "frequency": string, "duration": string }]
 }
-Be concise. Use only information present in the data below. If a field is unknown, write "To be reviewed by treating doctor". Do NOT invent diagnoses, drugs, or test results. The doctor will edit and approve before this is finalised.`;
+
+Rules:
+- If the admission record provides a working diagnosis, USE IT to populate diagnosisOnAdmission verbatim. Do NOT write "To be reviewed" for that field when a diagnosis exists.
+- If the admission record provides a discharge diagnosis, use it for diagnosisOnDischarge; otherwise infer it from the admission diagnosis (often the same condition, resolved) and prefix with "(Suggested) ".
+- For treatmentGiven / investigationSummary / dischargeMedications: ONLY use what's actually recorded in CONSULTATIONS / PRESCRIPTIONS / LAB ORDERS during the stay. If empty, write "Per admission record — verify with treating doctor before finalising." rather than the bare "To be reviewed" placeholder.
+- For followUpInstructions / dietaryAdvice / activityRestrictions: when no consult plan exists, draft a SAFE, GENERIC starting template based on the admission diagnosis (e.g. for gastroenteritis: "Oral rehydration as needed, soft bland diet, avoid spicy/oily food, return if vomiting or blood in stool"). Add a leading "(Draft) " prefix to mark it as a starting point.
+- conditionAtDischarge: prefer "STABLE" if a discharge date is set and no worsening is recorded, else "To be reviewed".
+- Do NOT invent test results, drug names, or specific dosages not present in the data.
+- The doctor will edit and approve before this is finalised.`;
 
     const prompt = `PATIENT: ${patientLine}
 ALLERGIES: ${allergies}
-ADMISSION DATE: ${admission.admissionDate.toISOString().slice(0, 10)}
-DISCHARGE DATE: ${(admission.dischargeDate || new Date()).toISOString().slice(0, 10)}
+
+ADMISSION RECORD (authoritative — use these fields directly):
+- Admission number: ${admission.admissionNumber}
+- Admission type: ${admission.admissionType || 'unspecified'}
+- Admission date: ${admission.admissionDate.toISOString().slice(0, 10)}
+- Discharge date: ${admission.dischargeDate ? admission.dischargeDate.toISOString().slice(0, 10) : '(not yet discharged)'}
+- Discharge type: ${admission.dischargeType || '(not specified)'}
+- Diagnosis on admission: ${admission.diagnosisOnAdmission || '(not recorded)'}
+- Discharge diagnosis: ${admission.dischargeDiagnosis || '(not recorded)'}
+- Package: ${admission.packageName || '(none)'}
 
 CONSULTATIONS DURING STAY:
 ${consultLines}
