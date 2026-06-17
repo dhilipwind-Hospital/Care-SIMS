@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { UserCheck, Bed, LogOut, Activity, Plus, X, Search, ArrowRightLeft, Eye, Printer } from 'lucide-react';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
@@ -22,6 +22,7 @@ const EMPTY_TRANSFER = { newBedId: '', newWardId: '', reason: '' };
 
 export default function AdmissionsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [admissions, setAdmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -108,17 +109,13 @@ export default function AdmissionsPage() {
   const active = admissions.filter(a => a.status === 'ACTIVE').length;
   const discharged = admissions.filter(a => a.status === 'DISCHARGED').length;
 
-  const [dischargeId, setDischargeId] = useState<string | null>(null);
-
-  const discharge = async (id: string) => {
-    setDischargeId(id);
-    try {
-      await api.patch(`/admissions/${id}/discharge`, { dischargeType: 'ROUTINE', dischargeSummary: '' });
-      toast.success('Patient discharged successfully');
-      fetchAdmissions();
-    } catch (err) {
-      toast.error('Failed to discharge patient');
-    } finally { setDischargeId(null); }
+  // Discharge always goes through the structured discharge-summary flow:
+  // the button navigates to the Discharge Summary page with this admission
+  // pre-selected. The summary's approve() (commit 52b0f27) handles the
+  // bed release + email + admission.status flip atomically — so there is
+  // exactly ONE path that ends in a discharged admission.
+  const goToDischargeSummary = (admissionId: string) => {
+    navigate(`/app/discharge-summary?admissionId=${admissionId}`);
   };
 
   // ---------- Patient search ----------
@@ -339,9 +336,10 @@ ${(r.nextOfKin || r.emergencyContact || r.patient?.emergencyContact) ? `<div sty
                             title="Transfer bed">
                             <ArrowRightLeft size={13} />
                           </button>
-                          <button onClick={() => discharge(a.id)} disabled={dischargeId === a.id}
-                            className="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 font-medium disabled:opacity-50">
-                            {dischargeId === a.id ? 'Discharging...' : 'Discharge'}
+                          <button onClick={() => goToDischargeSummary(a.id)}
+                            className="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 font-medium"
+                            title="Open discharge summary form">
+                            Discharge
                           </button>
                         </>
                       )}

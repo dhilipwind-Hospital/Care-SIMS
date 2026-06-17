@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { FileText, CheckCircle, Clock, AlertTriangle, Eye, Edit2, X, Printer, Sparkles, Loader2, CheckCircle2 } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
@@ -19,6 +20,23 @@ export default function DischargeSummaryPage() {
   });
   const [formError, setFormError] = useState('');
   const [admissionMeta, setAdmissionMeta] = useState<any>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Deep-link: AdmissionsPage's "Discharge" button navigates here with
+  // ?admissionId=X. Open the form pre-selected with that admission; the
+  // existing useEffect on form.admissionId then auto-fills patient + doctor
+  // + dates. Strip the query param after consuming so a refresh doesn't
+  // reopen the form unintentionally.
+  useEffect(() => {
+    const admissionIdFromUrl = searchParams.get('admissionId');
+    if (admissionIdFromUrl) {
+      setShowForm(true);
+      setForm(f => ({ ...f, admissionId: admissionIdFromUrl }));
+      searchParams.delete('admissionId');
+      setSearchParams(searchParams, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // When the admission picker changes, fetch the admission and auto-fill
   // patient/doctor + dates so the user cannot select a mismatched patient.
