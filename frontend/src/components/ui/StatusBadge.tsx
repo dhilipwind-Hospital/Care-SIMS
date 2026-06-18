@@ -152,11 +152,16 @@ const map: Record<string, string> = {
   MAINTENANCE: 'bg-amber-100 text-amber-700',
 };
 
-export default function StatusBadge({ status, label }: { status: string; label?: string }) {
-  const cls = map[status] || 'bg-gray-100 text-gray-600';
+export default function StatusBadge({ status, label }: { status?: string | null; label?: string }) {
+  // Guard against status being undefined/null — InsurancePage crashes the
+  // whole page when claims arrive without a status. Render a neutral
+  // "Unknown" pill instead of throwing on .replace() of undefined.
+  const raw = (label ?? status ?? 'UNKNOWN');
+  const display = String(raw).replace(/_/g, ' ');
+  const cls = map[status as string] || 'bg-gray-100 text-gray-600';
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cls}`} role="status" aria-label={`Status: ${(label || status).replace(/_/g, ' ')}`}>
-      {(label || status).replace(/_/g, ' ')}
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cls}`} role="status" aria-label={`Status: ${display}`}>
+      {display}
     </span>
   );
 }
