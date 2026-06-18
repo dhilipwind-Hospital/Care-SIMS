@@ -120,8 +120,12 @@ export default function PharmacyPage() {
         setRevenueToday(`₹${Number(rev).toLocaleString('en-IN')}`);
       }).catch((err) => { console.error('Failed to fetch pharmacy revenue:', err); });
       const all: any[] = rxRes.data.data || [];
+      // ISSUED is the canonical post-prescribe status used everywhere else in
+      // the codebase (MAR, prescriptions service). The legacy SENT_TO_PHARMACY
+      // / PENDING / READY / URGENT values are kept so older seed data still
+      // surfaces in the queue.
       const pending = all.filter((r: any) =>
-        ['SENT_TO_PHARMACY','PENDING','READY','URGENT'].includes(r.status)
+        ['ISSUED','SENT_TO_PHARMACY','PENDING','READY','URGENT'].includes(r.status)
       );
       setPrescriptions(pending);
       if (!selectedRx && pending.length > 0) setSelectedRx(pending[0]);
@@ -169,7 +173,7 @@ export default function PharmacyPage() {
   };
 
   const filteredRx = prescriptions.filter(rx => {
-    if (queueFilter === 'pending') return ['SENT_TO_PHARMACY','PENDING'].includes(rx.status);
+    if (queueFilter === 'pending') return ['ISSUED','SENT_TO_PHARMACY','PENDING'].includes(rx.status);
     if (queueFilter === 'ready')   return rx.status === 'READY';
     return true;
   });
