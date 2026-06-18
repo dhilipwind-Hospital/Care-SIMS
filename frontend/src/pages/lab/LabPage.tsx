@@ -13,12 +13,17 @@ import { formatTime, formatDateTime } from '../../lib/format';
 
 const PAGE_SIZE = 20;
 
+// Kept in sync with LabResultsPage.FLAG_OPTIONS so cross-page reports
+// and audit exports share the same flag vocabulary.
 const FLAG_OPTIONS = [
   { value: 'NORMAL', label: 'Normal' },
   { value: 'H', label: 'High' },
   { value: 'L', label: 'Low' },
   { value: 'HH', label: 'Critical High' },
   { value: 'LL', label: 'Critical Low' },
+  { value: 'CRITICAL_HIGH', label: 'CRITICAL HIGH' },
+  { value: 'CRITICAL_LOW', label: 'CRITICAL LOW' },
+  { value: 'PANIC', label: 'Panic' },
 ];
 
 export default function LabPage() {
@@ -41,7 +46,16 @@ export default function LabPage() {
     setLoading(true);
     try {
       const { data } = await api.get('/lab/orders', { params: { status: statusFilter || undefined, page, limit: PAGE_SIZE } });
-      setOrders(data.data || []);
+      // STAT first, then ROUTINE — within each, oldest first (FIFO).
+      const rows: any[] = data.data || [];
+      const prioRank: Record<string, number> = { STAT: 0, URGENT: 1, ROUTINE: 2 };
+      rows.sort((a, b) => {
+        const pa = prioRank[a.priority] ?? 9;
+        const pb = prioRank[b.priority] ?? 9;
+        if (pa !== pb) return pa - pb;
+        return new Date(a.orderedAt || a.createdAt).getTime() - new Date(b.orderedAt || b.createdAt).getTime();
+      });
+      setOrders(rows);
       setTotal(data.meta?.total || 0);
     } catch (err) { toast.error('Failed to load lab orders'); } finally { setLoading(false); }
   };
@@ -106,6 +120,33 @@ export default function LabPage() {
 
   const updateResultItem = (index: number, field: string, value: string) => {
     setResultItems(prev => prev.map((item, i) => i === index ? { ...item, [field]: value } : item));
+  };
+
+  // Validate every result row attached to the given order. Backend flips
+  // each LabResult.status -> VALIDATED and stamps validatedById / validatedAt.
+  // Used by the per-row "Validate" action on RESULTED orders.
+  const [validatingId, setValidatingId] = useState<string | null>(null);
+  const validateOrderResults = async (orderId: string) => {
+    setValidatingId(orderId);
+    try {
+      const { data } = await api.get('/lab/results', { params: { orderId } });
+      const rows: any[] = Array.isArray(data) ? data : (data?.data || []);
+      if (rows.length === 0) {
+        toast.error('No result rows found for this order yet — enter results first');
+        return;
+      }
+      for (const r of rows) {
+        if (r.status !== 'VALIDATED') {
+          await api.post(`/lab/results/${r.id}/validate`, {});
+        }
+      }
+      toast.success(`Validated ${rows.length} result row${rows.length > 1 ? 's' : ''}`);
+      fetchOrders();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to validate results');
+    } finally {
+      setValidatingId(null);
+    }
   };
 
   const handleSubmitResults = async () => {
@@ -349,6 +390,13 @@ export default function LabPage() {
                         <button onClick={() => updateStatus(o.id, 'RESULTED')} disabled={actionId === o.id}
                           className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium disabled:opacity-50">
                           {actionId === o.id ? 'Updating...' : 'Mark Resulted'}</button>
+                      )}
+                      {o.status === 'RESULTED' && (
+                        <button onClick={() => validateOrderResults(o.id)} disabled={validatingId === o.id}
+                          className="flex items-center gap-1 text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium disabled:opacity-50"
+                          title="Validate the results (digital sign-off)">
+                          {validatingId === o.id ? 'Validating…' : '✓ Validate'}
+                        </button>
                       )}
                       {['RESULTED', 'VALIDATED'].includes(o.status) && (
                         <button onClick={() => handlePrintLabReport(o)}

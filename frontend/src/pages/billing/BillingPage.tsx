@@ -655,7 +655,7 @@ export default function BillingPage() {
         {/* Invoice Table */}
         <div className="hms-card flex flex-col min-w-0">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-wrap gap-3">
-            <h3 className="font-semibold text-gray-800">Invoice Line Items</h3>
+            <h3 className="font-semibold text-gray-800">Invoices</h3>
             <div className="flex gap-2">
               <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Search invoice or patient…"
                 className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 w-full sm:w-48" />
@@ -670,7 +670,7 @@ export default function BillingPage() {
             <table className="w-full">
               <thead>
                 <tr>
-                  {['Item','Dept','Qty','Rate','Amount',''].map(h => (
+                  {['Invoice # / Patient','Type','Items','Subtotal','Total / Status',''].map(h => (
                     <th key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 py-3 text-left bg-gray-50">{h}</th>
                   ))}
                 </tr>

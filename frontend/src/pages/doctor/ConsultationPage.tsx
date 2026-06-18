@@ -159,6 +159,31 @@ export default function ConsultationPage() {
     ? new Date().getFullYear() - new Date(patient.dateOfBirth).getFullYear()
     : null;
 
+  // Stub-create the Consultation row if it doesn't exist yet, so lab orders
+  // and Rx written before "Complete Consultation" still link back to a real
+  // consultationId. Prevents the orphan-order bug. Returns the consult id.
+  const ensureConsultation = async (): Promise<string | null> => {
+    if (consultationId) return consultationId;
+    if (!patientId) {
+      toast.error('Pick a patient first');
+      return null;
+    }
+    try {
+      const { data } = await api.post('/consultations', {
+        patientId,
+        doctorId: user?.sub,
+        queueTokenId: tokenId || undefined,
+        chiefComplaint: form.chiefComplaint || undefined,
+      });
+      const id = data?.id || null;
+      if (id) setConsultationId(id);
+      return id;
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Could not start consultation');
+      return null;
+    }
+  };
+
   const save = async () => {
     if (!patientId) return;
     setSaving(true);
@@ -198,9 +223,12 @@ export default function ConsultationPage() {
     if (incomplete) { toast.error('Each test needs a name'); return; }
     setLabSubmitting(true);
     try {
+      // Auto-create the consultation row first so the lab order isn't orphaned.
+      const cid = await ensureConsultation();
+      if (!cid) { setLabSubmitting(false); return; }
       await api.post('/lab/orders', {
         patientId, doctorId: user?.sub,
-        consultationId: consultationId || undefined,
+        consultationId: cid,
         priority: labPriority, clinicalNotes: labNotes || undefined,
         tests: labTests.map(t => ({ testCode: t.testCode || t.testName, testName: t.testName, category: t.category, urgency: t.urgency })),
       });
@@ -213,7 +241,11 @@ export default function ConsultationPage() {
     } finally { setLabSubmitting(false); }
   };
 
-  const goToRx = () => navigate(`/app/doctor/prescriptions?patientId=${patientId}&consultationId=${consultationId || ''}`);
+  const goToRx = async () => {
+    // Make sure the consultation row exists so the prescription links cleanly.
+    const cid = await ensureConsultation();
+    navigate(`/app/doctor/prescriptions?patientId=${patientId}&consultationId=${cid || ''}`);
+  };
   // Admit: AdmissionsPage has the actual admit form; passing patientId in the
   // URL lets it pre-fill (wire-up added in same change-set as this comment).
   const goToAdmit = () => navigate(`/app/nurse/admissions?admit=1&patientId=${patientId || ''}`);

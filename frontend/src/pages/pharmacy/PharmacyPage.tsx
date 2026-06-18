@@ -63,7 +63,7 @@ export default function PharmacyPage() {
   };
 
   const handlePrintDispense = (r: any) => {
-    const meds: any[] = r.medications || [];
+    const meds: any[] = r.items || r.medications || [];
     const total = r.totalAmount || meds.reduce((s: number, m: any) => s + ((m.pricePerUnit || 0) * (m.quantity || 1)), 0);
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pharmacy Dispense Record</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111;font-size:13px;}h1,h2{margin:0;}table{width:100%;border-collapse:collapse;}td,th{padding:7px 10px;border:1px solid #ddd;}th{background:#f3f4f6;font-weight:600;text-align:left;}@media print{body{padding:20px;}}</style></head><body>
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
@@ -80,7 +80,7 @@ export default function PharmacyPage() {
     <table style="margin-bottom:16px;">
       <thead><tr><th style="width:30px;">#</th><th>Drug Name</th><th>Generic</th><th>Strength</th><th>Form</th><th>Qty</th><th>Days</th><th>Instructions</th></tr></thead>
       <tbody>
-        ${meds.length ? meds.map((m: any, i: number) => `<tr><td>${i+1}</td><td>${m.medicationName || m.brandName || m.name || '—'}</td><td>${m.genericName || '—'}</td><td>${m.dosage || m.strength || '—'}</td><td>${m.dosageForm || m.form || '—'}</td><td>${m.quantity || '—'}</td><td>${m.duration || '—'}</td><td>${m.instructions || m.frequency || '—'}</td></tr>`).join('') : `<tr><td colspan="8" style="text-align:center;color:#888;">No medications</td></tr>`}
+        ${meds.length ? meds.map((m: any, i: number) => `<tr><td>${i+1}</td><td>${m.drugName || m.medicationName || m.brandName || m.name || '—'}</td><td>${m.genericName || '—'}</td><td>${m.dosage || m.strength || '—'}</td><td>${m.dosageForm || m.form || '—'}</td><td>${m.quantity || '—'}</td><td>${m.durationDays ? m.durationDays + ' d' : (m.duration || '—')}</td><td>${m.instructions || m.frequency || '—'}</td></tr>`).join('') : `<tr><td colspan="8" style="text-align:center;color:#888;">No medications</td></tr>`}
       </tbody>
     </table>
     <div style="font-weight:700;margin-bottom:8px;color:#0F766E;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Pharmacist Counselling</div>
@@ -174,9 +174,11 @@ export default function PharmacyPage() {
     return true;
   });
 
-  // Prescription model exposes `items`, not `medications`. Coalesce so we
-  // never call .toLocaleString() on undefined.
-  const totalAmount: number = (selectedRx?.items || selectedRx?.medications || []).reduce(
+  // Prescription model exposes `items`. Helper coalesces with the legacy
+  // `medications` shape so older cached responses still render. Use rxItems(rx)
+  // everywhere the UI reads the line array.
+  const rxItems = (rx: any): any[] => (rx?.items || rx?.medications || []) as any[];
+  const totalAmount: number = rxItems(selectedRx).reduce(
     (sum: number, m: any) => sum + (Number(m.pricePerUnit || m.unitPrice || 0)) * (Number(m.quantity || 1)),
     0,
   );
@@ -280,7 +282,7 @@ export default function PharmacyPage() {
                         {rx.doctor ? `Dr. ${rx.doctor.firstName} ${rx.doctor.lastName?.[0] || ''}.` : '—'}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">
-                        {rx.medications?.length || 1}
+                        {rxItems(rx).length || 1}
                       </td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${
@@ -350,12 +352,13 @@ export default function PharmacyPage() {
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Prescribed Medications</p>
-                      <span className="text-xs text-gray-400">{selectedRx.medications?.length || 0} items</span>
+                      <span className="text-xs text-gray-400">{rxItems(selectedRx).length} items</span>
                     </div>
-                    {selectedRx.medications?.length > 0 ? (
+                    {rxItems(selectedRx).length > 0 ? (
                       <div className="space-y-2">
-                        {selectedRx.medications.map((med: any, i: number) => {
-                          const drug = drugs.find(d => d.id === med.drugId || d.genericName?.toLowerCase() === med.medicationName?.toLowerCase());
+                        {rxItems(selectedRx).map((med: any, i: number) => {
+                          const medName = med.drugName || med.medicationName || med.name || `Med ${i + 1}`;
+                          const drug = drugs.find(d => d.id === med.drugId || d.genericName?.toLowerCase() === medName.toLowerCase() || d.name?.toLowerCase() === medName.toLowerCase());
                           const stock = drug?.batches?.reduce((s: number, b: any) => s + b.quantityInStock, 0) || 0;
                           const stockBadge = !drug
                             ? 'bg-yellow-100 text-yellow-700'
@@ -364,15 +367,16 @@ export default function PharmacyPage() {
                               : stock < 20
                                 ? 'bg-amber-100 text-amber-700'
                                 : 'bg-green-100 text-green-700';
-                          const stockLabel = !drug ? 'No Stock' : stock === 0 ? 'Out' : stock < 20 ? 'Low Stock' : 'In Stock';
+                          const stockLabel = !drug ? 'Unknown' : stock === 0 ? 'Out' : stock < 20 ? 'Low Stock' : 'In Stock';
+                          const durationLabel = med.durationDays ? `${med.durationDays} d` : (med.duration || null);
                           return (
                             <div key={i} className="p-3 rounded-lg bg-gray-50 border border-gray-100">
                               <div className="flex items-start justify-between gap-2">
-                                <p className="text-sm font-semibold text-gray-900">{med.medicationName || med.name || `Med ${i+1}`}</p>
+                                <p className="text-sm font-semibold text-gray-900">{medName}</p>
                                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${stockBadge}`}>{stockLabel}</span>
                               </div>
                               <p className="text-xs text-gray-500 mt-0.5">
-                                {[med.dosage, med.frequency, med.duration].filter(Boolean).join(' · ')}
+                                {[med.dosage || med.strength, med.frequency, durationLabel].filter(Boolean).join(' · ')}
                               </p>
                               {med.instructions && (
                                 <p className="text-xs text-gray-400 mt-0.5">{med.instructions}</p>
