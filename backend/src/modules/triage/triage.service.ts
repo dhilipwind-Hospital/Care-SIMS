@@ -2,6 +2,24 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { PrismaService } from '../../database/prisma.service';
 import { WsGateway } from '../ws-gateway/ws-gateway.gateway';
 import { AiService } from '../ai/ai.service';
+import { sendEmail } from '../../common/utils/mailer';
+
+// Same shell as admissions/discharge-summary — kept inline to avoid a shared
+// dependency.
+function emailTemplate(title: string, body: string, orgName?: string): string {
+  return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+  <div style="background:linear-gradient(135deg,#0F766E,#14B8A6);padding:20px;border-radius:12px 12px 0 0;">
+    <h1 style="color:white;margin:0;font-size:20px;">${orgName || 'Ayphen HMS'}</h1>
+  </div>
+  <div style="padding:24px;background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
+    <h2 style="color:#1f2937;margin:0 0 16px;">${title}</h2>
+    <p style="color:#4b5563;line-height:1.6;">${body}</p>
+  </div>
+  <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:16px;">
+    This is an automated message from ${orgName || 'Ayphen HMS'}. Do not reply.
+  </p>
+</div>`;
+}
 
 @Injectable()
 export class TriageService {
@@ -152,7 +170,85 @@ export class TriageService {
     if (result.queueTokenChanged) {
       this.ws.emitToTenant(tenantId, 'queue:updated', { action: 'triage_completed', patientId: dto.patientId });
     }
+
+    // Fire-and-forget email notifications. RED/ORANGE/YELLOW triages page the
+    // assigned doctor with vitals + chief complaint. GREEN/ROUTINE stays silent
+    // so the doctor inbox doesn't drown in walk-ins. Patient gets an info-only
+    // confirmation if they have an email on file.
+    this.sendTriageEmails(tenantId, dto, vitalsOnArrival).catch((err) => {
+      this.logger.error(`Triage email dispatch failed: ${err?.message || err}`);
+    });
+
     return result.triage;
+  }
+
+  // Compose + send doctor alert + patient confirmation emails. Non-blocking.
+  private async sendTriageEmails(tenantId: string, dto: any, vitals: any): Promise<void> {
+    const level = (dto.triageLevel || 'GREEN').toUpperCase();
+    // Skip routine — doctor sees these via the queue, no need to email.
+    if (!['RED', 'ORANGE', 'YELLOW'].includes(level)) return;
+
+    const [patient, doctor, tenant] = await Promise.all([
+      this.prisma.patient.findUnique({
+        where: { id: dto.patientId },
+        select: { firstName: true, lastName: true, patientId: true, email: true },
+      }),
+      dto.assignedDoctorId
+        ? this.prisma.doctorRegistry.findUnique({
+            where: { id: dto.assignedDoctorId },
+            select: { firstName: true, lastName: true, email: true, pgSpecialization: true },
+          })
+        : null,
+      this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { tradeName: true, legalName: true },
+      }),
+    ]);
+
+    const orgName = tenant?.tradeName || tenant?.legalName || 'Hospital';
+    const patientName = `${patient?.firstName || ''} ${patient?.lastName || ''}`.trim() || '(unnamed)';
+    const mrn = patient?.patientId || '—';
+
+    const badge =
+      level === 'RED'    ? '🚨 RED — IMMEDIATE' :
+      level === 'ORANGE' ? '🟠 ORANGE — VERY URGENT' :
+                           '🟡 YELLOW — URGENT';
+
+    const v = vitals || {};
+    const vitalsRows: string[] = [];
+    if (v.systolicBp || v.diastolicBp) vitalsRows.push(`<li><strong>BP:</strong> ${v.systolicBp || '?'}/${v.diastolicBp || '?'} mmHg</li>`);
+    if (v.heartRate)      vitalsRows.push(`<li><strong>HR:</strong> ${v.heartRate} bpm</li>`);
+    if (v.temperatureC)   vitalsRows.push(`<li><strong>Temp:</strong> ${v.temperatureC} °C</li>`);
+    if (v.spo2)           vitalsRows.push(`<li><strong>SpO₂:</strong> ${v.spo2}%</li>`);
+    if (v.respiratoryRate) vitalsRows.push(`<li><strong>RR:</strong> ${v.respiratoryRate}/min</li>`);
+    if (dto.painScore !== undefined && dto.painScore !== null) vitalsRows.push(`<li><strong>Pain:</strong> ${dto.painScore}/10</li>`);
+    const vitalsBlock = vitalsRows.length
+      ? `<p><strong>Vitals on arrival:</strong></p><ul style="line-height:1.7;">${vitalsRows.join('')}</ul>`
+      : '';
+
+    // ── Doctor alert ──
+    if (doctor?.email) {
+      const subject = `${badge} Triage waiting — ${patientName} — ${orgName}`;
+      const body = `Dr ${doctor.firstName || ''} ${doctor.lastName || ''},<br/><br/>
+A patient has been triaged as <strong>${badge}</strong> and is awaiting your review.<br/><br/>
+<strong>Patient:</strong> ${patientName} (MRN ${mrn})<br/>
+<strong>Chief Complaint:</strong> ${dto.chiefComplaint || '—'}<br/>
+${vitalsBlock}
+<br/>Please attend to this patient promptly.`;
+      sendEmail(doctor.email, subject, emailTemplate(`Triage Alert — ${badge}`, body, orgName))
+        .catch((err) => this.logger.error(`Triage doctor alert email failed: ${err?.message || err}`));
+    }
+
+    // ── Patient confirmation (informational) ──
+    if (patient?.email) {
+      const body = `Dear ${patient.firstName || ''},<br/><br/>
+Your triage assessment has been recorded at <strong>${orgName}</strong>.<br/><br/>
+<strong>Chief Complaint:</strong> ${dto.chiefComplaint || '—'}<br/>
+<strong>Priority Level:</strong> ${badge}<br/><br/>
+A doctor will see you shortly. Please remain in the waiting area and inform a staff member if your condition worsens.`;
+      sendEmail(patient.email, `Triage Recorded — ${orgName}`, emailTemplate('Triage Recorded', body, orgName))
+        .catch((err) => this.logger.error(`Triage patient confirm email failed: ${err?.message || err}`));
+    }
   }
 
   async getByToken(tenantId: string, tokenId: string) {
