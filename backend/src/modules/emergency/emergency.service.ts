@@ -1,21 +1,39 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { WsGateway } from '../ws-gateway/ws-gateway.gateway';
 import { generateSequentialId } from '../../common/utils/id-generator';
+import { sendEmail } from '../../common/utils/mailer';
+
+// Same shell as triage/admissions — kept inline to avoid a shared dependency.
+function emailTemplate(title: string, body: string, orgName?: string): string {
+  return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+  <div style="background:linear-gradient(135deg,#0F766E,#14B8A6);padding:20px;border-radius:12px 12px 0 0;">
+    <h1 style="color:white;margin:0;font-size:20px;">${orgName || 'Ayphen HMS'}</h1>
+  </div>
+  <div style="padding:24px;background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
+    <h2 style="color:#1f2937;margin:0 0 16px;">${title}</h2>
+    <p style="color:#4b5563;line-height:1.6;">${body}</p>
+  </div>
+  <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:16px;">
+    This is an automated message from ${orgName || 'Ayphen HMS'}. Do not reply.
+  </p>
+</div>`;
+}
 
 @Injectable()
 export class EmergencyService {
+  private readonly logger = new Logger(EmergencyService.name);
   constructor(private prisma: PrismaService, private ws: WsGateway) {}
 
   async register(tenantId: string, dto: any, createdById: string) {
-    return generateSequentialId(this.prisma, {
+    const visit = await generateSequentialId(this.prisma, {
       table: 'EmergencyVisit',
       idColumn: 'visitNumber',
       prefix: `ED-${new Date().getFullYear()}-`,
       tenantId,
       padLength: 5,
       callback: async (tx, visitNumber) => {
-        const visit = await tx.emergencyVisit.create({
+        const created = await tx.emergencyVisit.create({
           data: {
             tenantId, visitNumber, locationId: dto.locationId, patientId: dto.patientId,
             triageCategory: dto.triageCategory || 'GREEN',
@@ -34,10 +52,75 @@ export class EmergencyService {
           },
           include: { patient: { select: { firstName: true, lastName: true, patientId: true, gender: true, ageYears: true } } },
         });
-        this.ws.emitToTenant(tenantId, 'ed:new-patient', { visit });
-        return visit;
+        this.ws.emitToTenant(tenantId, 'ed:new-patient', { visit: created });
+        return created;
       },
     });
+
+    // Fire-and-forget patient confirmation email with visit number, triage
+    // category, and next-steps. Non-blocking — registration itself must never
+    // fail because SMTP is down.
+    this.sendEmergencyEmails(tenantId, visit).catch((err) => {
+      this.logger.error(`Emergency registration email dispatch failed: ${err?.message || err}`);
+    });
+
+    return visit;
+  }
+
+  // Compose + send patient confirmation email for a new ED registration.
+  // Non-blocking. Skips silently if the patient has no email on file.
+  private async sendEmergencyEmails(tenantId: string, visit: any): Promise<void> {
+    const [patient, doctor, tenant] = await Promise.all([
+      this.prisma.patient.findUnique({
+        where: { id: visit.patientId },
+        select: { firstName: true, lastName: true, patientId: true, email: true },
+      }),
+      visit.assignedDoctorId
+        ? this.prisma.doctorRegistry.findUnique({
+            where: { id: visit.assignedDoctorId },
+            select: { firstName: true, lastName: true, pgSpecialization: true },
+          })
+        : null,
+      this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { tradeName: true, legalName: true },
+      }),
+    ]);
+
+    const orgName = tenant?.tradeName || tenant?.legalName || 'Hospital';
+    const patientName = `${patient?.firstName || ''} ${patient?.lastName || ''}`.trim() || '(unnamed)';
+    const triage = (visit.triageCategory || 'GREEN').toUpperCase();
+
+    const badge =
+      triage === 'RED'    ? '🚨 RED — IMMEDIATE'      :
+      triage === 'YELLOW' ? '🟡 YELLOW — URGENT'      :
+      triage === 'BLACK'  ? '⚫ BLACK — NON-URGENT'   :
+                            '🟢 GREEN — STABLE';
+
+    const nextSteps =
+      triage === 'RED'
+        ? 'You are being seen immediately by our emergency team. Please stay with the staff member assisting you.'
+        : triage === 'YELLOW'
+        ? 'A doctor will see you shortly. Please remain in the waiting area and alert a staff member if your condition worsens.'
+        : 'Please remain in the waiting area. You will be called for assessment in turn. Inform a nurse if your symptoms change.';
+
+    // Patient confirmation — only if we have an email on file.
+    if (patient?.email) {
+      const subject = `🏥 ED Registration Confirmed — ${patientName} — ${orgName}`;
+      const body = `Dear ${patient.firstName || ''},<br/><br/>
+Your visit to the Emergency Department at <strong>${orgName}</strong> has been registered.<br/><br/>
+<strong>Visit Number:</strong> ${visit.visitNumber}<br/>
+<strong>Patient:</strong> ${patientName} (MRN ${patient.patientId || '—'})<br/>
+<strong>Chief Complaint:</strong> ${visit.chiefComplaint || '—'}<br/>
+<strong>Triage Category:</strong> ${badge}<br/>
+${doctor ? `<strong>Assigned Doctor:</strong> Dr ${doctor.firstName || ''} ${doctor.lastName || ''}${doctor.pgSpecialization ? ` (${doctor.pgSpecialization})` : ''}<br/>` : ''}
+<br/>
+<strong>What to do next:</strong><br/>
+${nextSteps}<br/><br/>
+Please keep your visit number handy for any follow-up.`;
+      sendEmail(patient.email, subject, emailTemplate('Emergency Registration Confirmed', body, orgName))
+        .catch((err) => this.logger.error(`Emergency patient confirm email failed: ${err?.message || err}`));
+    }
   }
 
   async getActive(tenantId: string, locationId?: string) {
