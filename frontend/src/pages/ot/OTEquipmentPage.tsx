@@ -170,7 +170,7 @@ export default function OTEquipmentPage() {
                   staff.map(s => (
                     <tr key={s.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">{s.firstName} {s.lastName}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{s.role}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{s.role?.name || s.role || '—'}</td>
                       <td className="px-4 py-3 text-sm text-gray-600">{s.assignedOT || '—'}</td>
                       <td className="px-4 py-3"><span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">{s.status || 'ON_DUTY'}</span></td>
                     </tr>
