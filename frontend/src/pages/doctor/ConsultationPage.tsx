@@ -188,29 +188,31 @@ export default function ConsultationPage() {
     if (!patientId) return;
     setSaving(true);
     try {
-      const { data } = await api.post('/consultations', {
-        patientId,
-        doctorId: user?.sub,
-        queueTokenId: tokenId || undefined,
-        chiefComplaint: form.chiefComplaint || undefined,
-      });
-      const id = data?.id;
+      // Reuse the consultation already created for any lab order / Rx written
+      // during the visit, or create one now — avoids duplicate draft rows.
+      const id = await ensureConsultation();
+      if (!id) return;
       const history = [form.historyOfPresentIllness, form.pastMedicalHistory].filter(Boolean).join('\n\n');
-      const assessment = [form.diagnosis, form.diagnosisCode].filter(Boolean).join(' ');
       const plan = [form.plan, form.followUpDays && `Follow-up in ${form.followUpDays} day(s)`, form.notes].filter(Boolean).join('\n\n');
-      const soap: Record<string, string> = {};
-      if (history) soap.historySubjective = history;
-      if (form.examination) soap.examinationFindings = form.examination;
-      if (assessment) soap.assessment = assessment;
-      if (plan) soap.plan = plan;
-      if (id && Object.keys(soap).length) {
-        await api.put(`/consultations/${id}`, soap);
-      }
-      setConsultationId(id || null);
+      // Persist the diagnosis as a structured, ICD-coded record (not just free
+      // text) so it lands in consultation_diagnosis for coding/reports/claims.
+      const diagnoses = (form.diagnosis || form.diagnosisCode)
+        ? [{ icdCode: form.diagnosisCode || '', description: form.diagnosis || form.diagnosisCode, type: 'PRIMARY' }]
+        : [];
+      const payload: Record<string, any> = {};
+      if (history) payload.historySubjective = history;
+      if (form.examination) payload.examinationFindings = form.examination;
+      if (form.diagnosis) payload.assessment = form.diagnosis;
+      if (plan) payload.plan = plan;
+      if (diagnoses.length) payload.diagnoses = diagnoses;
+      // Finalize the encounter: this flips status DRAFT -> COMPLETED, stores the
+      // diagnoses, and triggers the consultation-fee invoice + visit-summary email.
+      await api.patch(`/consultations/${id}/complete`, payload);
+      setConsultationId(id);
       setCompleted(true);
-      toast.success('Consultation saved');
+      toast.success('Consultation completed');
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to save consultation');
+      toast.error(err.response?.data?.message || 'Failed to complete consultation');
     } finally { setSaving(false); }
   };
 

@@ -338,8 +338,8 @@ ${(r.nextOfKin || r.emergencyContact || r.patient?.emergencyContact) ? `<div sty
                           </button>
                           <button onClick={() => goToDischargeSummary(a.id)}
                             className="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 font-medium"
-                            title="Open discharge summary form">
-                            Discharge
+                            title="Opens the discharge summary — the patient is discharged once it is approved">
+                            Prepare Discharge…
                           </button>
                         </>
                       )}
