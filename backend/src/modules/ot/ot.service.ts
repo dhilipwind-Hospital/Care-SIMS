@@ -144,7 +144,24 @@ export class OTService {
   }
 
   async createRoom(tenantId: string, dto: any) {
-    return this.prisma.oTRoom.create({ data: { tenantId, locationId: dto.locationId, name: dto.name, type: dto.type, capacityClass: dto.capacityClass } });
+    // OTRoom has @@unique([tenantId, locationId, name]); a clashing name would
+    // otherwise surface a Prisma P2002 as a raw 500. Give a friendly 400 instead.
+    const existing = await this.prisma.oTRoom.findFirst({
+      where: { tenantId, locationId: dto.locationId, name: dto.name },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new BadRequestException(`An OT room named "${dto.name}" already exists at this location.`);
+    }
+    try {
+      return await this.prisma.oTRoom.create({ data: { tenantId, locationId: dto.locationId, name: dto.name, type: dto.type, capacityClass: dto.capacityClass } });
+    } catch (err: any) {
+      // Safety net for the race between the check above and the insert.
+      if (err?.code === 'P2002') {
+        throw new BadRequestException(`An OT room named "${dto.name}" already exists at this location.`);
+      }
+      throw err;
+    }
   }
 
   async getEquipment(tenantId: string, query?: any) {
