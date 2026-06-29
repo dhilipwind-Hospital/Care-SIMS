@@ -12,7 +12,7 @@ export class ReferralService {
       prefix: 'REF-',
       tenantId,
       callback: async (tx, referralNumber) => {
-        return tx.referral.create({ data: { tenantId, referralNumber, locationId: dto.locationId, patientId: dto.patientId, referringDoctorId: dto.referringDoctorId, referringDoctorName: dto.referringDoctorName, referredToDoctorId: dto.referredToDoctorId, referredToDoctorName: dto.referredToDoctorName, referredToDeptId: dto.referredToDeptId, referredToDeptName: dto.referredToDeptName, referralType: dto.referralType||'INTERNAL', urgency: dto.urgency||'ROUTINE', reason: dto.reason, clinicalSummary: dto.clinicalSummary, diagnosis: dto.diagnosis, status: 'PENDING' } });
+        return tx.referral.create({ data: { tenantId, referralNumber, locationId: dto.locationId, patientId: dto.patientId, referringDoctorId: dto.referringDoctorId || '', referringDoctorName: dto.referringDoctorName || '', referredToDoctorId: dto.referredToDoctorId, referredToDoctorName: dto.referredToDoctorName, referredToDeptId: dto.referredToDeptId, referredToDeptName: dto.referredToDeptName, referralType: dto.referralType||'INTERNAL', urgency: dto.urgency||'ROUTINE', reason: dto.reason, clinicalSummary: dto.clinicalSummary, diagnosis: dto.diagnosis, status: 'PENDING' } });
       },
     });
   }

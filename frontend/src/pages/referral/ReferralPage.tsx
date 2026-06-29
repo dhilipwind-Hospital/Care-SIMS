@@ -123,7 +123,7 @@ export default function ReferralPage() {
         await api.patch(`/referrals/${editingId}`, payload);
         toast.success('Referral updated successfully');
       } else {
-        await api.post('/referrals', { ...payload, referringDoctorId: user?.sub });
+        await api.post('/referrals', { ...payload, referringDoctorId: user?.sub, referringDoctorName: [user?.firstName, user?.lastName].filter(Boolean).join(' ') });
         toast.success('Referral created successfully');
       }
       resetForm();
