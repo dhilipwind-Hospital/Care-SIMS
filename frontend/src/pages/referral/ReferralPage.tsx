@@ -11,7 +11,7 @@ import Pagination from '../../components/ui/Pagination';
 import { SkeletonTableRow, SkeletonKpiRow } from '../../components/ui/Skeleton';
 import { useAuth } from '../../context/AuthContext';
 
-const emptyForm = { patientId: '', toDepartmentId: '', toDoctorId: '', reason: '', urgency: 'ROUTINE', clinicalNotes: '' };
+const emptyForm = { patientId: '', toDepartmentId: '', toDepartmentName: '', toDoctorId: '', toDoctorName: '', reason: '', urgency: 'ROUTINE', clinicalNotes: '' };
 
 export default function ReferralPage() {
   const { user } = useAuth();
@@ -89,11 +89,13 @@ export default function ReferralPage() {
   const editRecord = (r: any) => {
     setForm({
       patientId: r.patientId || '',
-      toDepartmentId: r.toDepartmentId || '',
-      toDoctorId: r.toDoctorId || '',
+      toDepartmentId: r.referredToDeptId || '',
+      toDepartmentName: r.referredToDeptName || '',
+      toDoctorId: r.referredToDoctorId || '',
+      toDoctorName: r.referredToDoctorName || '',
       reason: r.reason || '',
       urgency: r.urgency || 'ROUTINE',
-      clinicalNotes: r.clinicalNotes || '',
+      clinicalNotes: r.clinicalSummary || '',
     });
     setEditingId(r.id);
     setShowForm(true);
@@ -105,12 +107,23 @@ export default function ReferralPage() {
     if (!form.toDepartmentId) { setFormError('Please select a department'); return; }
     if (!form.reason.trim()) { setFormError('Reason is required'); return; }
     setFormError('');
+    // Map UI field names to the backend's referral schema (referredToDept*/clinicalSummary).
+    const payload: Record<string, any> = {
+      patientId: form.patientId,
+      referredToDeptId: form.toDepartmentId || undefined,
+      referredToDeptName: form.toDepartmentName || undefined,
+      referredToDoctorId: form.toDoctorId || undefined,
+      referredToDoctorName: form.toDoctorName || undefined,
+      reason: form.reason,
+      urgency: form.urgency,
+      clinicalSummary: form.clinicalNotes || undefined,
+    };
     try {
       if (editingId) {
-        await api.patch(`/referrals/${editingId}`, form);
+        await api.patch(`/referrals/${editingId}`, payload);
         toast.success('Referral updated successfully');
       } else {
-        await api.post('/referrals', { ...form, referringDoctorId: user?.sub });
+        await api.post('/referrals', { ...payload, referringDoctorId: user?.sub });
         toast.success('Referral created successfully');
       }
       resetForm();
@@ -165,21 +178,21 @@ export default function ReferralPage() {
             />
             <SearchableSelect
               value={form.toDepartmentId}
-              onChange={(id) => setForm({ ...form, toDepartmentId: id })}
+              onChange={(id, opt) => setForm({ ...form, toDepartmentId: id, toDepartmentName: opt?.label || '' })}
               placeholder="Select department…"
               label="To Department"
               required
-              endpoint="/departments"
+              endpoint="/org/departments"
               mapOption={(d: any) => ({ id: d.id, label: d.name, sub: d.code })}
             />
             <SearchableSelect
               value={form.toDoctorId}
-              onChange={(id) => setForm({ ...form, toDoctorId: id })}
+              onChange={(id, opt) => setForm({ ...form, toDoctorId: id, toDoctorName: opt?.label || '' })}
               placeholder="Select doctor…"
               label="To Doctor"
-              endpoint="/doctor-registry"
+              endpoint="/doctors"
               searchParam="q"
-              mapOption={(d: any) => ({ id: d.id, label: `Dr. ${d.firstName} ${d.lastName}`, sub: d.specialization })}
+              mapOption={(d: any) => ({ id: d.id, label: `Dr. ${d.firstName} ${d.lastName}`, sub: d.pgSpecialization || d.specialization })}
             />
             <select className="hms-input" value={form.urgency} onChange={e => setForm({ ...form, urgency: e.target.value })}><option value="ROUTINE">Routine</option><option value="URGENT">Urgent</option><option value="EMERGENCY">Emergency</option></select>
             <input className="hms-input col-span-2" placeholder="Reason *" value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} />
@@ -194,7 +207,7 @@ export default function ReferralPage() {
       ) : referrals.slice((page - 1) * 20, page * 20).map(r => (
         <tr key={r.id} className={`border-b hover:bg-gray-50 ${r.urgency === 'EMERGENCY' ? 'bg-red-50/40' : ''}`}>
           <td className="p-3 font-medium text-teal-700">{r.referralNumber}</td>
-          <td className="p-3">{r.patientId}</td><td className="p-3">{r.toDepartmentId}</td>
+          <td className="p-3">{r.patientId}</td><td className="p-3">{r.referredToDeptName || r.referredToDeptId || '—'}</td>
           <td className="p-3 max-w-[150px] truncate">{r.reason}</td>
           <td className="p-3"><StatusBadge status={r.urgency || 'ROUTINE'} /></td>
           <td className="p-3"><StatusBadge status={r.status} /></td>

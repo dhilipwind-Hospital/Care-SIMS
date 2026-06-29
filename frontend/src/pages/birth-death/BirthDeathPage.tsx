@@ -96,9 +96,11 @@ export default function BirthDeathPage() {
     setSubmitting(true);
     try {
       const payload: any = { ...form };
-      if (payload.weightGrams) payload.weightGrams = Number(payload.weightGrams);
-      if (payload.apgarScore1min) payload.apgarScore1min = Number(payload.apgarScore1min);
-      if (payload.apgarScore5min) payload.apgarScore5min = Number(payload.apgarScore5min);
+      // Blank numerics must be OMITTED (undefined), not sent as "" — an empty string
+      // to an Int column 500s. undefined is dropped by JSON.stringify.
+      payload.weightGrams = payload.weightGrams ? Number(payload.weightGrams) : undefined;
+      payload.apgarScore1min = payload.apgarScore1min ? Number(payload.apgarScore1min) : undefined;
+      payload.apgarScore5min = payload.apgarScore5min ? Number(payload.apgarScore5min) : undefined;
       await api.post('/vital-records/births', payload);
       toast.success('Birth registered'); setShowForm(false); fetchData();
     } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); }
@@ -121,9 +123,9 @@ export default function BirthDeathPage() {
       const endpoint = tab === 'births' ? `/vital-records/births/${editRecord.id}` : `/vital-records/deaths/${editRecord.id}`;
       const payload: any = { ...editForm };
       if (tab === 'births') {
-        if (payload.weightGrams) payload.weightGrams = Number(payload.weightGrams);
-        if (payload.apgarScore1min) payload.apgarScore1min = Number(payload.apgarScore1min);
-        if (payload.apgarScore5min) payload.apgarScore5min = Number(payload.apgarScore5min);
+        payload.weightGrams = payload.weightGrams ? Number(payload.weightGrams) : undefined;
+        payload.apgarScore1min = payload.apgarScore1min ? Number(payload.apgarScore1min) : undefined;
+        payload.apgarScore5min = payload.apgarScore5min ? Number(payload.apgarScore5min) : undefined;
       }
       await api.patch(endpoint, payload);
       toast.success('Record updated'); setEditRecord(null); fetchData();

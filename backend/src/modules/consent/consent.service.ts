@@ -19,7 +19,9 @@ export class ConsentService {
         consentType: dto.consentType, procedureName: dto.procedureName, description: dto.description,
         risks: dto.risks, alternatives: dto.alternatives, consentGivenBy: dto.consentGivenBy,
         relationship: dto.relationship, witnessName: dto.witnessName, witnessId: dto.witnessId,
-        doctorId: dto.doctorId, doctorName: dto.doctorName, signatureUrl: dto.signatureUrl,
+        // doctorId/doctorName are NOT NULL columns; the form has no doctorId input and the
+        // api client strips empty *Id fields, so default to '' to avoid a Prisma 500.
+        doctorId: dto.doctorId || '', doctorName: dto.doctorName || '', signatureUrl: dto.signatureUrl,
       },
     });
   }
