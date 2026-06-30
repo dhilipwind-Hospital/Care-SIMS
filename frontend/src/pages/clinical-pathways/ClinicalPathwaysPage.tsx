@@ -7,6 +7,7 @@ import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import api from '../../lib/api';
 import { formatDate } from '../../lib/format';
 
@@ -25,6 +26,8 @@ export default function ClinicalPathwaysPage() {
   const [form, setForm] = useState<any>({
     name: '', diagnosis: '', icdCode: '', department: '', durationDays: '',
   });
+  const [showAssign, setShowAssign] = useState(false);
+  const [assignForm, setAssignForm] = useState<any>({ patientId: '', protocolId: '', notes: '' });
 
   const fetchData = async () => {
     setLoading(true);
@@ -57,6 +60,25 @@ export default function ClinicalPathwaysPage() {
       setForm({ name: '', diagnosis: '', icdCode: '', department: '', durationDays: '' });
       fetchData();
     } catch { toast.error('Failed to save'); }
+    finally { setSaving(false); }
+  };
+
+  const openAssign = async () => {
+    try { const r = await api.get('/clinical-pathways/protocols'); setProtocols(Array.isArray(r.data) ? r.data : (r.data.data || [])); } catch { /* keep existing */ }
+    setShowAssign(true);
+  };
+
+  const handleAssign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignForm.patientId || !assignForm.protocolId) { toast.error('Patient and protocol are required'); return; }
+    setSaving(true);
+    try {
+      await api.post('/clinical-pathways/pathways', assignForm);
+      toast.success('Pathway assigned');
+      setShowAssign(false);
+      setAssignForm({ patientId: '', protocolId: '', notes: '' });
+      fetchData();
+    } catch (err: any) { toast.error(err?.response?.data?.message || 'Failed to assign pathway'); }
     finally { setSaving(false); }
   };
 
@@ -121,6 +143,11 @@ export default function ClinicalPathwaysPage() {
           {tab === 'protocols' && (
             <button onClick={() => setShowForm(true)} className="flex items-center gap-1 text-sm px-3 py-1.5 bg-teal-600 text-white rounded-md hover:bg-teal-700">
               <Plus size={14} /> New Protocol
+            </button>
+          )}
+          {tab === 'pathways' && (
+            <button onClick={openAssign} className="flex items-center gap-1 text-sm px-3 py-1.5 bg-teal-600 text-white rounded-md hover:bg-teal-700">
+              <Plus size={14} /> Assign Pathway
             </button>
           )}
         </div>
@@ -291,6 +318,41 @@ export default function ClinicalPathwaysPage() {
                 <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50">Cancel</button>
                 <button type="submit" disabled={saving} className="px-4 py-2 text-sm bg-teal-600 text-white rounded-md hover:bg-teal-700 disabled:opacity-50">
                   {saving ? 'Saving…' : 'Create Protocol'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showAssign && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-5 border-b">
+              <h3 className="font-semibold text-gray-800">Assign Pathway</h3>
+              <button onClick={() => setShowAssign(false)}><X size={18} className="text-gray-500" /></button>
+            </div>
+            <form onSubmit={handleAssign} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Patient *</label>
+                <SearchableSelect value={assignForm.patientId} onChange={(id) => setAssignForm({ ...assignForm, patientId: id })} placeholder="Search patient…" endpoint="/patients" searchParam="q" mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Care Protocol *</label>
+                <select value={assignForm.protocolId} onChange={e => setAssignForm({ ...assignForm, protocolId: e.target.value })} required className="hms-input">
+                  <option value="">Select a protocol…</option>
+                  {protocols.map((p: any) => <option key={p.id} value={p.id}>{p.name}{p.durationDays ? ` (${p.durationDays}d)` : ''}</option>)}
+                </select>
+                {protocols.length === 0 && <p className="text-xs text-amber-600 mt-1">No protocols yet — create one on the Protocols tab first.</p>}
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+                <textarea value={assignForm.notes} onChange={e => setAssignForm({ ...assignForm, notes: e.target.value })} rows={2} className="hms-input" placeholder="Optional notes" />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setShowAssign(false)} className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50">Cancel</button>
+                <button type="submit" disabled={saving} className="px-4 py-2 text-sm bg-teal-600 text-white rounded-md hover:bg-teal-700 disabled:opacity-50">
+                  {saving ? 'Assigning…' : 'Assign Pathway'}
                 </button>
               </div>
             </form>
