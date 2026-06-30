@@ -75,8 +75,8 @@ export class BloodBankService {
     if (status) where.status = status;
     return this.prisma.bloodTransfusion.findMany({ where, orderBy: { createdAt: 'desc' } });
   }
-  async orderTransfusion(tenantId: string, dto: any) {
-    return this.prisma.bloodTransfusion.create({ data: { tenantId, locationId: dto.locationId, patientId: dto.patientId, admissionId: dto.admissionId, bagNumber: dto.bagNumber, component: dto.component, bloodGroup: dto.bloodGroup, rhFactor: dto.rhFactor, volumeMl: dto.volumeMl, orderedById: dto.orderedById, status: 'ORDERED' } });
+  async orderTransfusion(tenantId: string, dto: any, userId?: string) {
+    return this.prisma.bloodTransfusion.create({ data: { tenantId, locationId: dto.locationId, patientId: dto.patientId, admissionId: dto.admissionId, bagNumber: dto.bagNumber, component: dto.component, bloodGroup: dto.bloodGroup, rhFactor: dto.rhFactor, volumeMl: dto.volumeMl, orderedById: dto.orderedById || userId || '', status: 'ORDERED' } });
   }
   async crossMatch(tenantId: string, id: string, userId: string) {
     return this.prisma.$transaction(async (tx) => {

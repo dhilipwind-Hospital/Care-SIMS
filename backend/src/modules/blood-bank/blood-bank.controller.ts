@@ -23,7 +23,7 @@ export class BloodBankController {
   @Get('inventory') inventory(@CurrentUser('tenantId') tid: string, @Query('bloodGroup') bg?: string, @Query('status') s?: string) { return this.svc.listInventory(tid, bg, s); }
   @Get('inventory/summary') summary(@CurrentUser('tenantId') tid: string) { return this.svc.inventorySummary(tid); }
   @Get('transfusions') listTransfusions(@CurrentUser('tenantId') tid: string, @Query('status') s?: string) { return this.svc.listTransfusions(tid, s); }
-  @Post('transfusions') orderTransfusion(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any) { return this.svc.orderTransfusion(tid, { ...body, locationId: body.locationId || lid }); }
+  @Post('transfusions') orderTransfusion(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @CurrentUser('sub') uid: string, @Body() body: any) { return this.svc.orderTransfusion(tid, { ...body, locationId: body.locationId || lid }, uid); }
   @Patch('transfusions/:id/crossmatch') crossmatch(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string, @Param('id') id: string) { return this.svc.crossMatch(tid, id, uid); }
   @Patch('transfusions/:id/administer') administer(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string, @Param('id') id: string, @Body() body: any) { return this.svc.administer(tid, id, uid, body); }
 }

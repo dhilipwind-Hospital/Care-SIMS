@@ -25,8 +25,8 @@ export class IcuService {
   async addBed(tenantId: string, dto: any) {
     return this.prisma.icuBed.create({
       data: {
-        tenantId, locationId: dto.locationId, wardId: dto.wardId, bedNumber: dto.bedNumber,
-        icuType: dto.icuType, hasVentilator: dto.hasVentilator || false,
+        tenantId, locationId: dto.locationId, wardId: dto.wardId || '', bedNumber: dto.bedNumber,
+        icuType: dto.icuType || dto.bedType || 'GENERAL_ICU', hasVentilator: dto.hasVentilator || false,
         hasMonitor: dto.hasMonitor ?? true, hasDialysis: dto.hasDialysis || false,
       },
     });
