@@ -6,8 +6,10 @@ export class ReceiveBatchDto {
   @IsUUID('4', { message: 'drugId must be a valid UUID' })
   drugId: string;
 
+  // Optional: the controller injects the caller's locationId from the JWT when omitted.
+  @IsOptional()
   @IsUUID('4', { message: 'locationId must be a valid UUID' })
-  locationId: string;
+  locationId?: string;
 
   @IsString()
   @IsNotEmpty({ message: 'Batch number is required' })
