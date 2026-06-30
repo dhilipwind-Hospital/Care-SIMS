@@ -15,7 +15,7 @@ export class AssetManagementService {
   async create(tenantId: string, dto: any) {
     return this.prisma.asset.create({
       data: {
-        tenantId, locationId: dto.locationId, assetCode: dto.assetCode, name: dto.name,
+        tenantId, locationId: dto.locationId || '', assetCode: dto.assetCode, name: dto.name,
         category: dto.category, brand: dto.brand, model: dto.model, serialNumber: dto.serialNumber,
         purchaseDate: dto.purchaseDate ? new Date(dto.purchaseDate) : undefined,
         purchaseCost: dto.purchaseCost, warrantyExpiry: dto.warrantyExpiry ? new Date(dto.warrantyExpiry) : undefined,

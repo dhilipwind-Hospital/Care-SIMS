@@ -19,7 +19,7 @@ export class StaffAttendanceService {
     const user = await this.prisma.tenantUser.findFirst({ where: { id: userId, tenantId }, select: { firstName: true, lastName: true, email: true } });
     const userName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'Unknown';
     return this.prisma.staffAttendance.create({
-      data: { tenantId, locationId: dto.locationId, userId, userName, departmentId: dto.departmentId, attendanceDate: today, shiftType: dto.shiftType || 'GENERAL', clockIn: new Date(), status: 'PRESENT' },
+      data: { tenantId, locationId: dto.locationId || '', userId, userName, departmentId: dto.departmentId, attendanceDate: today, shiftType: dto.shiftType || 'GENERAL', clockIn: new Date(), status: 'PRESENT' },
     });
   }
 
@@ -32,7 +32,7 @@ export class StaffAttendanceService {
 
   async markAttendance(tenantId: string, dto: any) {
     return this.prisma.staffAttendance.create({
-      data: { tenantId, locationId: dto.locationId, userId: dto.userId, userName: dto.userName, departmentId: dto.departmentId, attendanceDate: new Date(dto.attendanceDate), shiftType: dto.shiftType, status: dto.status || 'PRESENT', leaveType: dto.leaveType, leaveReason: dto.leaveReason, notes: dto.notes },
+      data: { tenantId, locationId: dto.locationId || '', userId: dto.userId, userName: dto.userName, departmentId: dto.departmentId, attendanceDate: new Date(dto.attendanceDate), shiftType: dto.shiftType, status: dto.status || 'PRESENT', leaveType: dto.leaveType, leaveReason: dto.leaveReason, notes: dto.notes },
     });
   }
 

@@ -5,7 +5,7 @@ import { PrismaService } from '../../database/prisma.service';
 export class AntimicrobialStewardshipService {
   constructor(private prisma: PrismaService) {}
 
-  async recordUsage(tenantId: string, dto: any) { return this.prisma.antibioticUsage.create({ data: { tenantId, patientId: dto.patientId, admissionId: dto.admissionId, drugName: dto.drugName, dose: dto.dose, route: dto.route, frequency: dto.frequency, indication: dto.indication, cultureOrdered: dto.cultureOrdered || false, isRestricted: dto.isRestricted || false, approvedById: dto.approvedById, startDate: new Date(dto.startDate), notes: dto.notes } }); }
+  async recordUsage(tenantId: string, dto: any) { return this.prisma.antibioticUsage.create({ data: { tenantId, patientId: dto.patientId, admissionId: dto.admissionId, drugName: dto.drugName, dose: dto.dose || '', route: dto.route, frequency: dto.frequency || '', indication: dto.indication, cultureOrdered: dto.cultureOrdered || false, isRestricted: dto.isRestricted || false, approvedById: dto.approvedById, startDate: dto.startDate ? new Date(dto.startDate) : new Date(), notes: dto.notes } }); }
 
   async getUsage(tenantId: string, query: any) { const { patientId, status, page = 1, limit = 20 } = query; const where: any = { tenantId }; if (patientId) where.patientId = patientId; if (status) where.status = status; const [data, total] = await Promise.all([this.prisma.antibioticUsage.findMany({ where, skip: (Number(page) - 1) * Number(limit), take: Number(limit), orderBy: { startDate: 'desc' } }), this.prisma.antibioticUsage.count({ where })]); return { data, meta: { total, page: Number(page), limit: Number(limit) } }; }
 

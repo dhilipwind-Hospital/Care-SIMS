@@ -21,7 +21,7 @@ export class MortuaryService {
       callback: async (tx, recordNumber) => {
         return tx.mortuaryRecord.create({
           data: {
-            tenantId, locationId: dto.locationId, recordNumber,
+            tenantId, locationId: dto.locationId || '', recordNumber,
             patientId: dto.patientId, admissionId: dto.admissionId, deceasedName: dto.deceasedName,
             age: dto.age, gender: dto.gender, dateOfDeath: new Date(dto.dateOfDeath), timeOfDeath: dto.timeOfDeath,
             causeOfDeath: dto.causeOfDeath, attendingDoctorId: dto.attendingDoctorId, pronouncedById: dto.pronouncedById,

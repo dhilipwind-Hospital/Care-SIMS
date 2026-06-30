@@ -17,7 +17,7 @@ export class InfectionControlService {
     const userName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'Unknown';
     return this.prisma.infectionControlRecord.create({
       data: {
-        tenantId, locationId: dto.locationId, recordType: dto.recordType,
+        tenantId, locationId: dto.locationId || '', recordType: dto.recordType,
         patientId: dto.patientId, admissionId: dto.admissionId, wardId: dto.wardId,
         organism: dto.organism, infectionSite: dto.infectionSite, infectionType: dto.infectionType,
         isolationType: dto.isolationType, onsetDate: dto.onsetDate ? new Date(dto.onsetDate) : undefined,

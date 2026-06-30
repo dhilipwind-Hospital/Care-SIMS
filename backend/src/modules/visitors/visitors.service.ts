@@ -22,7 +22,7 @@ export class VisitorsService {
     return this.prisma.visitor.create({
       data: {
         tenantId,
-        locationId: dto.locationId,
+        locationId: dto.locationId || '',
         patientId: dto.patientId,
         admissionId: dto.admissionId,
         visitorName: dto.visitorName,

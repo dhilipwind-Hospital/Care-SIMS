@@ -35,7 +35,7 @@ export class EmergencyService {
       callback: async (tx, visitNumber) => {
         const created = await tx.emergencyVisit.create({
           data: {
-            tenantId, visitNumber, locationId: dto.locationId, patientId: dto.patientId,
+            tenantId, visitNumber, locationId: dto.locationId || '', patientId: dto.patientId,
             triageCategory: dto.triageCategory || 'GREEN',
             chiefComplaint: dto.chiefComplaint,
             arrivalMode: dto.arrivalMode || 'WALK_IN',
