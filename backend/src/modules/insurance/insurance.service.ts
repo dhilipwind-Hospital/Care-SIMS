@@ -9,7 +9,7 @@ export class InsuranceService {
     return this.prisma.insurancePolicy.findMany({ where, orderBy: { createdAt: 'desc' } });
   }
   async addPolicy(tenantId: string, dto: any) {
-    return this.prisma.insurancePolicy.create({ data: { tenantId, patientId: dto.patientId, providerName: dto.providerName, policyNumber: dto.policyNumber, groupNumber: dto.groupNumber, tpaName: dto.tpaName, planType: dto.planType, coverageAmount: dto.coverageAmount, copayPercent: dto.copayPercent||0, deductible: dto.deductible||0, startDate: new Date(dto.startDate), endDate: new Date(dto.endDate), primaryInsured: dto.primaryInsured, relationship: dto.relationship } });
+    return this.prisma.insurancePolicy.create({ data: { tenantId, patientId: dto.patientId, providerName: dto.providerName, policyNumber: dto.policyNumber, groupNumber: dto.groupNumber, tpaName: dto.tpaName, planType: dto.planType ?? dto.planName ?? '', coverageAmount: dto.coverageAmount ?? dto.sumInsured ?? 0, copayPercent: dto.copayPercent||0, deductible: dto.deductible||0, startDate: dto.startDate ? new Date(dto.startDate) : new Date(), endDate: dto.endDate ? new Date(dto.endDate) : new Date(Date.now() + 365*24*60*60*1000), primaryInsured: dto.primaryInsured, relationship: dto.relationship } });
   }
   async getPolicy(tenantId: string, id: string) { const p = await this.prisma.insurancePolicy.findFirst({ where: { id, tenantId }, include: { claims: true } }); if (!p) throw new NotFoundException('Policy not found'); return p; }
   async updatePolicy(tenantId: string, id: string, dto: any) {
@@ -42,7 +42,10 @@ export class InsuranceService {
       prefix: 'CLM-',
       tenantId,
       callback: async (tx, claimNumber) => {
-        return tx.insuranceClaim.create({ data: { tenantId, claimNumber, policyId: dto.policyId, patientId: dto.patientId, admissionId: dto.admissionId, invoiceId: dto.invoiceId, claimType: dto.claimType, preAuthCode: dto.preAuthCode, preAuthAmount: dto.preAuthAmount, claimAmount: dto.claimAmount, processedById: userId, status: 'DRAFT' } });
+        // The claim form sends policyId + totalAmount (not patientId/claimAmount); derive patientId
+        // from the policy and accept either amount key so the create can't 500 on NOT-NULL columns.
+        const policy = dto.policyId ? await tx.insurancePolicy.findFirst({ where: { id: dto.policyId, tenantId } }) : null;
+        return tx.insuranceClaim.create({ data: { tenantId, claimNumber, policyId: dto.policyId, patientId: dto.patientId || policy?.patientId || '', admissionId: dto.admissionId, invoiceId: dto.invoiceId, claimType: dto.claimType, preAuthCode: dto.preAuthCode, preAuthAmount: dto.preAuthAmount, claimAmount: dto.claimAmount ?? dto.totalAmount ?? 0, processedById: userId, status: 'DRAFT' } });
       },
     });
   }
