@@ -15,7 +15,7 @@ export class DietService {
   async createOrder(tenantId: string, dto: any) {
     return this.prisma.dietOrder.create({
       data: {
-        tenantId, locationId: dto.locationId, patientId: dto.patientId, admissionId: dto.admissionId,
+        tenantId, locationId: dto.locationId, patientId: dto.patientId, admissionId: dto.admissionId || '',
         wardId: dto.wardId, bedId: dto.bedId, doctorId: dto.doctorId, dietType: dto.dietType,
         caloricTarget: dto.caloricTarget, proteinTarget: dto.proteinTarget,
         restrictions: dto.restrictions || [], allergies: dto.allergies || [],
