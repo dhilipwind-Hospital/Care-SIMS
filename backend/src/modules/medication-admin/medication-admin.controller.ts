@@ -17,7 +17,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class MedicationAdminController {
   constructor(private svc: MedicationAdminService) {}
   @Get('mar/:admissionId') getMAR(@CurrentUser('tenantId') tid: string, @Param('admissionId') aid: string) { return this.svc.getMARForAdmission(tid, aid); }
-  @Post('schedule') schedule(@CurrentUser('tenantId') tid: string, @Body() body: any) { return this.svc.scheduleMedication(tid, body); }
+  @Post('schedule') schedule(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any) { return this.svc.scheduleMedication(tid, { ...body, locationId: body.locationId || lid }); }
   @Patch(':id/administer') administer(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.recordAdministration(tid, id, { ...body, status: 'ADMINISTERED' }, uid); }
   @Patch(':id/withhold') withhold(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.recordAdministration(tid, id, { ...body, status: 'WITHHELD' }, uid); }
   @Get('pending') pending(@CurrentUser('tenantId') tid: string, @Query('locationId') lid: string) { return this.svc.getPendingForNurse(tid, lid); }

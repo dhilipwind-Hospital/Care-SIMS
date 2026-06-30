@@ -59,11 +59,11 @@ export class PhysiotherapyService {
       const session = await tx.physiotherapySession.create({
         data: {
           tenantId, orderId, sessionNumber: order.completedSessions + 1,
-          sessionDate: new Date(dto.sessionDate), treatmentGiven: dto.treatmentGiven,
+          sessionDate: dto.sessionDate ? new Date(dto.sessionDate) : new Date(), treatmentGiven: dto.treatmentGiven || dto.notes || 'Session completed',
           painBefore: dto.painBefore, painAfter: dto.painAfter,
           romBefore: dto.romBefore, romAfter: dto.romAfter,
           patientResponse: dto.patientResponse, homeExercises: dto.homeExercises,
-          therapistId: dto.therapistId, notes: dto.notes,
+          therapistId: dto.therapistId || order.therapistId || '', notes: dto.notes,
         },
       });
       const completed = order.completedSessions + 1;
