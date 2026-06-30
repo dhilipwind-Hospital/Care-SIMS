@@ -207,6 +207,18 @@ export default function AntimicrobialPage() {
                   </select>
                 </div>
                 <div>
+                  <label className={labelCls}>Dose</label>
+                  <input type="text" className={inputCls} value={form.dose || ''} onChange={e => setForm({ ...form, dose: e.target.value })} placeholder="e.g. 500mg" />
+                </div>
+                <div>
+                  <label className={labelCls}>Frequency</label>
+                  <input type="text" className={inputCls} value={form.frequency || ''} onChange={e => setForm({ ...form, frequency: e.target.value })} placeholder="e.g. BD, TDS" />
+                </div>
+                <div>
+                  <label className={labelCls}>Start Date</label>
+                  <input type="date" className={inputCls} value={form.startDate || ''} onChange={e => setForm({ ...form, startDate: e.target.value })} />
+                </div>
+                <div>
                   <label className={labelCls}>Duration (days) <span className="text-red-500">*</span></label>
                   <input type="number" min={1} className={inputCls} value={form.durationDays || ''} onChange={e => setForm({ ...form, durationDays: e.target.value })} placeholder="Number of days" />
                 </div>
