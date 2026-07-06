@@ -213,6 +213,11 @@ ${r.notes ? `<div style="margin-top:12px;padding:12px;background:#F8F9FA;border-
                 {s.lastSterilizedAt && <div>Last sterilized: <span className="font-medium text-gray-700">{formatDateTime(s.lastSterilizedAt)}</span></div>}
                 {s.items?.length > 0 && <div>Items: {(s.items as any[]).map((i: any) => i.name).join(', ')}</div>}
               </div>
+              {/* Issue/Return hidden: these PATCH /cssd/batches/:id/issue|return, which 404 — issue/return
+                  routes live under /cssd/items/:id and expect a SterilizationItem id, not this InstrumentSet
+                  id, and InstrumentSet has no issue-state field. Re-enable once set-level issue/return
+                  endpoints + a status field are built. See E2E_FEATURE_CATALOG.md. */}
+              {false && (
               <div className="flex gap-2 pt-2 border-t border-gray-100">
                 {s.condition !== 'ISSUED' && (
                   <button onClick={() => { setIssueTarget(s); setIssueDept(''); }} className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 font-medium flex items-center gap-1"><LogOut size={10} /> Issue</button>
@@ -221,6 +226,7 @@ ${r.notes ? `<div style="margin-top:12px;padding:12px;background:#F8F9FA;border-
                   <button onClick={() => setReturnTarget(s)} className="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 font-medium flex items-center gap-1"><LogIn size={10} /> Return</button>
                 )}
               </div>
+              )}
             </div>
           ))}
         </div>
