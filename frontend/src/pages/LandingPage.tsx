@@ -689,7 +689,7 @@ function ContactFormModal({ open, onClose, prefill = '' }: { open: boolean; onCl
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">Full Name *</label>
-                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
+                <input value={form.name} onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
                   className={`w-full px-3 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 ${errors.name ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}
                   placeholder="Dr. Rajesh Kumar" />
                 {errors.name && <p className="text-[10px] text-red-500 mt-0.5">{errors.name}</p>}
@@ -698,7 +698,7 @@ function ContactFormModal({ open, onClose, prefill = '' }: { open: boolean; onCl
                 <label className="block text-xs font-semibold text-gray-700 mb-1">Work Email *</label>
                 <div className="relative">
                   <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
+                  <input value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))}
                     className={`w-full pl-8 pr-3 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 ${errors.email ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}
                     placeholder="rajesh@hospital.com" type="email" />
                 </div>
@@ -712,7 +712,7 @@ function ContactFormModal({ open, onClose, prefill = '' }: { open: boolean; onCl
                 <label className="block text-xs font-semibold text-gray-700 mb-1">Phone *</label>
                 <div className="relative">
                   <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                  <input value={form.phone} onChange={e => setForm(prev => ({ ...prev, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
                     className={`w-full pl-8 pr-3 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 ${errors.phone ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}
                     placeholder="9876543210" />
                 </div>
@@ -722,7 +722,7 @@ function ContactFormModal({ open, onClose, prefill = '' }: { open: boolean; onCl
                 <label className="block text-xs font-semibold text-gray-700 mb-1">Hospital Name *</label>
                 <div className="relative">
                   <Building2 size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input value={form.hospital} onChange={e => setForm({ ...form, hospital: e.target.value })}
+                  <input value={form.hospital} onChange={e => setForm(prev => ({ ...prev, hospital: e.target.value }))}
                     className={`w-full pl-8 pr-3 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 ${errors.hospital ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}
                     placeholder="City Hospital" />
                 </div>
@@ -733,7 +733,7 @@ function ContactFormModal({ open, onClose, prefill = '' }: { open: boolean; onCl
             {/* Bed Count */}
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">Number of Beds (optional)</label>
-              <select value={form.beds} onChange={e => setForm({ ...form, beds: e.target.value })}
+              <select value={form.beds} onChange={e => setForm(prev => ({ ...prev, beds: e.target.value }))}
                 className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 text-gray-700">
                 <option value="">Select range</option>
                 <option value="1-10">1–10 (Clinic)</option>
@@ -747,7 +747,7 @@ function ContactFormModal({ open, onClose, prefill = '' }: { open: boolean; onCl
             {/* Message */}
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">Message (optional)</label>
-              <textarea value={form.message} onChange={e => setForm({ ...form, message: e.target.value })}
+              <textarea value={form.message} onChange={e => setForm(prev => ({ ...prev, message: e.target.value }))}
                 className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 resize-none"
                 rows={3} placeholder="Tell us about your requirements, number of locations, modules needed..." />
             </div>

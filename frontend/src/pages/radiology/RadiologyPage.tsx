@@ -444,16 +444,16 @@ export default function RadiologyPage() {
                 </>
               )}
             </div>
-            <select className="hms-input" value={form.modality} onChange={e => setForm({ ...form, modality: e.target.value })}>
+            <select className="hms-input" value={form.modality} onChange={e => setForm(prev => ({ ...prev, modality: e.target.value }))}>
               {modalities.map(m => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}
             </select>
-            <input className="hms-input" placeholder="Body Part *" value={form.bodyPart} onChange={e => setForm({ ...form, bodyPart: e.target.value })} />
-            <select className="hms-input" value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}>
+            <input className="hms-input" placeholder="Body Part *" value={form.bodyPart} onChange={e => setForm(prev => ({ ...prev, bodyPart: e.target.value }))} />
+            <select className="hms-input" value={form.priority} onChange={e => setForm(prev => ({ ...prev, priority: e.target.value }))}>
               <option value="ROUTINE">Routine</option>
               <option value="URGENT">Urgent</option>
               <option value="STAT">STAT</option>
             </select>
-            <input className="hms-input col-span-2" placeholder="Clinical History" value={form.clinicalHistory} onChange={e => setForm({ ...form, clinicalHistory: e.target.value })} />
+            <input className="hms-input col-span-2" placeholder="Clinical History" value={form.clinicalHistory} onChange={e => setForm(prev => ({ ...prev, clinicalHistory: e.target.value }))} />
           </div>
           <div className="flex gap-2">
             <button onClick={handleSubmit} className="px-4 py-2 rounded-lg text-white font-medium" style={{ background: 'var(--accent)' }}>{editingId ? 'Update' : 'Submit'}</button>

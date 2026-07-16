@@ -362,7 +362,7 @@ export default function DischargeSummaryPage() {
           )}
           {formError && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{formError}</div>}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <SearchableSelect value={form.admissionId} onChange={(id) => setForm({ ...form, admissionId: id })} placeholder="Search admission *" endpoint="/admissions" searchParam="q" mapOption={(a: any) => ({ id: a.id, label: a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : a.id, sub: `Bed ${a.bed?.bedNumber || '?'}` })} />
+            <SearchableSelect value={form.admissionId} onChange={(id) => setForm(prev => ({ ...prev, admissionId: id }))} placeholder="Search admission *" endpoint="/admissions" searchParam="q" mapOption={(a: any) => ({ id: a.id, label: a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : a.id, sub: `Bed ${a.bed?.bedNumber || '?'}` })} />
             {admissionMeta ? (
               <div className="md:col-span-2 bg-teal-50 border border-teal-100 rounded-lg p-3 text-sm">
                 <div className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-purple-700 bg-purple-50 border border-purple-100 rounded px-2 py-0.5 mb-1.5">
@@ -383,27 +383,27 @@ export default function DischargeSummaryPage() {
               </div>
             ) : (
               <>
-                <SearchableSelect value={form.patientId} onChange={(id) => setForm({ ...form, patientId: id })} placeholder="Search patient *" endpoint="/patients" searchParam="q" mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })} />
-                <SearchableSelect value={form.doctorId} onChange={(id) => setForm({ ...form, doctorId: id })} placeholder="Search doctor *" endpoint="/doctors/affiliations/tenant" searchParam="q" mapOption={(d: any) => ({ id: d.doctorId || d.id, label: `Dr. ${d.doctor?.firstName || d.firstName || ''} ${d.doctor?.lastName || d.lastName || ''}`, sub: d.doctor?.specialization || d.specialization || '' })} />
+                <SearchableSelect value={form.patientId} onChange={(id) => setForm(prev => ({ ...prev, patientId: id }))} placeholder="Search patient *" endpoint="/patients" searchParam="q" mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })} />
+                <SearchableSelect value={form.doctorId} onChange={(id) => setForm(prev => ({ ...prev, doctorId: id }))} placeholder="Search doctor *" endpoint="/doctors/affiliations/tenant" searchParam="q" mapOption={(d: any) => ({ id: d.doctorId || d.id, label: `Dr. ${d.doctor?.firstName || d.firstName || ''} ${d.doctor?.lastName || d.lastName || ''}`, sub: d.doctor?.specialization || d.specialization || '' })} />
               </>
             )}
-            <div><label className="text-xs text-gray-500">Admission Date *</label><input className="hms-input w-full" type="date" value={form.admissionDate} onChange={e => setForm({ ...form, admissionDate: e.target.value })} /></div>
-            <div><label className="text-xs text-gray-500">Discharge Date</label><input className="hms-input w-full" type="date" value={form.dischargeDate} onChange={e => setForm({ ...form, dischargeDate: e.target.value })} /></div>
-            <div><label className="text-xs text-gray-500">Follow-up Date</label><input className="hms-input w-full" type="date" value={form.followUpDate} onChange={e => setForm({ ...form, followUpDate: e.target.value })} /></div>
+            <div><label className="text-xs text-gray-500">Admission Date *</label><input className="hms-input w-full" type="date" value={form.admissionDate} onChange={e => setForm(prev => ({ ...prev, admissionDate: e.target.value }))} /></div>
+            <div><label className="text-xs text-gray-500">Discharge Date</label><input className="hms-input w-full" type="date" value={form.dischargeDate} onChange={e => setForm(prev => ({ ...prev, dischargeDate: e.target.value }))} /></div>
+            <div><label className="text-xs text-gray-500">Follow-up Date</label><input className="hms-input w-full" type="date" value={form.followUpDate} onChange={e => setForm(prev => ({ ...prev, followUpDate: e.target.value }))} /></div>
           </div>
-          <textarea className="hms-input w-full" placeholder="Diagnosis on Admission *" rows={2} value={form.diagnosisOnAdmission} onChange={e => setForm({ ...form, diagnosisOnAdmission: e.target.value })} />
-          <textarea className="hms-input w-full" placeholder="Diagnosis on Discharge" rows={2} value={form.diagnosisOnDischarge} onChange={e => setForm({ ...form, diagnosisOnDischarge: e.target.value })} />
+          <textarea className="hms-input w-full" placeholder="Diagnosis on Admission *" rows={2} value={form.diagnosisOnAdmission} onChange={e => setForm(prev => ({ ...prev, diagnosisOnAdmission: e.target.value }))} />
+          <textarea className="hms-input w-full" placeholder="Diagnosis on Discharge" rows={2} value={form.diagnosisOnDischarge} onChange={e => setForm(prev => ({ ...prev, diagnosisOnDischarge: e.target.value }))} />
           <div className="grid grid-cols-2 gap-4">
-            <textarea className="hms-input" placeholder="Treatment Given" rows={3} value={form.treatmentGiven} onChange={e => setForm({ ...form, treatmentGiven: e.target.value })} />
-            <textarea className="hms-input" placeholder="Investigation Summary" rows={3} value={form.investigationSummary} onChange={e => setForm({ ...form, investigationSummary: e.target.value })} />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <textarea className="hms-input" placeholder="Condition at Discharge" rows={2} value={form.conditionAtDischarge} onChange={e => setForm({ ...form, conditionAtDischarge: e.target.value })} />
-            <textarea className="hms-input" placeholder="Follow-up Instructions" rows={2} value={form.followUpInstructions} onChange={e => setForm({ ...form, followUpInstructions: e.target.value })} />
+            <textarea className="hms-input" placeholder="Treatment Given" rows={3} value={form.treatmentGiven} onChange={e => setForm(prev => ({ ...prev, treatmentGiven: e.target.value }))} />
+            <textarea className="hms-input" placeholder="Investigation Summary" rows={3} value={form.investigationSummary} onChange={e => setForm(prev => ({ ...prev, investigationSummary: e.target.value }))} />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <textarea className="hms-input" placeholder="Dietary Advice" rows={2} value={form.dietaryAdvice} onChange={e => setForm({ ...form, dietaryAdvice: e.target.value })} />
-            <textarea className="hms-input" placeholder="Activity Restrictions" rows={2} value={form.activityRestrictions} onChange={e => setForm({ ...form, activityRestrictions: e.target.value })} />
+            <textarea className="hms-input" placeholder="Condition at Discharge" rows={2} value={form.conditionAtDischarge} onChange={e => setForm(prev => ({ ...prev, conditionAtDischarge: e.target.value }))} />
+            <textarea className="hms-input" placeholder="Follow-up Instructions" rows={2} value={form.followUpInstructions} onChange={e => setForm(prev => ({ ...prev, followUpInstructions: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <textarea className="hms-input" placeholder="Dietary Advice" rows={2} value={form.dietaryAdvice} onChange={e => setForm(prev => ({ ...prev, dietaryAdvice: e.target.value }))} />
+            <textarea className="hms-input" placeholder="Activity Restrictions" rows={2} value={form.activityRestrictions} onChange={e => setForm(prev => ({ ...prev, activityRestrictions: e.target.value }))} />
           </div>
           <div className="flex gap-2">
             <button onClick={handleCreate} className="px-4 py-2 rounded-lg text-white font-medium" style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>Create Draft</button>

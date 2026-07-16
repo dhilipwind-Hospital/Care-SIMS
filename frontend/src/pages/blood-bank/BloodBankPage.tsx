@@ -793,11 +793,11 @@ export default function BloodBankPage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Bag Number *</label>
-              <input className="hms-input" placeholder="e.g. BAG-001" value={transfusionForm.bagNumber} onChange={e => setTransfusionForm({ ...transfusionForm, bagNumber: e.target.value })} />
+              <input className="hms-input" placeholder="e.g. BAG-001" value={transfusionForm.bagNumber} onChange={e => setTransfusionForm(prev => ({ ...prev, bagNumber: e.target.value }))} />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Component</label>
-              <select className="hms-input" value={transfusionForm.component} onChange={e => setTransfusionForm({ ...transfusionForm, component: e.target.value })}>
+              <select className="hms-input" value={transfusionForm.component} onChange={e => setTransfusionForm(prev => ({ ...prev, component: e.target.value }))}>
                 <option value="WHOLE_BLOOD">Whole Blood</option>
                 <option value="PACKED_RBC">Packed RBC</option>
                 <option value="PLATELETS">Platelets</option>
@@ -807,19 +807,19 @@ export default function BloodBankPage() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Blood Group</label>
-              <select className="hms-input" value={transfusionForm.bloodGroup} onChange={e => setTransfusionForm({ ...transfusionForm, bloodGroup: e.target.value })}>
+              <select className="hms-input" value={transfusionForm.bloodGroup} onChange={e => setTransfusionForm(prev => ({ ...prev, bloodGroup: e.target.value }))}>
                 <option value="A">A</option><option value="B">B</option><option value="AB">AB</option><option value="O">O</option>
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Rh Factor</label>
-              <select className="hms-input" value={transfusionForm.rhFactor} onChange={e => setTransfusionForm({ ...transfusionForm, rhFactor: e.target.value })}>
+              <select className="hms-input" value={transfusionForm.rhFactor} onChange={e => setTransfusionForm(prev => ({ ...prev, rhFactor: e.target.value }))}>
                 <option value="POSITIVE">Rh+</option><option value="NEGATIVE">Rh-</option>
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Volume (ml)</label>
-              <input className="hms-input" type="number" value={transfusionForm.volumeMl} onChange={e => setTransfusionForm({ ...transfusionForm, volumeMl: e.target.value })} />
+              <input className="hms-input" type="number" value={transfusionForm.volumeMl} onChange={e => setTransfusionForm(prev => ({ ...prev, volumeMl: e.target.value }))} />
             </div>
           </div>
           <div className="flex gap-2">
