@@ -90,7 +90,7 @@ export default function CssdPage() {
   const handleIssueSet = async () => {
     if (!issueTarget) return;
     try {
-      await api.patch(`/cssd/batches/${issueTarget.id}/issue`, { departmentId: issueDept || undefined });
+      await api.patch(`/cssd/instrument-sets/${issueTarget.id}/issue`, { issuedToDept: issueDept || undefined });
       toast.success('Set issued to department'); setIssueTarget(null); setIssueDept(''); fetchData();
     } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); }
   };
@@ -98,7 +98,7 @@ export default function CssdPage() {
   const handleReturnSet = async () => {
     if (!returnTarget) return;
     try {
-      await api.patch(`/cssd/batches/${returnTarget.id}/return`);
+      await api.patch(`/cssd/instrument-sets/${returnTarget.id}/return`);
       toast.success('Set returned to CSSD'); setReturnTarget(null); fetchData();
     } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); }
   };
@@ -205,7 +205,10 @@ ${r.notes ? `<div style="margin-top:12px;padding:12px;background:#F8F9FA;border-
             <div key={s.id} className="hms-card p-5">
               <div className="flex items-center justify-between mb-2">
                 <h4 className="font-semibold text-gray-900">{s.setName}</h4>
-                <StatusBadge status={s.condition} />
+                <div className="flex items-center gap-1.5">
+                  {s.status === 'ISSUED' && <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">ISSUED{s.issuedToDept ? ` → ${s.issuedToDept}` : ''}</span>}
+                  <StatusBadge status={s.condition} />
+                </div>
               </div>
               <div className="text-sm text-gray-500 mb-2">{s.department || 'General'}</div>
               <div className="text-xs text-gray-400 space-y-1 mb-3">
@@ -213,20 +216,14 @@ ${r.notes ? `<div style="margin-top:12px;padding:12px;background:#F8F9FA;border-
                 {s.lastSterilizedAt && <div>Last sterilized: <span className="font-medium text-gray-700">{formatDateTime(s.lastSterilizedAt)}</span></div>}
                 {s.items?.length > 0 && <div>Items: {(s.items as any[]).map((i: any) => i.name).join(', ')}</div>}
               </div>
-              {/* Issue/Return hidden: these PATCH /cssd/batches/:id/issue|return, which 404 — issue/return
-                  routes live under /cssd/items/:id and expect a SterilizationItem id, not this InstrumentSet
-                  id, and InstrumentSet has no issue-state field. Re-enable once set-level issue/return
-                  endpoints + a status field are built. See E2E_FEATURE_CATALOG.md. */}
-              {false && (
               <div className="flex gap-2 pt-2 border-t border-gray-100">
-                {s.condition !== 'ISSUED' && (
+                {s.status !== 'ISSUED' && (
                   <button onClick={() => { setIssueTarget(s); setIssueDept(''); }} className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 font-medium flex items-center gap-1"><LogOut size={10} /> Issue</button>
                 )}
-                {s.condition === 'ISSUED' && (
+                {s.status === 'ISSUED' && (
                   <button onClick={() => setReturnTarget(s)} className="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 font-medium flex items-center gap-1"><LogIn size={10} /> Return</button>
                 )}
               </div>
-              )}
             </div>
           ))}
         </div>

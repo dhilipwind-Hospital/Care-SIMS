@@ -147,6 +147,26 @@ export class CssdService {
     return this.prisma.instrumentSet.update({ where: { id }, data });
   }
 
+  async issueSet(tenantId: string, id: string, dto: any) {
+    const set = await this.prisma.instrumentSet.findFirst({ where: { id, tenantId } });
+    if (!set) throw new NotFoundException('Instrument set not found');
+    if (set.status === 'ISSUED') throw new BadRequestException('Set is already issued');
+    return this.prisma.instrumentSet.update({
+      where: { id },
+      data: { status: 'ISSUED', issuedToDept: dto.issuedToDept || dto.departmentId || null, issuedAt: new Date(), returnedAt: null },
+    });
+  }
+
+  async returnSet(tenantId: string, id: string) {
+    const set = await this.prisma.instrumentSet.findFirst({ where: { id, tenantId } });
+    if (!set) throw new NotFoundException('Instrument set not found');
+    if (set.status !== 'ISSUED') throw new BadRequestException('Set is not currently issued');
+    return this.prisma.instrumentSet.update({
+      where: { id },
+      data: { status: 'AVAILABLE', returnedAt: new Date() },
+    });
+  }
+
   // ── Dashboard ──
 
   async dashboard(tenantId: string) {

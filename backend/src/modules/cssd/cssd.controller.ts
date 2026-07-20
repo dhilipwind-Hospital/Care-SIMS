@@ -28,6 +28,8 @@ export class CssdController {
   // Instrument Sets
   @Post('instrument-sets') createSet(@CurrentUser('tenantId') tid: string, @Body() body: any) { return this.svc.createInstrumentSet(tid, body); }
   @Get('instrument-sets') getSets(@CurrentUser('tenantId') tid: string) { return this.svc.getInstrumentSets(tid); }
+  @Patch('instrument-sets/:id/issue') issueSet(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.issueSet(tid, id, body); }
+  @Patch('instrument-sets/:id/return') returnSet(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.returnSet(tid, id); }
   @Patch('instrument-sets/:id') updateSet(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.updateInstrumentSet(tid, id, body); }
 
   // Dashboard

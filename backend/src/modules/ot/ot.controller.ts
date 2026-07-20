@@ -31,6 +31,7 @@ export class OTController {
   @Get('schedule/timeline') getTimeline(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getTimeline(tid, q); }
   @Get('reports/performance') getPerformance(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getPerformanceReport(tid, q); }
   @Get('bookings') getBookings(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getBookings(tid, q); }
+  @Get('bookings/:id') getBooking(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getBooking(tid, id); }
   @Post('bookings') createBooking(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: CreateOTBookingDto, @CurrentUser('sub') uid: string) { return this.svc.createBooking(tid, { ...body, locationId: body.locationId || lid } as CreateOTBookingDto, uid); }
   @Put('bookings/:id') updateBooking(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: UpdateOTBookingDto) { return this.svc.updateBooking(tid, id, body); }
   @Post('bookings/:id/pre-op-assessment') upsertPreOp(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.upsertPreOpAssessment(tid, id, body, uid); }

@@ -212,6 +212,12 @@ export class OTService {
     return { data, meta: { total, page: Number(page), limit: Number(limit) } };
   }
 
+  async getBooking(tenantId: string, id: string) {
+    const b = await this.prisma.oTBooking.findFirst({ where: { id, tenantId }, include: { otRoom: { select: { name: true } } } });
+    if (!b) throw new NotFoundException('Booking not found');
+    return b;
+  }
+
   async createBooking(tenantId: string, dto: any, createdById: string) {
     // Resolve locationId: prefer DTO, then OT room's location, then tenant's
     // first active location. Required because OTBooking.locationId is NOT NULL

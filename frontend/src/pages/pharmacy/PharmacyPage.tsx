@@ -198,14 +198,10 @@ export default function PharmacyPage() {
             <button onClick={() => setShowScanner(true)} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 font-medium">
               <Barcode size={14} /> Scan Barcode
             </button>
-            {/* Manual dispense hidden: backend has no POST /pharmacy/manual-dispense route yet, so this
-                button 404s. Re-enable once the endpoint + a ManualDispense record are built. See E2E_FEATURE_CATALOG.md. */}
-            {false && (
             <button onClick={() => setShowManual(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium"
               style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
               <ClipboardList size={14} /> + Manual Entry
             </button>
-            )}
           </div>
         }
       />

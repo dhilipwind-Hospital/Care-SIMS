@@ -209,4 +209,21 @@ export class PharmacyService {
       return updated;
     });
   }
+
+  // Walk-in / prescription-less dispense: records a free-text manual dispense entry.
+  async manualDispense(tenantId: string, dto: any, dispensedById: string) {
+    if (!dto.patientName || !dto.drugName) throw new BadRequestException('Patient name and drug name are required');
+    return this.prisma.manualDispense.create({
+      data: {
+        tenantId,
+        patientName: dto.patientName,
+        drugName: dto.drugName,
+        quantity: Number(dto.quantity) || 0,
+        dosage: dto.dosage || null,
+        instructions: dto.instructions || null,
+        notes: dto.notes || null,
+        dispensedById: dispensedById || null,
+      },
+    });
+  }
 }

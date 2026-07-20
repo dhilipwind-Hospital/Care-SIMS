@@ -49,6 +49,7 @@ export class PharmacyController {
   @Post('batches') receiveBatch(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: ReceiveBatchDto) { return this.svc.receiveBatch(tid, { ...body, locationId: (body as any).locationId || lid } as ReceiveBatchDto); }
   @Post('dispense/:prescriptionId') dispense(@CurrentUser('tenantId') tid: string, @Param('prescriptionId') pid: string, @Body() body: DispenseDto, @CurrentUser('sub') uid: string) { return this.svc.dispensePrescription(tid, pid, body, uid); }
   @Post('prescriptions/:prescriptionId/dispense') dispenseAlias(@CurrentUser('tenantId') tid: string, @Param('prescriptionId') pid: string, @Body() body: DispenseDto, @CurrentUser('sub') uid: string) { return this.svc.dispensePrescription(tid, pid, body, uid); }
+  @Post('manual-dispense') manualDispense(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string, @Body() body: any) { return this.svc.manualDispense(tid, body, uid); }
   @Get('low-stock') lowStock(@CurrentUser('tenantId') tid: string, @Query('locationId') lid: string) { return this.svc.getLowStockAlerts(tid, lid); }
   @Get('expiry-alerts') expiryAlerts(@CurrentUser('tenantId') tid: string, @Query('locationId') lid: string, @Query('daysAhead') days: number) { return this.svc.getExpiryAlerts(tid, lid, days); }
 
