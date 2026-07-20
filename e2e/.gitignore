@@ -1,0 +1,9 @@
+node_modules/
+org.json
+shots/
+test-results/
+playwright-report/
+results.json
+wave5.json
+wave8-fixes.json
+*.png

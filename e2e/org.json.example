@@ -1,0 +1,16 @@
+{
+  "api": "https://care-sims.onrender.com/api",
+  "password": "REPLACE_WITH_TEST_ORG_PASSWORD",
+  "logins": {
+    "admin": "admin@<your-e2e-org>.local",
+    "reception": "reception@<your-e2e-org>.local",
+    "nurse": "nurse@<your-e2e-org>.local",
+    "wardnurse": "wardnurse@<your-e2e-org>.local",
+    "chargenurse": "chargenurse@<your-e2e-org>.local",
+    "pharmacy": "pharmacy@<your-e2e-org>.local",
+    "lab": "lab@<your-e2e-org>.local",
+    "billing": "billing@<your-e2e-org>.local",
+    "doctor": "doctor.demo@<your-e2e-org>.local",
+    "patient": "patient1@<your-e2e-org>.local"
+  }
+}
