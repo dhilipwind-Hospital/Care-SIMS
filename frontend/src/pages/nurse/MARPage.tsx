@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
-import { Pill, Clock, CheckCircle, AlertCircle, Calendar, Plus, X, Printer, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Pill, Clock, CheckCircle, AlertCircle, Calendar, Plus, X, Printer, AlertTriangle, ShieldCheck, Zap, Barcode, ClipboardList, Trash2, XCircle } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -8,8 +8,17 @@ import EmptyState from '../../components/ui/EmptyState';
 import SearchableSelect from '../../components/ui/SearchableSelect';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import api from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 
 const emptyScheduleForm = { admissionId: '', patientId: '', prescriptionItemId: '', drugName: '', dosage: '', route: 'ORAL', frequency: 'OD', scheduledTime: '', notes: '' };
+const emptyPrnForm = { admissionId: '', patientId: '', drugName: '', dosage: '', route: 'ORAL', prnReason: '', prnMaxDailyDoses: '', notes: '' };
+const emptyReconForm = { admissionId: '', patientId: '', reconcType: 'ADMISSION', notes: '' };
+
+type HomeMed = { drug: string; dose: string; frequency: string; route: string; continue: boolean };
+type HospMed = { drug: string; dose: string; frequency: string; route: string; source: string };
+type Discrepancy = { drug: string; issue: string; resolution: string };
+
+const ROUTE_OPTIONS = ['ORAL', 'IV', 'IM', 'SC', 'TOPICAL', 'INHALED', 'RECTAL', 'SUBLINGUAL'];
 
 const FIVE_RIGHTS = [
   'Right Patient — confirmed with ID/wristband',
@@ -48,6 +57,34 @@ export default function MARPage() {
   const [withholdReason, setWithholdReason] = useState('');
 
   const [actionId, setActionId] = useState<string | null>(null);
+
+  const { user } = useAuth();
+
+  // PRN (as-needed) dose
+  const [showPrnForm, setShowPrnForm] = useState(false);
+  const [prnForm, setPrnForm] = useState({ ...emptyPrnForm });
+  const [prnError, setPrnError] = useState('');
+  const [prnSaving, setPrnSaving] = useState(false);
+
+  // Barcode verification (per MAR row)
+  const [barcodeTarget, setBarcodeTarget] = useState<any>(null);
+  const [barcodeForm, setBarcodeForm] = useState({ drugBarcode: '', patientBarcode: '' });
+  const [barcodeResult, setBarcodeResult] = useState<any>(null);
+  const [barcodeVerifying, setBarcodeVerifying] = useState(false);
+
+  // Medication reconciliation
+  const [reconAdmissionId, setReconAdmissionId] = useState('');
+  const [reconPatientId, setReconPatientId] = useState('');
+  const [reconRecords, setReconRecords] = useState<any[]>([]);
+  const [reconLoading, setReconLoading] = useState(false);
+  const [showRecon, setShowRecon] = useState(false);
+  const [showReconForm, setShowReconForm] = useState(false);
+  const [reconForm, setReconForm] = useState({ ...emptyReconForm });
+  const [homeMeds, setHomeMeds] = useState<HomeMed[]>([]);
+  const [hospMeds, setHospMeds] = useState<HospMed[]>([]);
+  const [discrepancies, setDiscrepancies] = useState<Discrepancy[]>([]);
+  const [reconSaving, setReconSaving] = useState(false);
+  const [reconError, setReconError] = useState('');
 
   const fetchMAR = async () => {
     setLoading(true);
@@ -120,6 +157,118 @@ export default function MARPage() {
       setScheduleForm({ ...emptyScheduleForm });
       fetchMAR();
     } catch { toast.error('Failed to schedule medication'); }
+  };
+
+  // ── PRN (as-needed) dose ──
+  const openPrnForm = () => { setPrnForm({ ...emptyPrnForm }); setPrnError(''); setShowPrnForm(true); };
+
+  const handlePrn = async () => {
+    if (!prnForm.patientId) { setPrnError('Patient is required'); return; }
+    if (!prnForm.admissionId) { setPrnError('Admission is required'); return; }
+    if (!prnForm.drugName.trim()) { setPrnError('Drug name is required'); return; }
+    if (!prnForm.dosage.trim()) { setPrnError('Dose is required'); return; }
+    if (!prnForm.prnReason.trim()) { setPrnError('PRN reason (indication) is required'); return; }
+    setPrnError('');
+    setPrnSaving(true);
+    const admissionId = prnForm.admissionId;
+    try {
+      await api.post('/medication-admin/prn', {
+        admissionId: prnForm.admissionId,
+        patientId: prnForm.patientId,
+        locationId: user?.locationId,
+        drugName: prnForm.drugName.trim(),
+        dosage: prnForm.dosage.trim(),
+        route: prnForm.route,
+        prnReason: prnForm.prnReason.trim(),
+        prnMaxDailyDoses: prnForm.prnMaxDailyDoses ? Number(prnForm.prnMaxDailyDoses) : undefined,
+        notes: prnForm.notes.trim() || undefined,
+      });
+      toast.success('PRN dose recorded');
+      setShowPrnForm(false);
+      setPrnForm({ ...emptyPrnForm });
+      fetchMAR();
+      if (showMarGrid && marAdmissionId === admissionId) fetchMAR_Grid();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Failed to record PRN dose');
+    } finally { setPrnSaving(false); }
+  };
+
+  // ── Barcode verification ──
+  const openBarcode = (r: any) => { setBarcodeTarget(r); setBarcodeForm({ drugBarcode: '', patientBarcode: '' }); setBarcodeResult(null); };
+
+  const handleVerifyBarcode = async () => {
+    if (!barcodeTarget) return;
+    if (!barcodeForm.drugBarcode.trim() && !barcodeForm.patientBarcode.trim()) { toast.error('Scan at least one barcode'); return; }
+    setBarcodeVerifying(true);
+    try {
+      const { data } = await api.post('/medication-admin/verify-barcode', {
+        marId: barcodeTarget.id,
+        drugBarcode: barcodeForm.drugBarcode.trim(),
+        patientBarcode: barcodeForm.patientBarcode.trim(),
+      });
+      setBarcodeResult(data);
+      if (data?.verified) toast.success('Barcode verified — safe to administer');
+      else toast.error('Barcode verification failed');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Failed to verify barcode');
+    } finally { setBarcodeVerifying(false); }
+  };
+
+  const proceedFromBarcode = () => {
+    const t = barcodeTarget;
+    setBarcodeTarget(null);
+    setBarcodeResult(null);
+    if (t) openFiveRights(t);
+  };
+
+  // ── Medication reconciliation ──
+  const loadReconciliation = async () => {
+    if (!reconAdmissionId) { toast.error('Please select an admission'); return; }
+    setReconLoading(true);
+    setShowRecon(true);
+    try {
+      const { data } = await api.get(`/medication-admin/reconciliation/${reconAdmissionId}`);
+      setReconRecords(data.data || data || []);
+    } catch { toast.error('Failed to load reconciliation'); setReconRecords([]); }
+    finally { setReconLoading(false); }
+  };
+
+  const openReconForm = () => {
+    if (!reconAdmissionId || !reconPatientId) { toast.error('Select an admission and patient first'); return; }
+    setReconForm({ ...emptyReconForm, admissionId: reconAdmissionId, patientId: reconPatientId });
+    setHomeMeds([{ drug: '', dose: '', frequency: '', route: 'ORAL', continue: true }]);
+    setHospMeds([]);
+    setDiscrepancies([]);
+    setReconError('');
+    setShowReconForm(true);
+  };
+
+  const handleCreateRecon = async () => {
+    if (!reconForm.admissionId) { setReconError('Admission is required'); return; }
+    if (!reconForm.patientId) { setReconError('Patient is required'); return; }
+    const cleanHome = homeMeds.filter(m => m.drug.trim());
+    const cleanHosp = hospMeds.filter(m => m.drug.trim());
+    const cleanDisc = discrepancies.filter(d => d.drug.trim() || d.issue.trim());
+    if (cleanHome.length === 0 && cleanHosp.length === 0) { setReconError('Add at least one home or hospital medication'); return; }
+    setReconError('');
+    setReconSaving(true);
+    const admissionId = reconForm.admissionId;
+    try {
+      await api.post('/medication-admin/reconciliation', {
+        admissionId: reconForm.admissionId,
+        patientId: reconForm.patientId,
+        reconcType: reconForm.reconcType,
+        homeMedications: cleanHome,
+        hospitalMeds: cleanHosp,
+        discrepancies: cleanDisc,
+        notes: reconForm.notes.trim() || undefined,
+      });
+      toast.success('Medication reconciliation saved');
+      setShowReconForm(false);
+      if (reconAdmissionId === admissionId) loadReconciliation();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Failed to save reconciliation');
+    } finally { setReconSaving(false); }
   };
 
   const filtered = useMemo(() => records.filter(r =>
@@ -198,7 +347,10 @@ export default function MARPage() {
       <div className="hms-card p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-gray-800 flex items-center gap-2"><Calendar size={18} className="text-teal-600" /> View MAR Grid</h3>
-          <button onClick={() => { setShowScheduleForm(!showScheduleForm); setScheduleError(''); }} className="px-4 py-2 rounded-lg text-white font-medium text-sm inline-flex items-center gap-1.5" style={{ background: 'var(--accent)' }}><Plus size={15} /> Schedule Medication</button>
+          <div className="flex items-center gap-2">
+            <button onClick={openPrnForm} className="px-4 py-2 rounded-lg border border-amber-300 text-amber-700 font-medium text-sm inline-flex items-center gap-1.5 hover:bg-amber-50"><Zap size={15} /> PRN Dose</button>
+            <button onClick={() => { setShowScheduleForm(!showScheduleForm); setScheduleError(''); }} className="px-4 py-2 rounded-lg text-white font-medium text-sm inline-flex items-center gap-1.5" style={{ background: 'var(--accent)' }}><Plus size={15} /> Schedule Medication</button>
+          </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="w-full sm:w-64"><SearchableSelect value={marAdmissionId} onChange={(id) => { setMarAdmissionId(id); }} placeholder="Search admission…" endpoint="/admissions" searchParam="q" mapOption={(a: any) => ({ id: a.id, label: a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : a.id, sub: `Bed ${a.bed?.bedNumber || '?'}` })} /></div>
@@ -247,6 +399,80 @@ export default function MARPage() {
                 </tbody>
               </table>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* Medication Reconciliation */}
+      <div className="hms-card p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-gray-800 flex items-center gap-2"><ClipboardList size={18} className="text-teal-600" /> Medication Reconciliation</h3>
+          <button onClick={openReconForm} className="px-4 py-2 rounded-lg text-white font-medium text-sm inline-flex items-center gap-1.5" style={{ background: 'var(--accent)' }}><Plus size={15} /> New Reconciliation</button>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="w-full sm:w-64">
+            <SearchableSelect
+              value={reconPatientId}
+              onChange={(id) => setReconPatientId(id)}
+              placeholder="Search patient…"
+              endpoint="/patients"
+              searchParam="q"
+              mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })}
+            />
+          </div>
+          <div className="w-full sm:w-64">
+            <SearchableSelect
+              value={reconAdmissionId}
+              onChange={(id) => setReconAdmissionId(id)}
+              placeholder="Search admission…"
+              endpoint="/admissions"
+              searchParam="q"
+              mapOption={(a: any) => ({ id: a.id, label: a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : a.id, sub: `Bed ${a.bed?.bedNumber || '?'}` })}
+            />
+          </div>
+          <button onClick={loadReconciliation} className="px-4 py-2 rounded-lg text-white font-medium text-sm" style={{ background: 'var(--accent)' }}>Load</button>
+          {showRecon && <button onClick={() => { setShowRecon(false); setReconRecords([]); }} className="text-sm text-gray-500 hover:text-gray-700">Clear</button>}
+        </div>
+        {showRecon && (
+          <div className="space-y-3">
+            {reconLoading ? (
+              <div className="py-8 text-center text-gray-400">Loading reconciliation…</div>
+            ) : reconRecords.length === 0 ? (
+              <div className="py-8 text-center text-gray-400">No reconciliation records for this admission</div>
+            ) : reconRecords.map((rec: any) => {
+              const home = rec.homeMedications || [];
+              const hosp = rec.hospitalMeds || [];
+              const disc = rec.discrepancies || [];
+              return (
+                <div key={rec.id} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${rec.reconcType === 'DISCHARGE' ? 'bg-purple-100 text-purple-700' : 'bg-teal-100 text-teal-700'}`}>{rec.reconcType}</span>
+                    <span className="text-xs text-gray-400">{rec.reconciledAt ? new Date(rec.reconciledAt).toLocaleString() : ''}</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                    <div>
+                      <div className="font-semibold text-gray-600 mb-1">Home Meds ({home.length})</div>
+                      {home.length === 0 ? <div className="text-gray-400">—</div> : home.map((m: any, i: number) => (
+                        <div key={i} className="text-gray-700">{m.drug} {m.dose && `· ${m.dose}`} {m.frequency && `· ${m.frequency}`} {m.continue === false && <span className="text-red-500">(stop)</span>}</div>
+                      ))}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-600 mb-1">Hospital Meds ({hosp.length})</div>
+                      {hosp.length === 0 ? <div className="text-gray-400">—</div> : hosp.map((m: any, i: number) => (
+                        <div key={i} className="text-gray-700">{m.drug} {m.dose && `· ${m.dose}`} {m.frequency && `· ${m.frequency}`}</div>
+                      ))}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-600 mb-1">Discrepancies ({disc.length})</div>
+                      {disc.length === 0 ? <div className="text-gray-400">—</div> : disc.map((d: any, i: number) => (
+                        <div key={i} className="text-amber-700">{d.drug}: {d.issue}{d.resolution && ` → ${d.resolution}`}</div>
+                      ))}
+                    </div>
+                  </div>
+                  {rec.notes && <div className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">Notes: {rec.notes}</div>}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -335,6 +561,10 @@ export default function MARPage() {
                     <td className="px-4 py-3">
                       {r.status === 'SCHEDULED' && (
                         <div className="flex gap-1.5">
+                          <button onClick={() => openBarcode(r)} disabled={actionId === r.id}
+                            className="text-xs px-2 py-1 bg-indigo-50 text-indigo-700 rounded-md hover:bg-indigo-100 font-medium disabled:opacity-50 flex items-center gap-1">
+                            <Barcode size={11} /> Verify
+                          </button>
                           <button onClick={() => openFiveRights(r)} disabled={actionId === r.id}
                             className="text-xs px-2 py-1 bg-teal-600 text-white rounded-md hover:bg-teal-700 font-medium disabled:opacity-50 flex items-center gap-1">
                             <ShieldCheck size={11} /> Give

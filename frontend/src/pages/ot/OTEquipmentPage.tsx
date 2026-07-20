@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Wrench, CheckCircle, AlertTriangle, Users, Plus, ShieldCheck } from 'lucide-react';
+import { Wrench, CheckCircle, AlertTriangle, Users, Plus, ShieldCheck, Settings } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import api from '../../lib/api';
@@ -12,6 +12,9 @@ export default function OTEquipmentPage() {
   const [showForm, setShowForm] = useState(false);
   const [sterilizing, setSterilizing] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', equipmentType: 'ANESTHESIA_MACHINE', serialNumber: '', otRoomId: '', condition: 'OPERATIONAL' });
+  const [conditionTarget, setConditionTarget] = useState<any | null>(null);
+  const [conditionValue, setConditionValue] = useState('OPERATIONAL');
+  const [savingCondition, setSavingCondition] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -48,6 +51,23 @@ export default function OTEquipmentPage() {
       toast.success('Equipment marked as sterilized');
       fetchData();
     } catch (err: any) { toast.error(err.response?.data?.message || 'Sterilization failed'); } finally { setSterilizing(null); }
+  };
+
+  const openConditionModal = (e: any) => {
+    setConditionTarget(e);
+    setConditionValue(e.condition || 'OPERATIONAL');
+  };
+
+  const updateCondition = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    if (!conditionTarget) return;
+    setSavingCondition(true);
+    try {
+      await api.patch(`/ot/equipment/${conditionTarget.id}/condition`, { condition: conditionValue });
+      toast.success('Condition updated');
+      setConditionTarget(null);
+      fetchData();
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to update condition'); } finally { setSavingCondition(false); }
   };
 
   const formatDate = (d: string | null | undefined) => {
@@ -140,18 +160,26 @@ export default function OTEquipmentPage() {
                       <td className="px-4 py-3 text-xs text-gray-500">{formatDate(e.nextSterilizationDue)}</td>
                       <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${condColor[e.condition] || 'bg-gray-100 text-gray-600'}`}>{e.condition}</span></td>
                       <td className="px-4 py-3">
-                        {e.sterilizationStatus === 'STERILIZED' ? (
-                          <span className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md font-medium inline-flex items-center gap-1"><CheckCircle size={12} /> Ready</span>
-                        ) : (
+                        <div className="flex items-center gap-2">
+                          {e.sterilizationStatus === 'STERILIZED' ? (
+                            <span className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md font-medium inline-flex items-center gap-1"><CheckCircle size={12} /> Ready</span>
+                          ) : (
+                            <button
+                              onClick={() => handleSterilize(e.id)}
+                              disabled={sterilizing === e.id}
+                              className="text-xs px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-md font-medium inline-flex items-center gap-1 disabled:opacity-50 transition-colors"
+                            >
+                              <ShieldCheck size={12} />
+                              {sterilizing === e.id ? 'Sterilizing...' : 'Sterilize'}
+                            </button>
+                          )}
                           <button
-                            onClick={() => handleSterilize(e.id)}
-                            disabled={sterilizing === e.id}
-                            className="text-xs px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-md font-medium inline-flex items-center gap-1 disabled:opacity-50 transition-colors"
+                            onClick={() => openConditionModal(e)}
+                            className="text-xs px-3 py-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-md font-medium inline-flex items-center gap-1 transition-colors"
                           >
-                            <ShieldCheck size={12} />
-                            {sterilizing === e.id ? 'Sterilizing...' : 'Sterilize'}
+                            <Settings size={12} /> Condition
                           </button>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -177,6 +205,27 @@ export default function OTEquipmentPage() {
                   ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {conditionTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !savingCondition && setConditionTarget(null)}>
+          <div className="hms-card p-6 w-full max-w-md" onClick={ev => ev.stopPropagation()}>
+            <h3 className="text-base font-bold text-gray-900 mb-1">Update Condition</h3>
+            <p className="text-xs text-gray-500 mb-4">{conditionTarget.name}{conditionTarget.serialNumber ? ` · ${conditionTarget.serialNumber}` : ''}</p>
+            <form onSubmit={updateCondition} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Equipment Condition</label>
+                <select value={conditionValue} onChange={e => setConditionValue(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                  {['OPERATIONAL','NEEDS_MAINTENANCE','UNDER_REPAIR','DECOMMISSIONED'].map(c => <option key={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="flex items-center gap-3">
+                <button type="submit" disabled={savingCondition} className="px-5 py-2 rounded-lg text-white text-sm font-semibold disabled:opacity-50" style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>{savingCondition ? 'Saving...' : 'Update'}</button>
+                <button type="button" onClick={() => setConditionTarget(null)} disabled={savingCondition} className="px-5 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

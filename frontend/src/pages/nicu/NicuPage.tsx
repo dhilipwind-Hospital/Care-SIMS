@@ -24,6 +24,12 @@ export default function NicuPage() {
   const [vitalsAdmission, setVitalsAdmission] = useState<any>(null);
   const [vitalsData, setVitalsData] = useState<any[]>([]);
   const [vitalsLoading, setVitalsLoading] = useState(false);
+  const [dailyAdmission, setDailyAdmission] = useState<any>(null);
+  const [dailyRecords, setDailyRecords] = useState<any[]>([]);
+  const [dailyLoading, setDailyLoading] = useState(false);
+  const [showDailyForm, setShowDailyForm] = useState(false);
+  const [dailySubmitting, setDailySubmitting] = useState(false);
+  const [dailyForm, setDailyForm] = useState({ weightGrams: '', feedType: 'BREAST', feedVolumeMl: '', feedFrequency: '', urineOutput: '', stoolCount: '', bilirubinLevel: '', phototherapy: false, oxygenSupport: '', temperature: '', heartRate: '', spo2: '', apneaEpisodes: '', notes: '' });
 
   const fetchData = async () => { setLoading(true); try { const [list, dash] = await Promise.all([api.get('/nicu', { params: { page, limit: 20 } }), api.get('/nicu/dashboard')]); setAdmissions(list.data.data || []); setTotal(list.data.meta?.total || 0); setDashboard(dash.data.data || dash.data || {}); } catch { toast.error('Failed'); } finally { setLoading(false); } };
   useEffect(() => { fetchData(); }, [page]);
@@ -80,6 +86,51 @@ ${a.carePlan ? `<div style="margin-bottom:16px;padding:10px;background:#f9fafb;b
     }
   };
 
+  const fetchDailyRecords = async (admissionId: string) => {
+    setDailyLoading(true);
+    try {
+      const { data } = await api.get(`/nicu/${admissionId}/daily-records`);
+      setDailyRecords(data.data || data || []);
+    } catch {
+      setDailyRecords([]);
+    } finally {
+      setDailyLoading(false);
+    }
+  };
+
+  const openDailyRecords = (a: any) => { setDailyAdmission(a); setShowDailyForm(false); fetchDailyRecords(a.id); };
+
+  const handleAddDaily = async () => {
+    if (!dailyAdmission) return;
+    setDailySubmitting(true);
+    try {
+      await api.post(`/nicu/${dailyAdmission.id}/daily-records`, {
+        weightGrams: dailyForm.weightGrams ? Number(dailyForm.weightGrams) : undefined,
+        feedType: dailyForm.feedType || undefined,
+        feedVolumeMl: dailyForm.feedVolumeMl ? Number(dailyForm.feedVolumeMl) : undefined,
+        feedFrequency: dailyForm.feedFrequency || undefined,
+        urineOutput: dailyForm.urineOutput ? Number(dailyForm.urineOutput) : undefined,
+        stoolCount: dailyForm.stoolCount ? Number(dailyForm.stoolCount) : undefined,
+        bilirubinLevel: dailyForm.bilirubinLevel ? Number(dailyForm.bilirubinLevel) : undefined,
+        phototherapy: dailyForm.phototherapy,
+        oxygenSupport: dailyForm.oxygenSupport || undefined,
+        temperature: dailyForm.temperature ? Number(dailyForm.temperature) : undefined,
+        heartRate: dailyForm.heartRate ? Number(dailyForm.heartRate) : undefined,
+        spo2: dailyForm.spo2 ? Number(dailyForm.spo2) : undefined,
+        apneaEpisodes: dailyForm.apneaEpisodes ? Number(dailyForm.apneaEpisodes) : undefined,
+        notes: dailyForm.notes || undefined,
+      });
+      toast.success('Daily record added');
+      setShowDailyForm(false);
+      setDailyForm({ weightGrams: '', feedType: 'BREAST', feedVolumeMl: '', feedFrequency: '', urineOutput: '', stoolCount: '', bilirubinLevel: '', phototherapy: false, oxygenSupport: '', temperature: '', heartRate: '', spo2: '', apneaEpisodes: '', notes: '' });
+      fetchDailyRecords(dailyAdmission.id);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed');
+    } finally {
+      setDailySubmitting(false);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <TopBar title="NICU — Neonatal ICU" subtitle="Neonatal intensive care management" actions={<button onClick={() => setShowForm(true)} className="btn-primary flex items-center gap-2"><Plus size={15} /> New Admission</button>} />
@@ -107,6 +158,10 @@ ${a.carePlan ? `<div style="margin-bottom:16px;padding:10px;background:#f9fafb;b
                 <button onClick={() => { setVitalsAdmission(a); fetchVitals(a.id); }}
                   className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">
                   Vitals
+                </button>
+                <button onClick={() => openDailyRecords(a)}
+                  className="text-xs px-2 py-1 bg-pink-50 text-pink-700 rounded-md hover:bg-pink-100 font-medium">
+                  Records
                 </button>
                 <button onClick={() => handlePrintNicuSummary(a)}
                   className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1">
@@ -149,6 +204,73 @@ ${a.carePlan ? `<div style="margin-bottom:16px;padding:10px;background:#f9fafb;b
                     <Line type="monotone" dataKey="rr" stroke="#f97316" name="Resp Rate" dot={false} strokeWidth={2} />
                   </LineChart>
                 </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {dailyAdmission && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-white z-10">
+              <h2 className="font-semibold text-gray-900">Daily Records{dailyAdmission.admissionDate ? ` — Admitted ${new Date(dailyAdmission.admissionDate).toLocaleDateString()}` : ''}</h2>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setShowDailyForm(v => !v)} className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm"><Plus size={14} /> Add Record</button>
+                <button onClick={() => { setDailyAdmission(null); setShowDailyForm(false); }} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+              </div>
+            </div>
+            <div className="p-6 space-y-4">
+              {showDailyForm && (
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div><label className="block text-xs font-semibold text-gray-600 mb-1">Weight (g)</label><input type="number" className="hms-input w-full" value={dailyForm.weightGrams} onChange={e => setDailyForm({ ...dailyForm, weightGrams: e.target.value })} /></div>
+                    <div><label className="block text-xs font-semibold text-gray-600 mb-1">Feed Type</label><select className="hms-input w-full" value={dailyForm.feedType} onChange={e => setDailyForm({ ...dailyForm, feedType: e.target.value })}>{['BREAST', 'FORMULA', 'NGT', 'TPN', 'MIXED'].map(t => <option key={t}>{t}</option>)}</select></div>
+                    <div><label className="block text-xs font-semibold text-gray-600 mb-1">Feed Vol (ml)</label><input type="number" step="0.1" className="hms-input w-full" value={dailyForm.feedVolumeMl} onChange={e => setDailyForm({ ...dailyForm, feedVolumeMl: e.target.value })} /></div>
+                    <div><label className="block text-xs font-semibold text-gray-600 mb-1">Feed Freq</label><input className="hms-input w-full" placeholder="e.g. 3-hourly" value={dailyForm.feedFrequency} onChange={e => setDailyForm({ ...dailyForm, feedFrequency: e.target.value })} /></div>
+                    <div><label className="block text-xs font-semibold text-gray-600 mb-1">Temp (°C)</label><input type="number" step="0.1" className="hms-input w-full" value={dailyForm.temperature} onChange={e => setDailyForm({ ...dailyForm, temperature: e.target.value })} /></div>
+                    <div><label className="block text-xs font-semibold text-gray-600 mb-1">Heart Rate</label><input type="number" className="hms-input w-full" value={dailyForm.heartRate} onChange={e => setDailyForm({ ...dailyForm, heartRate: e.target.value })} /></div>
+                    <div><label className="block text-xs font-semibold text-gray-600 mb-1">SpO2 (%)</label><input type="number" min="0" max="100" className="hms-input w-full" value={dailyForm.spo2} onChange={e => setDailyForm({ ...dailyForm, spo2: e.target.value })} /></div>
+                    <div><label className="block text-xs font-semibold text-gray-600 mb-1">Bilirubin</label><input type="number" step="0.1" className="hms-input w-full" value={dailyForm.bilirubinLevel} onChange={e => setDailyForm({ ...dailyForm, bilirubinLevel: e.target.value })} /></div>
+                    <div><label className="block text-xs font-semibold text-gray-600 mb-1">O2 Support</label><input className="hms-input w-full" placeholder="e.g. RA, CPAP" value={dailyForm.oxygenSupport} onChange={e => setDailyForm({ ...dailyForm, oxygenSupport: e.target.value })} /></div>
+                    <div><label className="block text-xs font-semibold text-gray-600 mb-1">Urine (ml)</label><input type="number" className="hms-input w-full" value={dailyForm.urineOutput} onChange={e => setDailyForm({ ...dailyForm, urineOutput: e.target.value })} /></div>
+                    <div><label className="block text-xs font-semibold text-gray-600 mb-1">Stool Count</label><input type="number" className="hms-input w-full" value={dailyForm.stoolCount} onChange={e => setDailyForm({ ...dailyForm, stoolCount: e.target.value })} /></div>
+                    <div><label className="block text-xs font-semibold text-gray-600 mb-1">Apnea Ep.</label><input type="number" className="hms-input w-full" value={dailyForm.apneaEpisodes} onChange={e => setDailyForm({ ...dailyForm, apneaEpisodes: e.target.value })} /></div>
+                  </div>
+                  <div className="flex items-center gap-2"><input id="daily-photo" type="checkbox" className="h-4 w-4 rounded border-gray-300 text-pink-600" checked={dailyForm.phototherapy} onChange={e => setDailyForm({ ...dailyForm, phototherapy: e.target.checked })} /><label htmlFor="daily-photo" className="text-xs font-semibold text-gray-600">Phototherapy</label></div>
+                  <div><label className="block text-xs font-semibold text-gray-600 mb-1">Notes</label><textarea rows={2} className="hms-input w-full" value={dailyForm.notes} onChange={e => setDailyForm({ ...dailyForm, notes: e.target.value })} /></div>
+                  <div className="flex justify-end gap-3"><button onClick={() => setShowDailyForm(false)} className="btn-secondary px-4 py-2">Cancel</button><button onClick={handleAddDaily} disabled={dailySubmitting} className="btn-primary flex items-center gap-2 px-4 py-2">{dailySubmitting && <Loader2 size={14} className="animate-spin" />} Save Record</button></div>
+                </div>
+              )}
+              {dailyLoading ? (
+                <div className="h-32 flex items-center justify-center text-gray-400">Loading records...</div>
+              ) : dailyRecords.length === 0 ? (
+                <EmptyState icon={<Baby size={36} />} title="No daily records yet" />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead><tr>
+                      {['Date', 'Wt (g)', 'Feed', 'Vol (ml)', 'Temp', 'HR', 'SpO2', 'Bili', 'Photo', 'O2', 'Apnea', 'Notes'].map(h => <th key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 py-2 text-left bg-gray-50 whitespace-nowrap">{h}</th>)}
+                    </tr></thead>
+                    <tbody>
+                      {dailyRecords.map(r => (
+                        <tr key={r.id} className="border-t border-gray-50 text-sm">
+                          <td className="px-3 py-2 whitespace-nowrap">{formatDate(r.recordDate)}</td>
+                          <td className="px-3 py-2 font-medium">{r.weightGrams ?? '—'}</td>
+                          <td className="px-3 py-2 text-xs">{r.feedType || '—'}</td>
+                          <td className="px-3 py-2">{r.feedVolumeMl ?? '—'}</td>
+                          <td className="px-3 py-2">{r.temperature ?? '—'}</td>
+                          <td className="px-3 py-2">{r.heartRate ?? '—'}</td>
+                          <td className="px-3 py-2">{r.spo2 ?? '—'}</td>
+                          <td className="px-3 py-2">{r.bilirubinLevel ?? '—'}</td>
+                          <td className="px-3 py-2">{r.phototherapy ? <StatusBadge status="ON" /> : '—'}</td>
+                          <td className="px-3 py-2 text-xs">{r.oxygenSupport || '—'}</td>
+                          <td className="px-3 py-2">{r.apneaEpisodes ?? '—'}</td>
+                          <td className="px-3 py-2 text-xs max-w-[160px] truncate" title={r.notes || ''}>{r.notes || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>

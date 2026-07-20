@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Pill, Send, Clock, CheckCircle, Search, X, Printer } from 'lucide-react';
+import { Pill, Send, Clock, CheckCircle, Search, X, Printer, Ban } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
@@ -94,6 +94,10 @@ export default function PrescriptionsPage() {
   // so we want one tap of confirmation before the charges land on the bill.
   const [sendConfirmRx, setSendConfirmRx] = useState<any>(null);
   const [sending, setSending] = useState(false);
+  // Cancel prescription — reverses any pharmacy charges on open invoices.
+  const [cancelRx, setCancelRx] = useState<any>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelling, setCancelling] = useState(false);
 
   const searchDrugs = (idx: number, q: string) => {
     setDrugSearches(prev => { const a = [...prev]; a[idx] = q; return a; });
@@ -191,6 +195,22 @@ export default function PrescriptionsPage() {
       toast.error(err.response?.data?.message || 'Failed to send to pharmacy');
     } finally {
       setSending(false);
+    }
+  };
+
+  const confirmCancelRx = async () => {
+    if (!cancelRx) return;
+    setCancelling(true);
+    try {
+      await api.patch(`/prescriptions/${cancelRx.id}/cancel`, { reason: cancelReason.trim() || undefined });
+      toast.success('Prescription cancelled — any pharmacy charges on open invoices reversed');
+      setCancelRx(null);
+      setCancelReason('');
+      fetchRx();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to cancel prescription');
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -455,6 +475,12 @@ export default function PrescriptionsPage() {
                         className="flex items-center gap-1 text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 font-medium">
                         <Printer size={11} /> Print
                       </button>
+                      {rx.status !== 'CANCELLED' && rx.status !== 'DISPENSED' && (
+                        <button onClick={() => { setCancelRx(rx); setCancelReason(''); }}
+                          className="flex items-center gap-1 text-xs px-2 py-1 bg-red-50 text-red-600 rounded-md hover:bg-red-100 font-medium">
+                          <Ban size={11} /> Cancel
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -490,6 +516,43 @@ export default function PrescriptionsPage() {
                 className="px-4 py-2 rounded-lg text-white text-sm font-semibold disabled:opacity-60"
                 style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
                 {sending ? 'Sending…' : 'Send & Bill'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel-prescription confirmation — cancelling reverses pharmacy
+          charges on open invoices; finalized invoices need a manual refund. */}
+      {cancelRx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !cancelling && setCancelRx(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-bold text-gray-900">Cancel Prescription?</h3>
+              <button onClick={() => setCancelRx(null)} disabled={cancelling} className="text-gray-400 hover:text-red-500 disabled:opacity-50"><X size={16} /></button>
+            </div>
+            <div className="p-6 space-y-3 text-sm text-gray-700">
+              <p>
+                <strong>{cancelRx.rxNumber || cancelRx.prescriptionNumber}</strong> — {cancelRx.items?.length || 0} medication{(cancelRx.items?.length || 0) !== 1 ? 's' : ''} for {cancelRx.patient?.firstName} {cancelRx.patient?.lastName}.
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Reason for cancellation</label>
+                <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)} rows={3}
+                  placeholder="e.g. duplicate prescription, patient allergy, wrong drug…"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none" />
+              </div>
+              <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 text-amber-800 text-xs leading-relaxed">
+                Any pharmacy charges already added to the patient's open invoice are reversed automatically. Charges on finalized invoices need a manual refund from the billing desk.
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+              <button onClick={() => setCancelRx(null)} disabled={cancelling}
+                className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                Keep Prescription
+              </button>
+              <button onClick={confirmCancelRx} disabled={cancelling}
+                className="px-4 py-2 rounded-lg text-white text-sm font-semibold bg-red-600 hover:bg-red-700 disabled:opacity-60">
+                {cancelling ? 'Cancelling…' : 'Cancel Prescription'}
               </button>
             </div>
           </div>

@@ -44,6 +44,17 @@ export default function EmergencyPage() {
   const [assigning, setAssigning] = useState(false);
   const [disposition, setDisposition] = useState('DISCHARGED');
 
+  // Triage modal (PATCH /emergency/:id/triage)
+  const [triageVisit, setTriageVisit] = useState<any>(null);
+  const [triageForm, setTriageForm] = useState({ triageCategory: 'GREEN', bp: '', hr: '', spo2: '', temp: '', rr: '', gcs: '' });
+  const [triaging, setTriaging] = useState(false);
+
+  // Assign-to-staff modal (PATCH /emergency/:id/assign)
+  const [assignStaffVisit, setAssignStaffVisit] = useState<any>(null);
+  const [assignStaffDoctorId, setAssignStaffDoctorId] = useState('');
+  const [assignStaffBedId, setAssignStaffBedId] = useState('');
+  const [assigningStaff, setAssigningStaff] = useState(false);
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -148,6 +159,65 @@ ${(r.allergies || r.medications) ? `<div style="margin-top:16px;padding:12px;bac
     finally { setAssigning(false); }
   };
 
+  const openTriageModal = (v: any) => {
+    const vitals = v.vitalsOnArrival || {};
+    setTriageForm({
+      triageCategory: v.triageCategory || 'GREEN',
+      bp: vitals.bp || '', hr: vitals.hr || '', spo2: vitals.spo2 || '', temp: vitals.temp || '', rr: vitals.rr || '',
+      gcs: v.gcsOnArrival != null ? String(v.gcsOnArrival) : '',
+    });
+    setTriageVisit(v);
+  };
+
+  const handleTriage = async () => {
+    if (!triageVisit) return;
+    if (!triageForm.triageCategory) { toast.error('Select a triage category'); return; }
+    setTriaging(true);
+    try {
+      const vitals: Record<string, string> = {};
+      if (triageForm.bp) vitals.bp = triageForm.bp;
+      if (triageForm.hr) vitals.hr = triageForm.hr;
+      if (triageForm.spo2) vitals.spo2 = triageForm.spo2;
+      if (triageForm.temp) vitals.temp = triageForm.temp;
+      if (triageForm.rr) vitals.rr = triageForm.rr;
+      await api.patch(`/emergency/${triageVisit.id}/triage`, {
+        triageCategory: triageForm.triageCategory,
+        ...(Object.keys(vitals).length ? { vitalsOnArrival: vitals } : {}),
+        ...(triageForm.gcs ? { gcsOnArrival: Number(triageForm.gcs) } : {}),
+      });
+      toast.success('Triage updated');
+      setTriageVisit(null);
+      fetchData();
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to update triage'); }
+    finally { setTriaging(false); }
+  };
+
+  const openAssignStaffModal = async (v: any) => {
+    setAssignStaffVisit(v);
+    setAssignStaffDoctorId(v.assignedDoctorId || '');
+    setAssignStaffBedId(v.assignedBedId || '');
+    try {
+      const { data } = await api.get('/doctors/affiliations/tenant');
+      setDoctors(Array.isArray(data) ? data : data?.data || []);
+    } catch { setDoctors([]); }
+  };
+
+  const handleAssignStaff = async () => {
+    if (!assignStaffVisit) return;
+    if (!assignStaffDoctorId) { toast.error('Select a doctor'); return; }
+    setAssigningStaff(true);
+    try {
+      await api.patch(`/emergency/${assignStaffVisit.id}/assign`, {
+        doctorId: assignStaffDoctorId,
+        ...(assignStaffBedId ? { bedId: assignStaffBedId } : {}),
+      });
+      toast.success('Doctor assigned — status updated to Being Seen');
+      setAssignStaffVisit(null);
+      fetchData();
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to assign'); }
+    finally { setAssigningStaff(false); }
+  };
+
   return (
     <div className="p-3 sm:p-6 space-y-6">
       <TopBar title="Emergency Department" subtitle="Real-time ED patient tracking"
@@ -232,6 +302,12 @@ ${(r.allergies || r.medications) ? `<div style="margin-top:16px;padding:12px;bac
                       <div className="flex items-center gap-1.5">
                         {v.status === 'WAITING' && (
                           <button onClick={() => openAssignModal(v)} className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">See Patient</button>
+                        )}
+                        {['WAITING', 'BEING_SEEN', 'UNDER_OBSERVATION'].includes(v.status) && (
+                          <button onClick={() => openTriageModal(v)} className="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 font-medium">Triage</button>
+                        )}
+                        {['WAITING', 'BEING_SEEN', 'UNDER_OBSERVATION'].includes(v.status) && (
+                          <button onClick={() => openAssignStaffModal(v)} className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 font-medium">Assign</button>
                         )}
                         {['WAITING', 'BEING_SEEN', 'UNDER_OBSERVATION'].includes(v.status) && (
                           <button onClick={() => { setDispVisit(v); setDisposition('DISCHARGED'); }} className="text-xs px-2 py-1 bg-gray-50 text-gray-600 rounded-md hover:bg-gray-100 font-medium">Dispose</button>
@@ -378,6 +454,81 @@ ${(r.allergies || r.medications) ? `<div style="margin-top:16px;padding:12px;bac
               <button onClick={handleAssign} disabled={assigning}
                 className="btn-primary px-4 py-2 disabled:opacity-60">
                 {assigning ? 'Assigning…' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Triage Modal */}
+      {triageVisit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto p-6">
+            <h2 className="font-bold text-gray-900 mb-1">Update Triage</h2>
+            <p className="text-xs text-gray-400 mb-4">{triageVisit.visitNumber} — {triageVisit.patient?.firstName} {triageVisit.patient?.lastName}</p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Triage Category *</label>
+                <select className="hms-input w-full" value={triageForm.triageCategory} onChange={e => setTriageForm({ ...triageForm, triageCategory: e.target.value })}>
+                  <option value="RED">RED — Immediate</option>
+                  <option value="YELLOW">YELLOW — Urgent</option>
+                  <option value="GREEN">GREEN — Delayed</option>
+                  <option value="BLACK">BLACK — Deceased</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Vitals on Arrival</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <input className="hms-input w-full" placeholder="BP (e.g. 120/80)" value={triageForm.bp} onChange={e => setTriageForm({ ...triageForm, bp: e.target.value })} />
+                  <input className="hms-input w-full" placeholder="HR (bpm)" value={triageForm.hr} onChange={e => setTriageForm({ ...triageForm, hr: e.target.value })} />
+                  <input className="hms-input w-full" placeholder="SpO2 (%)" value={triageForm.spo2} onChange={e => setTriageForm({ ...triageForm, spo2: e.target.value })} />
+                  <input className="hms-input w-full" placeholder="Temp (F)" value={triageForm.temp} onChange={e => setTriageForm({ ...triageForm, temp: e.target.value })} />
+                  <input className="hms-input w-full" placeholder="RR (/min)" value={triageForm.rr} onChange={e => setTriageForm({ ...triageForm, rr: e.target.value })} />
+                  <input className="hms-input w-full" type="number" placeholder="GCS (3-15)" value={triageForm.gcs} onChange={e => setTriageForm({ ...triageForm, gcs: e.target.value })} />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setTriageVisit(null)} className="btn-secondary px-4 py-2">Cancel</button>
+              <button onClick={handleTriage} disabled={triaging} className="btn-primary flex items-center gap-2 px-4 py-2 disabled:opacity-60">
+                {triaging && <Loader2 size={14} className="animate-spin" />}
+                {triaging ? 'Saving…' : 'Update Triage'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assign to Staff Modal */}
+      {assignStaffVisit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 className="font-bold text-gray-900 mb-1">Assign to Staff</h2>
+            <p className="text-xs text-gray-400 mb-4">{assignStaffVisit.visitNumber} — {assignStaffVisit.patient?.firstName} {assignStaffVisit.patient?.lastName}</p>
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Attending Doctor *</label>
+              <select className="hms-input w-full" value={assignStaffDoctorId} onChange={e => setAssignStaffDoctorId(e.target.value)}>
+                <option value="">— Select doctor —</option>
+                {doctors.map((d: any) => (
+                  <option key={d.id || d.doctorId} value={d.id || d.doctorId}>
+                    Dr. {d.firstName || d.doctor?.firstName} {d.lastName || d.doctor?.lastName}
+                    {d.departmentName ? ` — ${d.departmentName}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Bed / Bay <span className="text-gray-400">(optional)</span></label>
+              <input className="hms-input w-full" placeholder="Bed or bay ID" value={assignStaffBedId} onChange={e => setAssignStaffBedId(e.target.value)} />
+            </div>
+            <div className="bg-teal-50 rounded-xl p-3 text-xs text-teal-700 mb-4">
+              Status will change to <strong>Being Seen</strong>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setAssignStaffVisit(null)} className="btn-secondary px-4 py-2">Cancel</button>
+              <button onClick={handleAssignStaff} disabled={assigningStaff} className="btn-primary flex items-center gap-2 px-4 py-2 disabled:opacity-60">
+                {assigningStaff && <Loader2 size={14} className="animate-spin" />}
+                {assigningStaff ? 'Assigning…' : 'Assign'}
               </button>
             </div>
           </div>

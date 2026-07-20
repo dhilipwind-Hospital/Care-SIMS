@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { UserPlus, Search, Eye, X, ArrowLeft, Pencil, History, Stethoscope, Pill, FlaskConical, BedDouble, FileText, Activity, Camera, Loader2 } from 'lucide-react';
+import { UserPlus, Search, Eye, X, ArrowLeft, Pencil, History, Stethoscope, Pill, FlaskConical, BedDouble, FileText, Activity, Camera, Loader2, ScrollText, MapPin } from 'lucide-react';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
@@ -52,6 +52,11 @@ export default function PatientsPage() {
   const [historyData, setHistoryData] = useState<any>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyTab, setHistoryTab] = useState('consultations');
+
+  // Access log panel state
+  const [accessLogPatient, setAccessLogPatient] = useState<any>(null);
+  const [accessLogData, setAccessLogData] = useState<any[]>([]);
+  const [accessLogLoading, setAccessLogLoading] = useState(false);
 
   const fetchPatients = async () => {
     setLoading(true);
@@ -200,6 +205,19 @@ export default function PatientsPage() {
       toast.error('Failed to load patient history');
       setHistoryPatient(null);
     } finally { setHistoryLoading(false); }
+  };
+
+  const openAccessLog = async (p: any) => {
+    setAccessLogPatient(p);
+    setAccessLogData([]);
+    setAccessLogLoading(true);
+    try {
+      const { data } = await api.get(`/patients/${p.id}/access-log`);
+      setAccessLogData(Array.isArray(data) ? data : []);
+    } catch (err) {
+      toast.error('Failed to load access log');
+      setAccessLogPatient(null);
+    } finally { setAccessLogLoading(false); }
   };
 
   const esf = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
@@ -458,6 +476,7 @@ export default function PatientsPage() {
                       <button onClick={() => setSelectedPatient(p)} className="text-teal-600 hover:text-teal-800" title="View"><Eye size={16} /></button>
                       <button onClick={() => openEdit(p)} className="text-blue-600 hover:text-blue-800" title="Edit"><Pencil size={15} /></button>
                       <button onClick={() => openHistory(p)} className="text-purple-600 hover:text-purple-800" title="History"><History size={15} /></button>
+                      <button onClick={() => openAccessLog(p)} className="text-gray-500 hover:text-gray-800" title="Access Log"><ScrollText size={15} /></button>
                     </div>
                   </td>
                 </tr>
@@ -869,6 +888,60 @@ export default function PatientsPage() {
                     </div>
                   )}
                 </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Patient Record Access Log Panel */}
+      {accessLogPatient && (
+        <div className="fixed inset-0 z-50 flex" onClick={() => setAccessLogPatient(null)}>
+          <div className="flex-1 bg-black/40" />
+          <div className="w-full max-w-xl bg-white h-full overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+              <div>
+                <h2 className="font-bold text-gray-900 flex items-center gap-2">
+                  <ScrollText size={18} className="text-gray-600" />
+                  Record Access Log
+                </h2>
+                <p className="text-xs text-gray-400 mt-0.5">Who viewed this record and when — {accessLogPatient.firstName} {accessLogPatient.lastName} · {accessLogPatient.patientId}</p>
+              </div>
+              <button onClick={() => setAccessLogPatient(null)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+            </div>
+
+            <div className="p-6">
+              {accessLogLoading ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="bg-gray-100 rounded-xl h-16 animate-pulse" />
+                  ))}
+                </div>
+              ) : accessLogData.length === 0 ? (
+                <EmptyState icon={<ScrollText size={24} className="text-gray-400" />} title="No access records" description="No access to this patient record has been logged yet." />
+              ) : (
+                <div className="space-y-3">
+                  {accessLogData.map((log: any) => (
+                    <div key={log.id} className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-semibold text-gray-900">{log.actorName || 'Unknown user'}</span>
+                        <span className="text-xs text-gray-400">{log.createdAt ? new Date(log.createdAt).toLocaleString() : '—'}</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {log.eventType && <span className="text-xs px-2 py-0.5 rounded-full bg-teal-50 text-teal-700">{log.eventType}</span>}
+                        {log.actorRole && <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{log.actorRole}</span>}
+                        {log.isCrossLocation && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 flex items-center gap-1">
+                            <MapPin size={11} /> Cross-location
+                          </span>
+                        )}
+                      </div>
+                      {log.accessReason && <p className="text-sm text-gray-600 mt-2"><span className="font-medium">Reason:</span> {log.accessReason}</p>}
+                      {log.resourceType && <p className="text-xs text-gray-400 mt-1">{log.resourceType}{log.resourceId ? ` · ${log.resourceId}` : ''}</p>}
+                      {log.ipAddress && <p className="text-xs text-gray-400 mt-1 font-mono">IP {log.ipAddress}</p>}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>

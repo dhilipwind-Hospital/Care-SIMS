@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { UserCheck, Bed, LogOut, Activity, Plus, X, Search, ArrowRightLeft, Eye, Printer } from 'lucide-react';
+import { UserCheck, Bed, LogOut, Activity, Plus, X, Search, ArrowRightLeft, Eye, Printer, ClipboardCheck, Receipt } from 'lucide-react';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
@@ -19,6 +19,19 @@ const EMPTY_ADMIT = {
 };
 
 const EMPTY_TRANSFER = { newBedId: '', newWardId: '', reason: '' };
+
+// Standard pre-admission readiness checklist. Stored as a JSON object
+// ({ [key]: boolean }) on admission.preAdmissionChecklist via the backend.
+const CHECKLIST_ITEMS = [
+  { key: 'consentSigned', label: 'Admission consent form signed' },
+  { key: 'idVerified', label: 'Patient identity & demographics verified' },
+  { key: 'insuranceVerified', label: 'Insurance / TPA eligibility verified' },
+  { key: 'allergiesDocumented', label: 'Allergies documented' },
+  { key: 'vitalsRecorded', label: 'Baseline vitals recorded' },
+  { key: 'wristbandApplied', label: 'ID wristband applied' },
+  { key: 'belongingsSecured', label: 'Valuables / belongings secured' },
+  { key: 'orientationDone', label: 'Patient oriented to ward & call bell' },
+];
 
 export default function AdmissionsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -90,10 +103,22 @@ export default function AdmissionsPage() {
   const [detail, setDetail] = useState<any>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
+  // Pre-admission checklist modal
+  const [showChecklist, setShowChecklist] = useState(false);
+  const [checklistId, setChecklistId] = useState('');
+  const [checklistLabel, setChecklistLabel] = useState('');
+  const [checklistForm, setChecklistForm] = useState<Record<string, boolean>>({});
+  const [checklistLoading, setChecklistLoading] = useState(false);
+  const [checklistSubmitting, setChecklistSubmitting] = useState(false);
+
+  // Bed charges posting
+  const [postingBedCharges, setPostingBedCharges] = useState(false);
+
   // Escape key to close modals
   useEscapeClose(showAdmit, () => setShowAdmit(false));
   useEscapeClose(showTransfer, () => setShowTransfer(false));
   useEscapeClose(showDetail, () => setShowDetail(false));
+  useEscapeClose(showChecklist, () => setShowChecklist(false));
 
   const fetchAdmissions = async () => {
     setLoading(true);
@@ -236,6 +261,51 @@ export default function AdmissionsPage() {
     finally { setDetailLoading(false); }
   };
 
+  // ---------- Post daily bed charges ----------
+  // POST /admissions/bed-charges takes no body — the backend charges every
+  // active admission that has a dailyBedCharge set, appending a line item to
+  // its running IPD invoice. Returns { message }.
+  const handlePostBedCharges = async () => {
+    if (!window.confirm("Post today's bed charge to the IPD invoice of every active admission that has a daily bed charge set?")) return;
+    setPostingBedCharges(true);
+    try {
+      const { data } = await api.post('/admissions/bed-charges');
+      toast.success(data?.message || 'Bed charges posted');
+      fetchAdmissions();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to post bed charges');
+    } finally { setPostingBedCharges(false); }
+  };
+
+  // ---------- Pre-admission checklist ----------
+  const openChecklist = async (admission: any) => {
+    setChecklistId(admission.id);
+    setChecklistLabel(`${admission.patient?.firstName || ''} ${admission.patient?.lastName || ''}`.trim());
+    setChecklistForm({});
+    setShowChecklist(true);
+    setChecklistLoading(true);
+    try {
+      const { data } = await api.get(`/admissions/${admission.id}`);
+      setChecklistForm((data?.preAdmissionChecklist || {}) as Record<string, boolean>);
+    } catch (err) {
+      console.error('Failed to load checklist:', err);
+      toast.error('Failed to load checklist');
+    } finally { setChecklistLoading(false); }
+  };
+
+  const handleChecklistSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setChecklistSubmitting(true);
+    try {
+      await api.patch(`/admissions/${checklistId}/pre-admission-checklist`, { checklist: checklistForm });
+      toast.success('Pre-admission checklist saved');
+      setShowChecklist(false);
+      fetchAdmissions();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to save checklist');
+    } finally { setChecklistSubmitting(false); }
+  };
+
   const handlePrintAdmissionForm = (r: any) => {
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Patient Admission Form</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111;font-size:13px;}@media print{body{padding:16px;}}</style></head><body>
 <div style="text-align:center;margin-bottom:16px;">
@@ -279,11 +349,18 @@ ${(r.nextOfKin || r.emergencyContact || r.patient?.emergencyContact) ? `<div sty
       <div className="hms-card">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <h3 className="font-semibold text-gray-800">Inpatient List</h3>
-          <button onClick={openAdmitModal}
-            className="flex items-center gap-2 px-4 py-2 rounded-full text-white text-sm font-semibold transition-all"
-            style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
-            <Plus size={14} /> Admit Patient
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={handlePostBedCharges} disabled={postingBedCharges}
+              className="flex items-center gap-2 px-4 py-2 rounded-full border border-teal-200 bg-teal-50 text-teal-700 text-sm font-semibold hover:bg-teal-100 transition-all disabled:opacity-60"
+              title="Post today's bed charge to every active admission's IPD invoice">
+              <Receipt size={14} /> {postingBedCharges ? 'Posting…' : 'Post Bed Charges'}
+            </button>
+            <button onClick={openAdmitModal}
+              className="flex items-center gap-2 px-4 py-2 rounded-full text-white text-sm font-semibold transition-all"
+              style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
+              <Plus size={14} /> Admit Patient
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -331,6 +408,11 @@ ${(r.nextOfKin || r.emergencyContact || r.patient?.emergencyContact) ? `<div sty
                       <button onClick={() => handlePrintAdmissionForm(a)} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"><Printer size={11} /> Print</button>
                       {a.status === 'ACTIVE' && (
                         <>
+                          <button onClick={() => openChecklist(a)}
+                            className="text-xs px-2 py-1 bg-emerald-50 text-emerald-700 rounded-md hover:bg-emerald-100 font-medium"
+                            title="Pre-admission checklist">
+                            <ClipboardCheck size={13} />
+                          </button>
                           <button onClick={() => openTransferModal(a)}
                             className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 font-medium"
                             title="Transfer bed">
@@ -578,6 +660,50 @@ ${(r.nextOfKin || r.emergencyContact || r.patient?.emergencyContact) ? `<div sty
                 <div className="py-12 text-center text-sm text-gray-400">No details available</div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========== PRE-ADMISSION CHECKLIST MODAL ========== */}
+      {showChecklist && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white">
+              <div>
+                <h2 className="font-bold text-gray-900">Pre-Admission Checklist</h2>
+                <p className="text-xs text-gray-400 mt-0.5">{checklistLabel || 'Verify readiness before admission'}</p>
+              </div>
+              <button type="button" onClick={() => setShowChecklist(false)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+            </div>
+            <form onSubmit={handleChecklistSubmit} className="p-6 space-y-4">
+              {checklistLoading ? (
+                <div className="py-8 text-center text-sm text-gray-400">Loading checklist...</div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    {CHECKLIST_ITEMS.map(item => (
+                      <label key={item.key} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" checked={!!checklistForm[item.key]}
+                          onChange={e => setChecklistForm(f => ({ ...f, [item.key]: e.target.checked }))}
+                          className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500" />
+                        <span className="text-sm text-gray-700">{item.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    {CHECKLIST_ITEMS.filter(i => checklistForm[i.key]).length} of {CHECKLIST_ITEMS.length} completed
+                  </div>
+                </>
+              )}
+              <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
+                <button type="button" onClick={() => setShowChecklist(false)} className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button type="submit" disabled={checklistSubmitting || checklistLoading}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-60"
+                  style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
+                  {checklistSubmitting ? 'Saving...' : 'Save Checklist'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

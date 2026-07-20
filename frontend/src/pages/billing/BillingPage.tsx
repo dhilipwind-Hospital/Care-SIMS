@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { CreditCard, DollarSign, Clock, FileText, Plus, X, Search, Trash2, Printer, Eye, ChevronDown, ChevronUp } from 'lucide-react';
+import { CreditCard, DollarSign, Clock, FileText, Plus, X, Search, Trash2, Printer, Eye, ChevronDown, ChevronUp, Mail } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
 import KpiCard from '../../components/ui/KpiCard';
@@ -182,6 +182,13 @@ export default function BillingPage() {
   const [addItemError, setAddItemError] = useState('');
   const [showPayments, setShowPayments] = useState(false);
 
+  // Email invoice modal — sends the invoice to the patient's email (or an
+  // override typed here). Pre-fills with the patient's email on open.
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailTo, setEmailTo] = useState('');
+  const [emailing, setEmailing] = useState(false);
+  const [emailError, setEmailError] = useState('');
+
   const fetchInvoices = async () => {
     setLoading(true);
     try {
@@ -205,6 +212,7 @@ export default function BillingPage() {
   // Escape key to close modals
   useEscapeClose(showNew, () => setShowNew(false));
   useEscapeClose(showDetailModal, () => setShowDetailModal(false));
+  useEscapeClose(showEmailModal, () => setShowEmailModal(false));
 
   const searchPatients = async (q: string) => {
     if (!q.trim()) { setPatients([]); return; }
@@ -313,6 +321,28 @@ export default function BillingPage() {
       setAddItemError('');
       setShowPayments(false);
     } catch (err) { toast.error('Operation failed'); }
+  };
+
+  const openEmailModal = () => {
+    if (!selected) return;
+    setEmailTo(selected.patient?.email || '');
+    setEmailError('');
+    setShowEmailModal(true);
+  };
+
+  const handleEmailInvoice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selected) return;
+    const to = emailTo.trim();
+    if (!to) { setEmailError('Enter a recipient email address'); return; }
+    setEmailing(true); setEmailError('');
+    try {
+      const { data } = await api.post(`/billing/invoices/${selected.id}/email`, { email: to });
+      toast.success(`Invoice emailed to ${data?.to || to}`);
+      setShowEmailModal(false);
+    } catch (err: any) {
+      setEmailError(err.response?.data?.message || 'Failed to email invoice');
+    } finally { setEmailing(false); }
   };
 
   const handleAddLineItem = async (e: React.FormEvent) => {
@@ -745,6 +775,7 @@ export default function BillingPage() {
 
       <InvoiceDetailModal />
       <NewInvoiceModal />
+      <EmailInvoiceModal />
     </div>
   );
 
@@ -1005,6 +1036,10 @@ export default function BillingPage() {
               className="flex items-center gap-2 px-4 py-2 rounded-xl border border-teal-200 text-teal-700 text-sm font-semibold hover:bg-teal-50 transition-all">
               <Printer size={14} /> Print
             </button>
+            <button onClick={openEmailModal}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-teal-200 text-teal-700 text-sm font-semibold hover:bg-teal-50 transition-all">
+              <Mail size={14} /> Email
+            </button>
             {!['PAID','CANCELLED'].includes(selected.status) && (
               <button onClick={() => { handleCancel(selected.id); setShowDetailModal(false); }}
                 className="px-4 py-2 rounded-xl border border-red-200 text-red-600 text-sm font-medium hover:bg-red-50 transition-all">
@@ -1255,6 +1290,44 @@ export default function BillingPage() {
               <button type="button" onClick={() => setShowNew(false)} className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
               <button type="submit" disabled={submitting} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-60" style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
                 {submitting ? 'Creating…' : 'Create Invoice'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  function EmailInvoiceModal() {
+    if (!showEmailModal || !selected) return null;
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+            <div>
+              <h2 className="font-bold text-gray-900">Email Invoice</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Send invoice {selected.invoiceNumber} to the patient</p>
+            </div>
+            <button type="button" onClick={() => setShowEmailModal(false)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+          </div>
+          <form onSubmit={handleEmailInvoice} className="p-6 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Recipient Email <span className="text-red-500">*</span></label>
+              <div className="relative">
+                <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input type="email" value={emailTo} onChange={e => setEmailTo(e.target.value)}
+                  placeholder="patient@example.com"
+                  className="w-full pl-8 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              </div>
+              {!selected.patient?.email && (
+                <p className="text-[11px] text-amber-600 mt-1">This patient has no email on file — enter one to send the invoice.</p>
+              )}
+            </div>
+            {emailError && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">{emailError}</div>}
+            <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
+              <button type="button" onClick={() => setShowEmailModal(false)} className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button type="submit" disabled={emailing || !emailTo.trim()} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-60" style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
+                <Mail size={14} /> {emailing ? 'Sending…' : 'Send Invoice'}
               </button>
             </div>
           </form>

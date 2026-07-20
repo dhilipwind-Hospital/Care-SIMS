@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { DollarSign, Plus, X, Loader2, Printer, CheckCheck } from 'lucide-react';
+import { DollarSign, Plus, X, Loader2, Printer, CheckCheck, Settings } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -24,6 +24,10 @@ export default function PayrollPage() {
   const [staff, setStaff] = useState<any[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkApproving, setBulkApproving] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
+  const [configForm, setConfigForm] = useState({ pfRate: '', esiRate: '', pfEmployerRate: '', esiEmployerRate: '' });
+  const [configLoading, setConfigLoading] = useState(false);
+  const [savingConfig, setSavingConfig] = useState(false);
 
   const fetchData = async () => { setLoading(true); try { const [list, dash] = await Promise.all([api.get('/payroll', { params: { page, limit: 20, month: monthFilter, year: yearFilter } }), api.get('/payroll/dashboard', { params: { month: monthFilter, year: yearFilter } })]); setRecords(list.data.data || []); setTotal(list.data.meta?.total || 0); setDashboard(dash.data.data || dash.data || {}); } catch { toast.error('Failed'); } finally { setLoading(false); } };
   useEffect(() => { fetchData(); }, [page, monthFilter, yearFilter]);
@@ -31,6 +35,35 @@ export default function PayrollPage() {
 
   const handleProcess = async () => { if (!form.staffId || !form.basicPay) { toast.error('Staff and basic pay required'); return; } setSubmitting(true); try { await api.post('/payroll', { ...form, basicPay: Number(form.basicPay), da: Number(form.da || 0), hra: Number(form.hra || 0), allowances: Number(form.allowances || 0), overtime: Number(form.overtime || 0) }); toast.success('Payroll processed'); setShowForm(false); fetchData(); } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); } finally { setSubmitting(false); } };
   const handleAction = async (id: string, action: string) => { try { await api.patch(`/payroll/${id}/${action}`); toast.success(`Payroll ${action}d`); fetchData(); } catch { toast.error('Failed'); } };
+
+  const openConfig = async () => {
+    setShowConfig(true);
+    setConfigLoading(true);
+    try {
+      const res = await api.get('/payroll/config');
+      const c = res.data?.data || res.data || {};
+      setConfigForm({
+        pfRate: String(c.pfRate ?? 12),
+        esiRate: String(c.esiRate ?? 0.75),
+        pfEmployerRate: String(c.pfEmployerRate ?? 12),
+        esiEmployerRate: String(c.esiEmployerRate ?? 3.25),
+      });
+    } catch { toast.error('Failed to load salary settings'); } finally { setConfigLoading(false); }
+  };
+
+  const handleSaveConfig = async () => {
+    setSavingConfig(true);
+    try {
+      await api.patch('/payroll/config', {
+        pfRate: Number(configForm.pfRate || 0),
+        esiRate: Number(configForm.esiRate || 0),
+        pfEmployerRate: Number(configForm.pfEmployerRate || 0),
+        esiEmployerRate: Number(configForm.esiEmployerRate || 0),
+      });
+      toast.success('Salary settings updated');
+      setShowConfig(false);
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); } finally { setSavingConfig(false); }
+  };
 
   const processableIds = records.filter(r => r.status === 'PROCESSED').map(r => r.id);
   const allProcessableSelected = processableIds.length > 0 && processableIds.every(id => selected.has(id));
@@ -159,7 +192,7 @@ export default function PayrollPage() {
 
   return (
     <div className="p-3 sm:p-6 space-y-6">
-      <TopBar title="Payroll Management" subtitle="Staff salary processing" actions={<button onClick={() => setShowForm(true)} className="btn-primary flex items-center gap-2"><Plus size={15} /> Process Payroll</button>} />
+      <TopBar title="Payroll Management" subtitle="Staff salary processing" actions={<div className="flex items-center gap-2"><button onClick={openConfig} className="btn-secondary flex items-center gap-2"><Settings size={15} /> Salary Settings</button><button onClick={() => setShowForm(true)} className="btn-primary flex items-center gap-2"><Plus size={15} /> Process Payroll</button></div>} />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Gross" value={formatCurrency(dashboard.totalGross || 0)} icon={DollarSign} color="#0F766E" />
         <KpiCard label="Total Net" value={formatCurrency(dashboard.totalNet || 0)} icon={DollarSign} color="#10B981" />
@@ -239,6 +272,17 @@ export default function PayrollPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><label className="block text-xs font-semibold text-gray-600 mb-1">Basic Pay *</label><input type="number" className="hms-input w-full" value={form.basicPay} onChange={e=>setForm({...form,basicPay:e.target.value})}/></div><div><label className="block text-xs font-semibold text-gray-600 mb-1">DA</label><input type="number" className="hms-input w-full" value={form.da} onChange={e=>setForm({...form,da:e.target.value})}/></div></div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4"><div><label className="block text-xs font-semibold text-gray-600 mb-1">HRA</label><input type="number" className="hms-input w-full" value={form.hra} onChange={e=>setForm({...form,hra:e.target.value})}/></div><div><label className="block text-xs font-semibold text-gray-600 mb-1">Allowances</label><input type="number" className="hms-input w-full" value={form.allowances} onChange={e=>setForm({...form,allowances:e.target.value})}/></div><div><label className="block text-xs font-semibold text-gray-600 mb-1">Overtime</label><input type="number" className="hms-input w-full" value={form.overtime} onChange={e=>setForm({...form,overtime:e.target.value})}/></div></div>
       </div><div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50"><button onClick={()=>setShowForm(false)} className="btn-secondary px-4 py-2">Cancel</button><button onClick={handleProcess} disabled={submitting} className="btn-primary flex items-center gap-2 px-4 py-2">{submitting&&<Loader2 size={14} className="animate-spin"/>} Process</button></div></div></div>)}
+      {showConfig&&(<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto"><div className="flex items-center justify-between px-6 py-4 border-b border-gray-100"><h2 className="font-bold text-gray-900">Salary Structure Settings</h2><button onClick={()=>setShowConfig(false)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18}/></button></div>
+        {configLoading ? <div className="p-10 flex items-center justify-center text-gray-400"><Loader2 size={20} className="animate-spin"/></div> : <div className="p-6 space-y-4">
+          <p className="text-xs text-gray-500">These statutory rates are applied automatically when payroll is processed.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div><label className="block text-xs font-semibold text-gray-600 mb-1">PF Rate (Employee %)</label><input type="number" step="0.01" className="hms-input w-full" value={configForm.pfRate} onChange={e=>setConfigForm({...configForm,pfRate:e.target.value})}/></div>
+            <div><label className="block text-xs font-semibold text-gray-600 mb-1">ESI Rate (Employee %)</label><input type="number" step="0.01" className="hms-input w-full" value={configForm.esiRate} onChange={e=>setConfigForm({...configForm,esiRate:e.target.value})}/></div>
+            <div><label className="block text-xs font-semibold text-gray-600 mb-1">PF Rate (Employer %)</label><input type="number" step="0.01" className="hms-input w-full" value={configForm.pfEmployerRate} onChange={e=>setConfigForm({...configForm,pfEmployerRate:e.target.value})}/></div>
+            <div><label className="block text-xs font-semibold text-gray-600 mb-1">ESI Rate (Employer %)</label><input type="number" step="0.01" className="hms-input w-full" value={configForm.esiEmployerRate} onChange={e=>setConfigForm({...configForm,esiEmployerRate:e.target.value})}/></div>
+          </div>
+        </div>}
+      <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50"><button onClick={()=>setShowConfig(false)} className="btn-secondary px-4 py-2">Cancel</button><button onClick={handleSaveConfig} disabled={savingConfig||configLoading} className="btn-primary flex items-center gap-2 px-4 py-2">{savingConfig&&<Loader2 size={14} className="animate-spin"/>} Save Settings</button></div></div></div>)}
     </div>
   );
 }

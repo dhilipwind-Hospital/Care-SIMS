@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Calendar, Users, Plus, X, Loader2, Clock, CalendarOff, Printer, ArrowLeftRight } from 'lucide-react';
+import { Calendar, Users, Plus, X, Loader2, Clock, CalendarOff, Printer, ArrowLeftRight, CopyPlus, CalendarCheck } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -21,7 +21,7 @@ const SHIFT_COLORS: Record<string, string> = {
 };
 
 export default function DutyRosterPage() {
-  const [tab, setTab] = useState<'roster' | 'leave'>('roster');
+  const [tab, setTab] = useState<'roster' | 'leave' | 'my'>('roster');
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -33,6 +33,10 @@ export default function DutyRosterPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ staffId: '', shiftDate: '', shiftType: 'GENERAL', startTime: '08:00', endTime: '16:00', notes: '' });
   const [submitting, setSubmitting] = useState(false);
+
+  // Bulk shift form
+  const [showBulkForm, setShowBulkForm] = useState(false);
+  const [bulkForm, setBulkForm] = useState({ staffIds: [] as string[], startDate: '', endDate: '', shiftType: 'GENERAL', startTime: '08:00', endTime: '16:00' });
 
   // Leave form
   const [showLeaveForm, setShowLeaveForm] = useState(false);
@@ -49,14 +53,23 @@ export default function DutyRosterPage() {
     setLoading(true);
     try {
       const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 7);
-      const [list, dash] = await Promise.all([
+      const weekEndStr = weekEnd.toISOString().slice(0, 10);
+      const listReq =
         tab === 'roster'
-          ? api.get('/duty-roster', { params: { from: weekStart, to: weekEnd.toISOString().slice(0, 10), page, limit: 100 } })
-          : api.get('/duty-roster/leave', { params: { page, limit: 20 } }),
-        api.get('/duty-roster/dashboard'),
-      ]);
-      setRecords(list.data.data || []);
-      setTotal(list.data.meta?.total || 0);
+          ? api.get('/duty-roster', { params: { from: weekStart, to: weekEndStr, page, limit: 100 } })
+          : tab === 'my'
+            ? api.get('/duty-roster/my', { params: { from: weekStart, to: weekEndStr } })
+            : api.get('/duty-roster/leave', { params: { page, limit: 20 } });
+      const [list, dash] = await Promise.all([listReq, api.get('/duty-roster/dashboard')]);
+      if (tab === 'my') {
+        // GET /duty-roster/my returns a plain array of the current user's shifts
+        const arr = Array.isArray(list.data) ? list.data : (list.data.data || []);
+        setRecords(arr);
+        setTotal(arr.length);
+      } else {
+        setRecords(list.data.data || []);
+        setTotal(list.data.meta?.total || 0);
+      }
       setDashboard(dash.data.data || dash.data || {});
     } catch { toast.error('Failed to load data'); }
     finally { setLoading(false); }
@@ -74,6 +87,42 @@ export default function DutyRosterPage() {
     setSubmitting(true);
     try { await api.post('/duty-roster', form); toast.success('Shift created'); setShowForm(false); fetchData(); }
     catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); }
+    finally { setSubmitting(false); }
+  };
+
+  const openBulkForm = () => {
+    const end = new Date(weekStart); end.setDate(end.getDate() + 6);
+    setBulkForm({ staffIds: [], startDate: weekStart, endDate: end.toISOString().slice(0, 10), shiftType: 'GENERAL', startTime: '08:00', endTime: '16:00' });
+    setShowBulkForm(true);
+  };
+
+  const toggleBulkStaff = (id: string) =>
+    setBulkForm(f => ({ ...f, staffIds: f.staffIds.includes(id) ? f.staffIds.filter(x => x !== id) : [...f.staffIds, id] }));
+
+  // Dates in the selected range (inclusive) — used for preview + payload build
+  const bulkDates = (() => {
+    if (!bulkForm.startDate || !bulkForm.endDate) return [] as string[];
+    const dates: string[] = [];
+    const cur = new Date(bulkForm.startDate); const end = new Date(bulkForm.endDate);
+    if (end < cur) return dates;
+    while (cur <= end) { dates.push(cur.toISOString().slice(0, 10)); cur.setDate(cur.getDate() + 1); }
+    return dates;
+  })();
+
+  const handleBulkCreate = async () => {
+    if (bulkForm.staffIds.length === 0) { toast.error('Select at least one staff member'); return; }
+    if (!bulkForm.startDate || !bulkForm.endDate) { toast.error('Start and end date required'); return; }
+    if (new Date(bulkForm.endDate) < new Date(bulkForm.startDate)) { toast.error('End date must be after start date'); return; }
+    const shifts = bulkForm.staffIds.flatMap(staffId =>
+      bulkDates.map(shiftDate => ({ staffId, shiftDate, shiftType: bulkForm.shiftType, startTime: bulkForm.startTime, endTime: bulkForm.endTime })),
+    );
+    setSubmitting(true);
+    try {
+      const { data } = await api.post('/duty-roster/bulk', { shifts });
+      const created = data?.created ?? 0; const failed = data?.failed ?? 0;
+      toast.success(`Created ${created} shift${created === 1 ? '' : 's'}${failed ? `, ${failed} skipped` : ''}`);
+      setShowBulkForm(false); fetchData();
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); }
     finally { setSubmitting(false); }
   };
 
@@ -205,13 +254,13 @@ export default function DutyRosterPage() {
 
       <div className="flex items-center justify-between">
         <div className="flex bg-gray-100 rounded-xl p-1 w-fit">
-          {[['roster', 'Week Roster'], ['leave', 'Leave Requests']].map(([val, label]) => (
+          {[['roster', 'Week Roster'], ['my', 'My Roster'], ['leave', 'Leave Requests']].map(([val, label]) => (
             <button key={val} onClick={() => { setTab(val as any); setPage(1); }}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === val ? 'bg-white shadow text-teal-700' : 'text-gray-500'}`}>{label}</button>
           ))}
         </div>
         <div className="flex gap-2">
-          {tab === 'roster' && (
+          {(tab === 'roster' || tab === 'my') && (
             <>
               <button onClick={prevWeek} className="px-3 py-1.5 rounded-lg border text-sm text-gray-600 hover:bg-gray-50">← Prev</button>
               <span className="px-3 py-1.5 text-sm font-medium text-gray-700">{formatDate(weekStart)}</span>
@@ -224,9 +273,17 @@ export default function DutyRosterPage() {
               <Printer size={14} /> Print Roster
             </button>
           )}
-          <button onClick={() => tab === 'roster' ? setShowForm(true) : setShowLeaveForm(true)} className="btn-primary flex items-center gap-2">
-            <Plus size={15} /> {tab === 'roster' ? 'Add Shift' : 'Apply Leave'}
-          </button>
+          {tab === 'roster' && (
+            <button onClick={openBulkForm}
+              className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 text-sm">
+              <CopyPlus size={14} /> Bulk Add
+            </button>
+          )}
+          {tab !== 'my' && (
+            <button onClick={() => tab === 'roster' ? setShowForm(true) : setShowLeaveForm(true)} className="btn-primary flex items-center gap-2">
+              <Plus size={15} /> {tab === 'roster' ? 'Add Shift' : 'Apply Leave'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -280,6 +337,32 @@ export default function DutyRosterPage() {
                   ));
                 })()
               }
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab === 'my' && (
+        <div className="hms-card overflow-x-auto">
+          <table className="w-full">
+            <thead className="sticky top-0 z-10"><tr>
+              {['Date', 'Day', 'Shift', 'Time', 'Status', 'Notes'].map(h => <th key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 py-3 text-left bg-gray-50">{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {loading ? <>{Array.from({ length: 5 }).map((_, i) => <SkeletonTableRow key={i} cols={6} />)}</>
+              : records.length === 0 ? <tr><td colSpan={6}><EmptyState icon={<CalendarCheck size={36} />} title="No shifts this week" description="Your scheduled shifts for the selected week will appear here" /></td></tr>
+              : records.map(s => (
+                <tr key={s.id} className="hover:bg-gray-50 border-t border-gray-50">
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{formatDate(s.shiftDate)}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{new Date(s.shiftDate).toLocaleDateString('en-IN', { weekday: 'long' })}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex px-2 py-1 rounded-lg border text-[10px] font-bold ${SHIFT_COLORS[s.shiftType] || SHIFT_COLORS.GENERAL}`}>{s.shiftType}</span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-700">{s.startTime}–{s.endTime}</td>
+                  <td className="px-4 py-3"><StatusBadge status={s.status} /></td>
+                  <td className="px-4 py-3 text-sm text-gray-600 max-w-[220px] truncate">{s.notes || '—'}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -357,6 +440,54 @@ export default function DutyRosterPage() {
               <button onClick={() => setShowForm(false)} className="btn-secondary px-4 py-2">Cancel</button>
               <button onClick={handleCreateShift} disabled={submitting} className="btn-primary flex items-center gap-2 px-4 py-2">
                 {submitting && <Loader2 size={14} className="animate-spin" />} Add Shift
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Add Shifts Modal */}
+      {showBulkForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="font-bold text-gray-900 flex items-center gap-2"><CopyPlus size={18} className="text-teal-600" /> Bulk Add Shifts</h2>
+              <button onClick={() => setShowBulkForm(false)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+            </div>
+            <div className="p-6 space-y-4 overflow-y-auto">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Staff * <span className="text-gray-400 font-normal">({bulkForm.staffIds.length} selected)</span></label>
+                <div className="border border-gray-200 rounded-lg max-h-48 overflow-y-auto divide-y divide-gray-50">
+                  {staff.length === 0 && <p className="px-3 py-3 text-sm text-gray-400">No staff available</p>}
+                  {staff.map(s => (
+                    <label key={s.id} className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer">
+                      <input type="checkbox" className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                        checked={bulkForm.staffIds.includes(s.id)} onChange={() => toggleBulkStaff(s.id)} />
+                      <span className="text-gray-800">{s.firstName} {s.lastName}</span>
+                      <span className="text-gray-400 text-xs">{s.role?.name || ''}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-xs font-semibold text-gray-600 mb-1">From *</label><input type="date" className="hms-input w-full" value={bulkForm.startDate} onChange={e => setBulkForm({ ...bulkForm, startDate: e.target.value })} /></div>
+                <div><label className="block text-xs font-semibold text-gray-600 mb-1">To *</label><input type="date" className="hms-input w-full" value={bulkForm.endDate} onChange={e => setBulkForm({ ...bulkForm, endDate: e.target.value })} /></div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div><label className="block text-xs font-semibold text-gray-600 mb-1">Shift Type</label>
+                  <select className="hms-input w-full" value={bulkForm.shiftType} onChange={e => setBulkForm({ ...bulkForm, shiftType: e.target.value })}>{SHIFT_TYPES.map(t => <option key={t}>{t}</option>)}</select></div>
+                <div><label className="block text-xs font-semibold text-gray-600 mb-1">Start</label><input type="time" className="hms-input w-full" value={bulkForm.startTime} onChange={e => setBulkForm({ ...bulkForm, startTime: e.target.value })} /></div>
+                <div><label className="block text-xs font-semibold text-gray-600 mb-1">End</label><input type="time" className="hms-input w-full" value={bulkForm.endTime} onChange={e => setBulkForm({ ...bulkForm, endTime: e.target.value })} /></div>
+              </div>
+              <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+                This will create <span className="font-semibold text-gray-700">{bulkForm.staffIds.length * bulkDates.length}</span> shift(s)
+                — {bulkForm.staffIds.length} staff × {bulkDates.length} day(s). Existing shifts on the same date are skipped automatically.
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
+              <button onClick={() => setShowBulkForm(false)} className="btn-secondary px-4 py-2">Cancel</button>
+              <button onClick={handleBulkCreate} disabled={submitting} className="btn-primary flex items-center gap-2 px-4 py-2">
+                {submitting && <Loader2 size={14} className="animate-spin" />} Create Shifts
               </button>
             </div>
           </div>
