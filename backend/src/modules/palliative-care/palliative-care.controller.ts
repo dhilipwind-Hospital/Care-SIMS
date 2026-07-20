@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { PalliativeCareService } from './palliative-care.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -15,4 +15,5 @@ export class PalliativeCareController {
   @Get() getAll(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getRecords(tid, q); }
   @Get('dashboard') dashboard(@CurrentUser('tenantId') tid: string) { return this.svc.dashboard(tid); }
   @Get(':id') getOne(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getOne(tid, id); }
+  @Patch(':id') update(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.update(tid, id, body); }
 }

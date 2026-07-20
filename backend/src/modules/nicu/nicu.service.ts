@@ -22,5 +22,14 @@ export class NicuService {
 
   async getDailyRecords(tenantId: string, admissionId: string) { return this.prisma.nicuDailyRecord.findMany({ where: { tenantId, nicuAdmissionId: admissionId }, orderBy: { recordDate: 'desc' } }); }
 
+  // Vitals timeline for the NICU chart: derived from the daily records (which capture
+  // heartRate/spo2/temperature), oldest-first so the chart's slice(-20) shows the latest run.
+  async getVitals(tenantId: string, admissionId: string) {
+    const a = await this.prisma.nicuAdmission.findFirst({ where: { id: admissionId, tenantId } });
+    if (!a) throw new NotFoundException('Not found');
+    const records = await this.prisma.nicuDailyRecord.findMany({ where: { tenantId, nicuAdmissionId: admissionId }, orderBy: { recordDate: 'asc' } });
+    return records.map(r => ({ recordedAt: r.recordDate, heartRate: r.heartRate, spo2: r.spo2, temperature: r.temperature, respiratoryRate: null }));
+  }
+
   async dashboard(tenantId: string) { const active = await this.prisma.nicuAdmission.count({ where: { tenantId, status: 'ACTIVE' } }); const total = await this.prisma.nicuAdmission.count({ where: { tenantId } }); return { active, total, discharged: total - active }; }
 }

@@ -11,5 +11,14 @@ export class PalliativeCareService {
 
   async getOne(tenantId: string, id: string) { const r = await this.prisma.palliativeCareRecord.findFirst({ where: { id, tenantId } }); if (!r) throw new NotFoundException('Not found'); return r; }
 
+  async update(tenantId: string, id: string, dto: any) {
+    await this.getOne(tenantId, id); // tenant-scoped existence check (404s otherwise)
+    const data: any = {};
+    // Whitelist mutable content fields only (never patientId/tenantId/assessedById).
+    ['recordType', 'patientName', 'diagnosis', 'supportType', 'primaryNurse', 'carePlan', 'status', 'painScore', 'painType', 'symptoms', 'goalsOfCare', 'advanceDirective', 'familyMeetingNotes', 'medications', 'notes'].forEach(k => { if (dto[k] !== undefined) data[k] = dto[k]; });
+    if (dto.nextFollowUp !== undefined) data.nextFollowUp = dto.nextFollowUp ? new Date(dto.nextFollowUp) : null;
+    return this.prisma.palliativeCareRecord.update({ where: { id }, data });
+  }
+
   async dashboard(tenantId: string) { const total = await this.prisma.palliativeCareRecord.count({ where: { tenantId } }); const byType = await this.prisma.palliativeCareRecord.groupBy({ by: ['recordType'], where: { tenantId }, _count: true }); return { total, byType }; }
 }

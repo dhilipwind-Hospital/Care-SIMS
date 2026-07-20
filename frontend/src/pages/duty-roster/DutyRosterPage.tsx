@@ -96,7 +96,7 @@ export default function DutyRosterPage() {
   const handleRequestSwap = async () => {
     if (!swapTarget || !swapStaffId) { toast.error('Select a staff member to swap with'); return; }
     try {
-      await api.post(`/duty-roster/${swapTarget.id}/swap`, { swapWithStaffId: swapStaffId });
+      await api.patch(`/duty-roster/${swapTarget.id}/swap`, { swapWithStaffId: swapStaffId });
       toast.success('Swap request sent'); setSwapTarget(null); setSwapStaffId('');
     } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); }
   };

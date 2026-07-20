@@ -18,4 +18,5 @@ export class NicuController {
   @Patch(':id') update(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.update(tid, id, body); }
   @Post(':id/daily-records') addDaily(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.addDailyRecord(tid, { ...body, nicuAdmissionId: id }, uid); }
   @Get(':id/daily-records') getDailyRecords(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getDailyRecords(tid, id); }
+  @Get(':id/vitals') vitals(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getVitals(tid, id); }
 }
