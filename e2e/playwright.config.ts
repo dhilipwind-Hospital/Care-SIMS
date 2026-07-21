@@ -14,6 +14,10 @@ export default defineConfig({
     headless: true,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
+    // Bound every action/navigation. Without these they default to 0 (= inherit the whole
+    // test budget), so a single never-settling wait can silently consume the entire run.
+    actionTimeout: 25_000,
+    navigationTimeout: 45_000,
   },
   projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
 });
