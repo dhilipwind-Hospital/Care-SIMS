@@ -12,7 +12,7 @@ import {
   UserPlus, ArrowRightLeft, Sparkles, FileBadge, LogOut, Search, Lock,
   Droplets, ScanLine, ShieldCheck, GitBranch, Monitor, Video,
   HeartPulse, Dumbbell, Ambulance, Clock, Package, Wrench,
-  MessageSquare, Bug, FileCheck, UtensilsCrossed, Skull, Siren, Baby, Award, Star,
+  MessageSquare, Bug, FileCheck, UtensilsCrossed, Skull, Siren, Baby, Award, Star, CalendarCheck,
 } from 'lucide-react';
 
 export type NavItem = { label: string; icon: React.ElementType; path: string; module?: string };
@@ -23,6 +23,7 @@ export const navByRole: Record<string, NavItem[]> = {
     { label: 'Queue Dashboard',      icon: LayoutDashboard, path: '/app/queue',           module: 'MOD_QUEUE' },
     { label: 'Patient Registration', icon: Users,           path: '/app/patients',        module: 'MOD_PAT_REG' },
     { label: 'Appointments',         icon: Calendar,        path: '/app/appointments',    module: 'MOD_APPT' },
+    { label: 'Self Booking',         icon: CalendarCheck,   path: '/app/appointments/self-booking', module: 'MOD_APPT' },
     { label: 'Operation Theatre',    icon: Scissors,        path: '/app/ot',              module: 'MOD_OT_SCHEDULE' },
     { label: 'Billing',              icon: CreditCard,      path: '/app/billing',         module: 'MOD_BILL_OPD' },
     { label: 'Insurance/TPA',        icon: ShieldCheck,     path: '/app/insurance',       module: 'MOD_INSURANCE' },
@@ -45,6 +46,7 @@ export const navByRole: Record<string, NavItem[]> = {
     { label: 'Referral',           icon: GitBranch,        path: '/app/referral',            module: 'MOD_REFERRAL' },
     { label: 'Telemedicine',       icon: Video,            path: '/app/telemedicine',        module: 'MOD_TELEMEDICINE' },
     { label: 'Operation Theatre',  icon: Scissors,         path: '/app/ot',                  module: 'MOD_OT_SCHEDULE' },
+    { label: 'OT Live Monitor',    icon: Monitor,          path: '/app/ot/live',             module: 'MOD_OT_SCHEDULE' },
     { label: 'Consent Forms',      icon: FileCheck,        path: '/app/consent',             module: 'MOD_CONSENT' },
     { label: 'Discharge Summary',  icon: FileBadge,        path: '/app/discharge-summary',   module: 'MOD_DISCHARGE' },
     { label: 'Medical Certificates', icon: Award,          path: '/app/certificates' },
@@ -61,6 +63,7 @@ export const navByRole: Record<string, NavItem[]> = {
     { label: 'Admissions',          icon: UserCheck,       path: '/app/nurse/admissions',  module: 'MOD_ADMISSION' },
     { label: 'ICU Monitoring',      icon: Monitor,         path: '/app/icu',               module: 'MOD_ICU' },
     { label: 'Operation Theatre',   icon: Scissors,        path: '/app/ot',                module: 'MOD_OT_SCHEDULE' },
+    { label: 'OT Live Monitor',     icon: Monitor,         path: '/app/ot/live',           module: 'MOD_OT_SCHEDULE' },
     { label: 'Blood Bank',          icon: Droplets,        path: '/app/blood-bank',        module: 'MOD_BLOOD_BANK' },
     { label: 'Dialysis',            icon: HeartPulse,      path: '/app/dialysis',          module: 'MOD_DIALYSIS' },
     { label: 'Diet & Nutrition',    icon: UtensilsCrossed, path: '/app/diet',              module: 'MOD_DIET' },
@@ -99,6 +102,8 @@ export const navByRole: Record<string, NavItem[]> = {
     { label: 'Appointments',          icon: Calendar,        path: '/app/appointments', module: 'MOD_APPT' },
     { label: 'Billing',               icon: CreditCard,      path: '/app/billing',      module: 'MOD_BILL_OPD' },
     { label: 'Operation Theatre',     icon: Scissors,        path: '/app/ot',           module: 'MOD_OT_SCHEDULE' },
+    { label: 'OT Live Monitor',       icon: Monitor,         path: '/app/ot/live',      module: 'MOD_OT_SCHEDULE' },
+    { label: 'OT Equipment',          icon: Wrench,          path: '/app/ot/equipment', module: 'MOD_OT_SCHEDULE' },
     { label: 'Notifications',         icon: Bell,            path: '/app/notifications' },
   ],
   ADMIN: [
@@ -121,6 +126,8 @@ export const navByRole: Record<string, NavItem[]> = {
     { label: 'Insurance/TPA',       icon: ShieldCheck,     path: '/app/insurance',           module: 'MOD_INSURANCE' },
     { label: 'ICU Management',      icon: Monitor,         path: '/app/icu',                 module: 'MOD_ICU' },
     { label: 'Operation Theatre',   icon: Scissors,        path: '/app/ot',                  module: 'MOD_OT_SCHEDULE' },
+    { label: 'OT Live Monitor',     icon: Monitor,         path: '/app/ot/live',             module: 'MOD_OT_SCHEDULE' },
+    { label: 'OT Equipment',        icon: Wrench,          path: '/app/ot/equipment',        module: 'MOD_OT_SCHEDULE' },
     { label: 'Dialysis',            icon: HeartPulse,      path: '/app/dialysis',            module: 'MOD_DIALYSIS' },
     { label: 'Physiotherapy',       icon: Dumbbell,        path: '/app/physiotherapy',       module: 'MOD_PHYSIOTHERAPY' },
     { label: 'Ambulance',           icon: Ambulance,       path: '/app/ambulance',           module: 'MOD_AMBULANCE' },
