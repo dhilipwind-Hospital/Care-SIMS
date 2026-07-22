@@ -317,29 +317,86 @@ test('12-act patient journey — register → … → discharge (UI-driven, API-
   await fresh();
   await test.step('Act 9 — OT', async () => {
     try {
+      // prerequisite only: an OT room must exist (theatre config, not the flow under test)
       const room = (await api('POST', '/ot/rooms', adminTok, { name: `OT-${stamp}` })).j;
-      const booking = (await api('POST', '/ot/bookings', adminTok, {
-        patientId: PAT.id, otRoomId: room.id, primarySurgeonId: doctorId, procedureName: 'Appendectomy',
-        // unique date+slot — the app correctly rejects a surgeon already booked at that time
-        scheduledDate: new Date(Date.now() + (2 + (Number(stamp) % 20)) * 864e5).toISOString().slice(0, 10),
-        scheduledStart: SLOT, surgeryType: 'ELECTIVE', expectedDurationMins: 60,
-      })).j;
-      if (!booking.id) throw new Error('booking not created: ' + JSON.stringify(booking).slice(0, 80));
       await login(page, cfg.logins.admin);
       await page.goto('/app/ot', { waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(3000);
+      await page.waitForTimeout(2500);
+
+      // ── schedule the surgery through the real modal ──
+      // Everything below is scoped to the modal container. Relying on .last() is unsafe:
+      // the page has its own SHOW DATE / timeline / report date inputs and a "Schedule
+      // Surgery" button with the same label as the modal's submit.
+      await page.getByRole('button', { name: 'Schedule Surgery' }).first().click({ timeout: 20000 });
+      const heading = page.getByRole('heading', { name: 'Schedule Surgery' });
+      await heading.waitFor({ state: 'visible', timeout: 20000 }); // throw loudly if it never opens
+      // the overlay container — NOT `div.filter({has: heading}).last()`, which resolves to the
+      // innermost wrapper (just the header) and excludes the form fields
+      const modal = page.locator('div.fixed.inset-0').filter({ has: heading }).first();
+      await shot(page, '09-ot-modal');
+
+      await pickPatient(page, /Click to see recent patients/i, PAT.last);
+      const sels = modal.locator('select');
+      const nSel = await sels.count();
+      // OT Room: the <option> value is the room id
+      for (let i = 0; i < nSel; i++) {
+        const vals = await sels.nth(i).locator('option').evaluateAll((os: any[]) => os.map(o => o.value));
+        if (vals.includes(room.id)) { await sels.nth(i).selectOption(room.id).catch(() => {}); break; }
+      }
+      await modal.getByPlaceholder('Type the procedure name').fill('Appendectomy');
+      // Surgeon: first select offering a "Dr." option (room select has none; anesthetist comes after)
+      for (let i = 0; i < nSel; i++) {
+        const texts = await sels.nth(i).locator('option').allInnerTexts();
+        const dr = texts.find(t => /^Dr\.?\s/i.test(t.trim()));
+        if (dr) { await sels.nth(i).selectOption({ label: dr }).catch(() => {}); break; }
+      }
+      // Book far in the future — today's schedule already has seeded demo bookings for this
+      // surgeon and the conflict guard blocks overlapping 60-min windows.
+      const otDate = new Date(Date.now() + (30 + (Number(stamp) % 60)) * 864e5).toISOString().slice(0, 10);
+      await modal.locator('input[type="date"]').first().fill(otDate);
+      await modal.locator('input[type="time"]').first().fill(SLOT);
+      await modal.getByRole('button', { name: 'Schedule Surgery' }).click({ timeout: 20000 });
+      // modal closing == the save succeeded; if it stays open, surface the form error
+      await heading.waitFor({ state: 'hidden', timeout: 30000 }).catch(() => {});
+      await shot(page, '09-ot-scheduled');
+      if (await heading.isVisible().catch(() => false)) {
+        const err = await page.locator('.bg-red-50, [class*="text-red"]').first().innerText().catch(() => '');
+        throw new Error(`booking modal did not close — ${err.replace(/\s+/g, ' ').slice(0, 120)}`);
+      }
+      // the list defaults to a single view-date; click "All" to drop the date filter so our
+      // future-dated booking is guaranteed to be in the list (avoids brittle exact-day matching),
+      // then poll past the skeleton loaders for OUR row.
+      await page.getByRole('button', { name: 'All', exact: true }).click({ timeout: 10000 }).catch(() => {});
+      // IMPORTANT: the bookings table shows PATIENT as "—" (GET /ot/bookings has no patient
+      // relation), so match OUR row by the unique OT ROOM name instead — it IS rendered.
+      const otRow = () => page.getByRole('row').filter({ hasText: `OT-${stamp}` }).first();
+      let rowOk = false;
+      for (let i = 0; i < 15; i++) { await page.waitForTimeout(1200); if (await otRow().count()) { rowOk = true; break; } }
+      if (!rowOk) throw new Error('scheduled booking row never rendered');
+
+      // ── drive Start → Complete from the booking row ──
+      const clickRow = async (re: RegExp, ms = 20000) => {
+        const end = Date.now() + ms;
+        while (Date.now() < end) {
+          const b = otRow().getByRole('button', { name: re }).first();
+          if (await b.isVisible().catch(() => false) && await b.isEnabled().catch(() => false)) { await b.click().catch(() => {}); await page.waitForTimeout(2500); return true; }
+          await page.waitForTimeout(1000);
+        }
+        return false;
+      };
+      if (!(await clickRow(/^Start$/i))) throw new Error('Start button not reachable on the booking row');
+      if (!(await clickRow(/^Complete$/i))) throw new Error('Complete button not reachable');
+      // completion modal → "Mark Complete"
+      await page.getByPlaceholder(/Post-op|Post-Operative/i).first().fill('Stable, shifted to recovery').catch(() => {});
+      await page.getByRole('button', { name: /Mark Complete/i }).click({ timeout: 20000 }).catch(() => {});
+      await page.waitForTimeout(3500);
       await shot(page, '09-ot');
-      // drive status via UI if buttons present, else via API (workflow is what matters)
-      const startBtn = page.getByRole('button', { name: /^Start$|Start Surgery/i }).first();
-      if (await startBtn.isVisible({ timeout: 5000 }).catch(() => false)) { await startBtn.click().catch(() => {}); await page.waitForTimeout(2500); }
-      else await api('PATCH', `/ot/bookings/${booking.id}/start`, adminTok);
-      // body must match CompleteProcedureDto exactly — the global ValidationPipe uses
-      // forbidNonWhitelisted, so unknown keys (outcome/operativeNotes) get the request rejected
-      await api('PATCH', `/ot/bookings/${booking.id}/complete`, adminTok, { intraOpNotes: 'Uneventful', postOpNotes: 'Stable, shifted to recovery' });
-      const after = (await api('GET', `/ot/bookings/${booking.id}`, adminTok)).j;
-      const st = (after?.data || after)?.status;
-      if (!/COMPLETED/i.test(st || '')) throw new Error(`OT status ${st}`);
-      record({ act: '9', persona: 'admin (OT)', status: 'PASS', detail: `OT booking ${after.bookingNumber || ''} → ${st}` });
+
+      // NB: GET /ot/bookings has NO patient relation — filter by patientId, not patient.lastName
+      const bookings = arr(await api('GET', '/ot/bookings?limit=300', adminTok)).filter((b: any) => b.patientId === PAT.id);
+      const done = bookings.find((b: any) => /COMPLETED/i.test(b.status || ''));
+      if (!done) throw new Error(`no COMPLETED booking (statuses: ${bookings.map((b: any) => b.status).join(',')})`);
+      record({ act: '9', persona: 'admin (OT)', status: 'PASS', detail: `OT booking ${done.bookingNumber} → ${done.status} (scheduled+started+completed via UI)` });
     } catch (e: any) { await shot(page, '09-ot-FAIL'); record({ act: '9', persona: 'admin (OT)', status: 'FAIL', detail: String(e?.message || e).slice(0, 150) }); }
   });
 
@@ -372,14 +429,20 @@ test('12-act patient journey — register → … → discharge (UI-driven, API-
       await target.scrollIntoViewIfNeeded().catch(() => {});
       const view = target.getByRole('button', { name: 'View' }).first();
       if (await view.count()) await view.click().catch(() => {}); else await target.click().catch(() => {});
-      // wait for the detail modal's payment panel (it renders only when balance > 0)
-      await page.getByText('Collect Payment', { exact: false }).first()
-        .waitFor({ state: 'visible', timeout: 20000 }).catch(() => {});
+      // the detail modal's payment panel renders only when balance > 0; assert it appeared
+      // instead of silently clicking into the void
+      const payPanel = page.getByText('Collect Payment', { exact: false }).first();
+      await payPanel.waitFor({ state: 'visible', timeout: 25000 }).catch(() => {});
+      if (!(await payPanel.isVisible().catch(() => false))) {
+        throw new Error('invoice detail / Collect Payment panel never appeared');
+      }
       const full = page.getByRole('button', { name: 'Full', exact: true });
       if (await full.count()) await full.click().catch(() => {});
-      await page.waitForTimeout(600);
-      await page.getByRole('button', { name: /Collect Payment/ }).last().click({ timeout: 15000 }).catch(() => {});
-      await page.waitForTimeout(4500);
+      await page.waitForTimeout(800);
+      await page.getByRole('button', { name: /Collect Payment/ }).last().click({ timeout: 20000 });
+      // wait for the success toast rather than a fixed sleep
+      await page.getByText(/Payment recorded/i).first().waitFor({ state: 'visible', timeout: 20000 }).catch(() => {});
+      await page.waitForTimeout(2000);
       await shot(page, '10-billing');
       const invs = arr(await api('GET', '/billing/invoices?limit=100', adminTok)).filter((i: any) => i.patientId === PAT.id);
       const paid = invs.find((i: any) => /PAID/i.test(i.status || '') || Number(i.paidAmount) > 0);
