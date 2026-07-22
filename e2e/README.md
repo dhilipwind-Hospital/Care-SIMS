@@ -61,3 +61,15 @@ curl -s https://care-sims.onrender.com/ >/dev/null
   so a hardcoded time collides with previous runs (`SLOT` is derived from the run stamp).
 - **Request bodies must match the DTO exactly** — the global ValidationPipe uses
   `forbidNonWhitelisted`, so an extra key gets the whole request rejected.
+
+## See the run as a gallery
+
+After a journey run, turn the captured screenshots into a single self-contained HTML page:
+
+```bash
+npx playwright test journey.spec.ts   # writes results.json + shots/*.png
+node build-gallery.mjs                 # -> journey-gallery.html (images embedded, open in a browser)
+```
+
+`build-gallery.mjs` reads `results.json` (per-act status + detail) and `shots/*.png`, compresses each
+with `sips`, and embeds them as base64 — so the output works offline and can be published as an artifact.
