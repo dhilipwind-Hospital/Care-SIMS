@@ -676,6 +676,206 @@ export default function MARPage() {
           </div>
         </div>
       )}
+
+      {/* PRN (As-Needed) Dose Modal */}
+      {showPrnForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2"><Zap size={16} className="text-amber-500" /> Record PRN (As-Needed) Dose</h3>
+              <button onClick={() => setShowPrnForm(false)} className="p-1 rounded hover:bg-gray-100"><X size={18} className="text-gray-500" /></button>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <p className="text-xs text-gray-500">A PRN dose is recorded as administered immediately. If a daily maximum is set, the limit is enforced by the server.</p>
+              {prnError && <p className="text-sm text-red-600">{prnError}</p>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <SearchableSelect
+                  value={prnForm.patientId}
+                  onChange={(id) => setPrnForm({ ...prnForm, patientId: id })}
+                  placeholder="Search patient *"
+                  endpoint="/patients"
+                  searchParam="q"
+                  mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })}
+                />
+                <SearchableSelect
+                  value={prnForm.admissionId}
+                  onChange={(id) => setPrnForm({ ...prnForm, admissionId: id })}
+                  placeholder="Search admission *"
+                  endpoint="/admissions"
+                  searchParam="q"
+                  mapOption={(a: any) => ({ id: a.id, label: a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : a.id, sub: `Bed ${a.bed?.bedNumber || '?'}` })}
+                />
+                <input className="hms-input" placeholder="Drug Name *" value={prnForm.drugName} onChange={e => setPrnForm({ ...prnForm, drugName: e.target.value })} />
+                <input className="hms-input" placeholder="Dose *" value={prnForm.dosage} onChange={e => setPrnForm({ ...prnForm, dosage: e.target.value })} />
+                <select className="hms-input" value={prnForm.route} onChange={e => setPrnForm({ ...prnForm, route: e.target.value })}>
+                  {ROUTE_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+                <input className="hms-input" type="number" min={1} placeholder="Max doses / day (optional)" value={prnForm.prnMaxDailyDoses} onChange={e => setPrnForm({ ...prnForm, prnMaxDailyDoses: e.target.value })} />
+              </div>
+              <input className="hms-input w-full" placeholder="PRN reason / indication (e.g. pain, fever) *" value={prnForm.prnReason} onChange={e => setPrnForm({ ...prnForm, prnReason: e.target.value })} />
+              <textarea className="hms-input w-full" placeholder="Notes" rows={2} value={prnForm.notes} onChange={e => setPrnForm({ ...prnForm, notes: e.target.value })} />
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
+              <button onClick={() => setShowPrnForm(false)} className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={handlePrn} disabled={prnSaving}
+                className="px-5 py-2 rounded-lg text-white text-sm font-semibold disabled:opacity-40"
+                style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
+                {prnSaving ? 'Recording…' : 'Record PRN Dose'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Barcode Verification Modal */}
+      {barcodeTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2"><Barcode size={16} className="text-indigo-600" /> Barcode Verification</h3>
+              <button onClick={() => { setBarcodeTarget(null); setBarcodeResult(null); }} className="p-1 rounded hover:bg-gray-100"><X size={18} className="text-gray-500" /></button>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <div className="bg-indigo-50 rounded-lg p-3 text-sm">
+                <div className="font-semibold text-indigo-800">{barcodeTarget.drugName} — {barcodeTarget.dosage || barcodeTarget.dose}</div>
+                <div className="text-indigo-600 mt-0.5">{barcodeTarget.patient?.firstName} {barcodeTarget.patient?.lastName} · {barcodeTarget.route}</div>
+              </div>
+              <p className="text-xs text-gray-500">Scan or enter the drug and patient barcodes to confirm the right drug for the right patient.</p>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Drug Barcode</label>
+                <input className="hms-input w-full" placeholder="Scan drug barcode…" value={barcodeForm.drugBarcode} onChange={e => { setBarcodeForm({ ...barcodeForm, drugBarcode: e.target.value }); setBarcodeResult(null); }} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Patient Barcode / Wristband ID</label>
+                <input className="hms-input w-full" placeholder="Scan patient wristband…" value={barcodeForm.patientBarcode} onChange={e => { setBarcodeForm({ ...barcodeForm, patientBarcode: e.target.value }); setBarcodeResult(null); }} />
+              </div>
+              {barcodeResult && (
+                barcodeResult.verified ? (
+                  <div className="flex items-start gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2.5 text-sm text-green-700">
+                    <CheckCircle size={16} className="shrink-0 mt-0.5" />
+                    <span>Verified — barcodes match the scheduled dose. Safe to administer.</span>
+                  </div>
+                ) : (
+                  <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 text-sm text-red-700 space-y-1">
+                    <div className="flex items-center gap-2 font-semibold"><XCircle size={16} className="shrink-0" /> Verification failed</div>
+                    <ul className="list-disc list-inside space-y-0.5">
+                      {(barcodeResult.errors || []).map((err: string, i: number) => <li key={i}>{err}</li>)}
+                    </ul>
+                  </div>
+                )
+              )}
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
+              <button onClick={() => { setBarcodeTarget(null); setBarcodeResult(null); }} className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50">Close</button>
+              {barcodeResult?.verified ? (
+                <button onClick={proceedFromBarcode} className="px-5 py-2 rounded-lg text-white text-sm font-semibold" style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>Proceed to Administer</button>
+              ) : (
+                <button onClick={handleVerifyBarcode} disabled={barcodeVerifying}
+                  className="px-5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold disabled:opacity-40 hover:bg-indigo-700">
+                  {barcodeVerifying ? 'Verifying…' : 'Verify'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Reconciliation Modal */}
+      {showReconForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2"><ClipboardList size={16} className="text-teal-600" /> New Medication Reconciliation</h3>
+              <button onClick={() => setShowReconForm(false)} className="p-1 rounded hover:bg-gray-100"><X size={18} className="text-gray-500" /></button>
+            </div>
+            <div className="px-6 py-4 space-y-5">
+              {reconError && <p className="text-sm text-red-600">{reconError}</p>}
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium text-gray-600">Type</label>
+                <select className="hms-input w-48" value={reconForm.reconcType} onChange={e => setReconForm({ ...reconForm, reconcType: e.target.value })}>
+                  <option value="ADMISSION">Admission</option>
+                  <option value="DISCHARGE">Discharge</option>
+                </select>
+              </div>
+
+              {/* Home Medications */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-semibold text-gray-700">Home Medications</h4>
+                  <button onClick={() => setHomeMeds([...homeMeds, { drug: '', dose: '', frequency: '', route: 'ORAL', continue: true }])} className="text-xs px-2 py-1 rounded-md border border-teal-200 text-teal-700 hover:bg-teal-50 inline-flex items-center gap-1"><Plus size={12} /> Add</button>
+                </div>
+                <div className="space-y-2">
+                  {homeMeds.length === 0 && <p className="text-xs text-gray-400">No home medications added.</p>}
+                  {homeMeds.map((m, i) => (
+                    <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                      <input className="hms-input col-span-3" placeholder="Drug" value={m.drug} onChange={e => { const n = [...homeMeds]; n[i] = { ...n[i], drug: e.target.value }; setHomeMeds(n); }} />
+                      <input className="hms-input col-span-2" placeholder="Dose" value={m.dose} onChange={e => { const n = [...homeMeds]; n[i] = { ...n[i], dose: e.target.value }; setHomeMeds(n); }} />
+                      <input className="hms-input col-span-2" placeholder="Freq" value={m.frequency} onChange={e => { const n = [...homeMeds]; n[i] = { ...n[i], frequency: e.target.value }; setHomeMeds(n); }} />
+                      <select className="hms-input col-span-2" value={m.route} onChange={e => { const n = [...homeMeds]; n[i] = { ...n[i], route: e.target.value }; setHomeMeds(n); }}>
+                        {ROUTE_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                      <label className="col-span-2 flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" className="accent-teal-600" checked={m.continue} onChange={e => { const n = [...homeMeds]; n[i] = { ...n[i], continue: e.target.checked }; setHomeMeds(n); }} /> Continue</label>
+                      <button onClick={() => setHomeMeds(homeMeds.filter((_, idx) => idx !== i))} className="col-span-1 text-gray-400 hover:text-red-500 flex justify-center"><Trash2 size={14} /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Hospital Medications */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-semibold text-gray-700">Hospital Medications</h4>
+                  <button onClick={() => setHospMeds([...hospMeds, { drug: '', dose: '', frequency: '', route: 'ORAL', source: '' }])} className="text-xs px-2 py-1 rounded-md border border-teal-200 text-teal-700 hover:bg-teal-50 inline-flex items-center gap-1"><Plus size={12} /> Add</button>
+                </div>
+                <div className="space-y-2">
+                  {hospMeds.length === 0 && <p className="text-xs text-gray-400">No hospital medications added.</p>}
+                  {hospMeds.map((m, i) => (
+                    <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                      <input className="hms-input col-span-3" placeholder="Drug" value={m.drug} onChange={e => { const n = [...hospMeds]; n[i] = { ...n[i], drug: e.target.value }; setHospMeds(n); }} />
+                      <input className="hms-input col-span-2" placeholder="Dose" value={m.dose} onChange={e => { const n = [...hospMeds]; n[i] = { ...n[i], dose: e.target.value }; setHospMeds(n); }} />
+                      <input className="hms-input col-span-2" placeholder="Freq" value={m.frequency} onChange={e => { const n = [...hospMeds]; n[i] = { ...n[i], frequency: e.target.value }; setHospMeds(n); }} />
+                      <select className="hms-input col-span-2" value={m.route} onChange={e => { const n = [...hospMeds]; n[i] = { ...n[i], route: e.target.value }; setHospMeds(n); }}>
+                        {ROUTE_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                      <input className="hms-input col-span-2" placeholder="Source" value={m.source} onChange={e => { const n = [...hospMeds]; n[i] = { ...n[i], source: e.target.value }; setHospMeds(n); }} />
+                      <button onClick={() => setHospMeds(hospMeds.filter((_, idx) => idx !== i))} className="col-span-1 text-gray-400 hover:text-red-500 flex justify-center"><Trash2 size={14} /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Discrepancies */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-semibold text-gray-700">Discrepancies</h4>
+                  <button onClick={() => setDiscrepancies([...discrepancies, { drug: '', issue: '', resolution: '' }])} className="text-xs px-2 py-1 rounded-md border border-amber-200 text-amber-700 hover:bg-amber-50 inline-flex items-center gap-1"><Plus size={12} /> Add</button>
+                </div>
+                <div className="space-y-2">
+                  {discrepancies.length === 0 && <p className="text-xs text-gray-400">No discrepancies flagged.</p>}
+                  {discrepancies.map((d, i) => (
+                    <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                      <input className="hms-input col-span-3" placeholder="Drug" value={d.drug} onChange={e => { const n = [...discrepancies]; n[i] = { ...n[i], drug: e.target.value }; setDiscrepancies(n); }} />
+                      <input className="hms-input col-span-4" placeholder="Issue" value={d.issue} onChange={e => { const n = [...discrepancies]; n[i] = { ...n[i], issue: e.target.value }; setDiscrepancies(n); }} />
+                      <input className="hms-input col-span-4" placeholder="Resolution" value={d.resolution} onChange={e => { const n = [...discrepancies]; n[i] = { ...n[i], resolution: e.target.value }; setDiscrepancies(n); }} />
+                      <button onClick={() => setDiscrepancies(discrepancies.filter((_, idx) => idx !== i))} className="col-span-1 text-gray-400 hover:text-red-500 flex justify-center"><Trash2 size={14} /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <textarea className="hms-input w-full" placeholder="Reconciliation notes" rows={2} value={reconForm.notes} onChange={e => setReconForm({ ...reconForm, notes: e.target.value })} />
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50 sticky bottom-0">
+              <button onClick={() => setShowReconForm(false)} className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleCreateRecon} disabled={reconSaving}
+                className="px-5 py-2 rounded-lg text-white text-sm font-semibold disabled:opacity-40"
+                style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
+                {reconSaving ? 'Saving…' : 'Save Reconciliation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
