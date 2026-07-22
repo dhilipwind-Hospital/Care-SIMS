@@ -209,7 +209,19 @@ export class OTService {
       this.prisma.oTBooking.findMany({ where, skip, take: Number(limit), orderBy: [{ scheduledDate: 'asc' }, { scheduledStart: 'asc' }], include: { otRoom: { select: { name: true } } } }),
       this.prisma.oTBooking.count({ where }),
     ]);
-    return { data, meta: { total, page: Number(page), limit: Number(limit) } };
+    // OTBooking has no patient/surgeon Prisma relations (bare FK columns), so the board showed
+    // "—" for both. Batch-resolve names and attach them (one query each, not per-row).
+    const patientIds = [...new Set(data.map((b) => b.patientId).filter(Boolean))];
+    const surgeonIds = [...new Set(data.map((b) => b.primarySurgeonId).filter(Boolean))];
+    const [patients, users, docs] = await Promise.all([
+      patientIds.length ? this.prisma.patient.findMany({ where: { id: { in: patientIds } }, select: { id: true, firstName: true, lastName: true, patientId: true } }) : [],
+      surgeonIds.length ? this.prisma.tenantUser.findMany({ where: { id: { in: surgeonIds } }, select: { id: true, firstName: true, lastName: true } }) : [],
+      surgeonIds.length ? this.prisma.doctorRegistry.findMany({ where: { id: { in: surgeonIds } }, select: { id: true, firstName: true, lastName: true } }) : [],
+    ]);
+    const pMap = new Map<string, any>(patients.map((p) => [p.id, p] as [string, any]));
+    const sMap = new Map<string, any>([...docs, ...users].map((u) => [u.id, u] as [string, any])); // tenantUser wins over registry
+    const enriched = data.map((b) => ({ ...b, patient: pMap.get(b.patientId) || null, primarySurgeon: sMap.get(b.primarySurgeonId) || null }));
+    return { data: enriched, meta: { total, page: Number(page), limit: Number(limit) } };
   }
 
   async getBooking(tenantId: string, id: string) {
