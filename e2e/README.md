@@ -8,6 +8,7 @@ Version-controlled here so it survives and can run in CI.
 | File | What it does | Browser? |
 |---|---|---|
 | `journey.spec.ts` | **The 12-act patient journey** — register → appointment → triage → consult (ICD persisted) → prescription → pharmacy dispense → lab (collect→process→results→validate) → admit → OT → billing (invoice+payment) → patient portal → discharge. UI-driven, every assertion API/DB-verified. **12/12 passing.** | Yes |
+| `patient-selfbooking.spec.ts` | **Self-booking** (the gap journey Act 11 leaves — it only confirms the portal *loads*). 4 tests: (1) portal API contract book→list→cancel; (2) portal doctor-name enrichment guard; (3) portal UI booking; (4) **staff** SelfBookingPage UI booking. Each books then cancels, so it self-cleans. `FE_URL=http://localhost:5555 npx playwright test patient-selfbooking.spec.ts` runs it against a local/preview build. See note below. | Partly |
 | `regression-creates.mjs` | Smoke test: POSTs ~36 create endpoints, asserts 201. Fastest check. | No |
 | `verify-fixes.spec.ts` | Consultation-complete (structured ICD persists) + discharge-approve (admission → DISCHARGED), both DB-verified. | Yes |
 | `verify-wave8-fixes.spec.ts` | Create flows: Referral, Birth, Consent, MLC. | Yes |
@@ -16,6 +17,18 @@ Version-controlled here so it survives and can run in CI.
 
 > **Not yet included:** the `sweep-*` specs (broad page-render coverage) were lost in the `/tmp`
 > purge and still need rebuilding.
+
+> **`patient-selfbooking.spec.ts` — the "doctor name" test is a deploy guard.** Test 2
+> (`…resolves the doctor name`) asserts `doctorName` is populated in the portal's *My Appointments*.
+> It **fails until the `auth.service.getPatientAppointments` enrichment fix is deployed** to the
+> backend, then goes green — the failure message says exactly this. Tests 1 (API) and 3 (UI) pass
+> against current production. Every test books then cancels via the patient-scoped API, so a
+> failed/interrupted run leaves no orphan appointment.
+>
+> **Test 4 (staff `SelfBookingPage`) is a FRONTEND deploy guard.** The deployed page still (a) crashes
+> rendering slot objects and (b) sends a `reason` field the DTO rejects — so it fails against current
+> production and passes once the frontend fix is deployed. Verified locally against the prod backend
+> with `FE_URL=http://localhost:5555` (point the vite dev `/api` proxy at the prod backend first).
 
 ## Setup
 

@@ -692,12 +692,19 @@ export class AuthService {
       this.prisma.appointment.findMany({ where, skip, take: Number(limit), orderBy: [{ appointmentDate: 'desc' }] }),
       this.prisma.appointment.count({ where }),
     ]);
-    // Enrich with doctor names
-    const doctorIds = [...new Set(appts.map(a => a.doctorId))];
-    const doctors = doctorIds.length
-      ? await this.prisma.tenantUser.findMany({ where: { id: { in: doctorIds } }, select: { id: true, firstName: true, lastName: true } })
-      : [];
-    const docMap = Object.fromEntries(doctors.map(d => [d.id, `Dr. ${d.firstName} ${d.lastName}`]));
+    // Enrich with doctor names. appointment.doctorId can reference either a
+    // TenantUser (staff-booked) or a DoctorRegistry row (portal-booked, since
+    // getPatientFacingDoctors returns registry ids), so resolve against both.
+    const doctorIds = [...new Set(appts.map(a => a.doctorId).filter(Boolean))];
+    const [staffDocs, registryDocs] = doctorIds.length
+      ? await Promise.all([
+          this.prisma.tenantUser.findMany({ where: { id: { in: doctorIds } }, select: { id: true, firstName: true, lastName: true } }),
+          this.prisma.doctorRegistry.findMany({ where: { id: { in: doctorIds } }, select: { id: true, firstName: true, lastName: true } }),
+        ])
+      : [[], []];
+    const docMap = Object.fromEntries(
+      [...staffDocs, ...registryDocs].map(d => [d.id, `Dr. ${d.firstName} ${d.lastName}`]),
+    );
     const data = appts.map(a => ({ ...a, doctorName: docMap[a.doctorId] || null }));
     return { data, meta: { total, page: Number(page), limit: Number(limit) } };
   }

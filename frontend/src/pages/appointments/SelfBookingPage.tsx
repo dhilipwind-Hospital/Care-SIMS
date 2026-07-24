@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Search, Star, Calendar, Clock, ChevronRight, CheckCircle } from 'lucide-react';
+import { Search, Star, Calendar, Clock, ChevronRight, CheckCircle, X } from 'lucide-react';
 import TopBar from '../../components/layout/TopBar';
 import api from '../../lib/api';
 
@@ -13,12 +13,18 @@ export default function SelfBookingPage() {
   const [search, setSearch] = useState('');
   const [selectedDoctor, setSelectedDoctor] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState('');
-  const [slots, setSlots] = useState<string[]>([]);
+  const [slots, setSlots] = useState<Array<{ time: string; available: boolean }>>([]);
   const [selectedSlot, setSelectedSlot] = useState('');
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [form, setForm] = useState({ patientId: '', appointmentType: 'NEW_VISIT', reason: '' });
   const [confirmed, setConfirmed] = useState(false);
   const [bookedAppt, setBookedAppt] = useState<any>(null);
+  // Patient picker — the backend requires a real patient id, so a free-text
+  // field can't work. Same debounced search the AppointmentsPage book modal uses.
+  const [patSearch, setPatSearch] = useState('');
+  const [patients, setPatients] = useState<any[]>([]);
+  const [patLoading, setPatLoading] = useState(false);
+  const [selectedPat, setSelectedPat] = useState<any>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -44,22 +50,45 @@ export default function SelfBookingPage() {
   useEffect(() => {
     if (!selectedDoctor || !selectedDate) return;
     setSlotsLoading(true);
+    setSelectedSlot('');
     api.get(`/appointments/slots`, { params: { doctorId: selectedDoctor.id, date: selectedDate, locationId: selectedDoctor.locationId } })
-      .then(r => setSlots(r.data?.slots || r.data || []))
+      .then(r => {
+        // Backend (getDoctorSlots) returns { slots: [{ time, available, reason }], onLeave, hours }.
+        // Tolerate a raw array or bare time strings too, so the panel never renders a raw object.
+        const raw = r.data?.slots ?? r.data ?? [];
+        const norm = (Array.isArray(raw) ? raw : []).map((s: any) =>
+          typeof s === 'string' ? { time: s, available: true } : { time: s.time, available: s.available !== false });
+        setSlots(norm);
+      })
       .catch((err) => { console.error('Failed to fetch appointment slots:', err); setSlots([]); })
       .finally(() => setSlotsLoading(false));
   }, [selectedDoctor, selectedDate]);
 
+  // Debounced patient search (name / phone / patient ID).
+  useEffect(() => {
+    if (!patSearch.trim()) { setPatients([]); return; }
+    const t = setTimeout(async () => {
+      setPatLoading(true);
+      try {
+        const { data } = await api.get('/patients', { params: { q: patSearch, limit: 8 } });
+        setPatients(data.data || data || []);
+      } catch (err) { console.error('Failed to search patients:', err); }
+      finally { setPatLoading(false); }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [patSearch]);
+
   const confirmBooking = async () => {
+    if (!form.patientId) { toast.error('Please select a patient'); return; }
     try {
       const { data } = await api.post('/appointments', {
         doctorId: selectedDoctor.id,
-        patientId: form.patientId || undefined,
+        patientId: form.patientId,
         locationId: selectedDoctor.locationId,
         appointmentDate: selectedDate,
         slotTime: selectedSlot,
         appointmentType: form.appointmentType,
-        reason: form.reason,
+        chiefComplaint: form.reason, // DTO field is chiefComplaint; `reason` is rejected by forbidNonWhitelisted
       });
       setBookedAppt(data);
       setConfirmed(true);
@@ -86,7 +115,7 @@ export default function SelfBookingPage() {
               <div><span className="text-gray-500">Appointment #:</span> <span className="font-semibold text-teal-700">{bookedAppt.appointmentNumber || bookedAppt.id?.slice(0,8)}</span></div>
             </div>
           )}
-          <button onClick={() => { setConfirmed(false); setStep(0); setSelectedDoctor(null); setSelectedDate(''); setSelectedSlot(''); }}
+          <button onClick={() => { setConfirmed(false); setStep(0); setSelectedDoctor(null); setSelectedDate(''); setSelectedSlot(''); setSelectedPat(null); setPatSearch(''); setForm({ patientId: '', appointmentType: 'NEW_VISIT', reason: '' }); }}
             className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold" style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
             Book Another
           </button>
@@ -183,9 +212,12 @@ export default function SelfBookingPage() {
                 ) : (
                   <div className="grid grid-cols-4 gap-2">
                     {slots.map(slot => (
-                      <button key={slot} onClick={() => setSelectedSlot(slot)}
-                        className={`py-2 rounded-lg text-sm font-medium border transition-all ${selectedSlot === slot ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-gray-200 text-gray-700 hover:border-teal-300'}`}>
-                        {slot}
+                      <button key={slot.time} disabled={!slot.available} onClick={() => slot.available && setSelectedSlot(slot.time)}
+                        className={`py-2 rounded-lg text-sm font-medium border transition-all ${
+                          selectedSlot === slot.time ? 'border-teal-500 bg-teal-50 text-teal-700'
+                          : !slot.available ? 'border-gray-100 bg-gray-50 text-gray-300 line-through cursor-not-allowed'
+                          : 'border-gray-200 text-gray-700 hover:border-teal-300'}`}>
+                        {slot.time}
                       </button>
                     ))}
                   </div>
@@ -228,9 +260,38 @@ export default function SelfBookingPage() {
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Patient ID (optional)</label>
-                <input value={form.patientId} onChange={e => setForm(f => ({ ...f, patientId: e.target.value }))} placeholder="PT-00000"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                <label className="block text-xs font-medium text-gray-600 mb-1">Patient <span className="text-red-500">*</span></label>
+                {selectedPat ? (
+                  <div className="flex items-center justify-between p-3 bg-teal-50 rounded-lg">
+                    <div>
+                      <span className="font-semibold text-teal-800 text-sm">{selectedPat.firstName} {selectedPat.lastName}</span>
+                      <span className="text-xs text-teal-600 ml-2">{selectedPat.patientId}</span>
+                    </div>
+                    <button type="button" onClick={() => { setSelectedPat(null); setForm(f => ({ ...f, patientId: '' })); }}
+                      className="text-teal-500 hover:text-red-500"><X size={14} /></button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input value={patSearch} onChange={e => setPatSearch(e.target.value)}
+                      placeholder="Search by name, phone or patient ID…"
+                      className="w-full pl-8 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                    {patients.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg border border-gray-200 shadow-lg z-10 max-h-44 overflow-y-auto">
+                        {patLoading ? (
+                          <div className="p-3 text-sm text-gray-400">Searching…</div>
+                        ) : patients.map(p => (
+                          <button key={p.id} type="button"
+                            onClick={() => { setSelectedPat(p); setForm(f => ({ ...f, patientId: p.id })); setPatSearch(''); setPatients([]); }}
+                            className="w-full text-left px-4 py-2.5 hover:bg-gray-50 text-sm border-b border-gray-50 last:border-0">
+                            <span className="font-medium text-gray-900">{p.firstName} {p.lastName}</span>
+                            <span className="text-gray-400 text-xs ml-2">{p.patientId} · {p.phone}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Appointment Type</label>
@@ -250,7 +311,7 @@ export default function SelfBookingPage() {
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={() => setStep(1)} className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm text-gray-700 hover:bg-gray-50">Back</button>
-              <button onClick={confirmBooking} className="flex-1 py-2.5 rounded-xl text-white text-sm font-bold" style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
+              <button onClick={confirmBooking} disabled={!form.patientId} className="flex-1 py-2.5 rounded-xl text-white text-sm font-bold disabled:opacity-50" style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
                 Confirm Booking
               </button>
             </div>
