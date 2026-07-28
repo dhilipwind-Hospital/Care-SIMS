@@ -431,10 +431,15 @@ export class BillingService {
       const payment = await tx.payment.create({
         data: { tenantId, invoiceId, amount: dto.amount, paymentMethod: dto.paymentMethod, referenceNumber: dto.referenceNumber, bankName: dto.bankName, notes: dto.notes, recordedById },
       });
-      const newPaid = Number(inv.paidAmount) + dto.amount;
-      const balance = Number(inv.netTotal) - newPaid;
+      // Atomic increment (UPDATE ... SET paid_amount = paid_amount + amount) takes
+      // a row lock, so concurrent payments serialize and none is lost. The old
+      // read-modify-write let simultaneous payments clobber each other, leaving
+      // paidAmount < Σ(payments).
+      const updated = await tx.invoice.update({ where: { id: invoiceId }, data: { paidAmount: { increment: dto.amount } } });
+      const newPaid = Number(updated.paidAmount);
+      const balance = Number(updated.netTotal) - newPaid;
       const status = balance <= 0 ? 'PAID' : 'PARTIAL';
-      await tx.invoice.update({ where: { id: invoiceId }, data: { paidAmount: newPaid, status } });
+      await tx.invoice.update({ where: { id: invoiceId }, data: { status } });
       return { payment, inv, newPaid, balance, status };
     });
 

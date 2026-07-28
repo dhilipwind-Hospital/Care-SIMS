@@ -825,6 +825,10 @@ export class AuthService {
     const { patient } = await this.resolvePatientRecord(tenantId, patientAccountId);
     if (!patient) throw new BadRequestException('Patient record not found in this organization');
     return this.prisma.$transaction(async (tx) => {
+      // Lock the invoice row FIRST so the balance we clamp against is current —
+      // two simultaneous portal payments would otherwise both read a stale
+      // paidAmount, both clamp to the full balance, and overpay.
+      await tx.$queryRaw`SELECT id FROM invoices WHERE id = ${invoiceId}::uuid AND tenant_id = ${tenantId}::uuid FOR UPDATE`;
       const inv = await tx.invoice.findFirst({
         where: { id: invoiceId, tenantId, patientId: patient.id },
         include: { lineItems: true, payments: true },
