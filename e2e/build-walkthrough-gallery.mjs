@@ -32,6 +32,11 @@ const FLOWS = {
     persona: 'RECEPTION / ADMIN',
     blurb: 'Front-desk staff book on a patient’s behalf through the Self Booking wizard at Appointments → Self Booking.',
   },
+  race: {
+    label: 'Flow C · Guard rails',
+    persona: 'TWO TABS · ONE SLOT',
+    blurb: 'What stops a double booking: two tabs grab the same slot, only one wins, the loser gets a clear answer — enforced by a unique index in the database, not just UI checks. Plus doctor search filtering at the source.',
+  },
 };
 
 const card = (s, i) => `
@@ -63,10 +68,7 @@ ${flowSteps.map(s => card(s, ++i)).join('\n')}
 }).join('\n');
 
 const pass = steps.filter(s => s.status === 'PASS').length;
-const glance = {
-  portal: steps.filter(s => s.flow === 'portal').map(s => s.title),
-  staff: steps.filter(s => s.flow === 'staff').map(s => s.title),
-};
+const glance = Object.fromEntries(Object.keys(FLOWS).map(k => [k, steps.filter(s => s.flow === k).map(s => s.title)]));
 
 const html = `<title>Self-Booking — Live UI Walkthrough</title>
 <style>
@@ -85,7 +87,7 @@ const html = `<title>Self-Booking — Live UI Walkthrough</title>
   .score{display:flex;align-items:baseline;gap:10px;} .score b{font-size:34px;letter-spacing:-.03em;color:${pass === steps.length ? 'var(--good)' : 'var(--ink)'};font-variant-numeric:tabular-nums;} .score span{font-size:13px;color:var(--muted);}
   .lede{color:var(--muted);font-size:15px;max-width:64ch;margin:18px 0 4px;}
   .legend{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:12.5px;color:var(--muted);margin:14px 0 30px;} .legend b{color:var(--ink);font-weight:600;}
-  .glance{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:0 0 40px;}
+  .glance{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin:0 0 40px;}
   .glance-col{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow);}
   .glance-col h4{margin:0 0 8px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);}
   .glance-col ol{margin:0;padding-left:20px;font-size:13.5px;color:var(--muted);} .glance-col li{margin:3px 0;} .glance-col li::marker{color:var(--teal);font-variant-numeric:tabular-nums;font-weight:600;}
@@ -120,8 +122,7 @@ const html = `<title>Self-Booking — Live UI Walkthrough</title>
   <p class="lede">Both self-booking flows were driven through the deployed application in a real browser — real logins, real clicks, real slots — and each outcome was confirmed against the API. Every screen below was captured during the run. All test bookings were cancelled afterwards, so production data is untouched.</p>
   <div class="legend"><span><b>UI-driven</b> — real browser &amp; logins</span><span><b>API-verified</b> — outcomes checked server-side</span><span><b>Self-cleaning</b> — bookings cancelled after</span><span><b>Environment</b> — care-sims.vercel.app · live</span></div>
   <div class="glance">
-    <div class="glance-col"><h4>Flow A — patient portal</h4><ol>${glance.portal.map(t => `<li>${esc(t)}</li>`).join('')}</ol></div>
-    <div class="glance-col"><h4>Flow B — staff wizard</h4><ol>${glance.staff.map(t => `<li>${esc(t)}</li>`).join('')}</ol></div>
+${Object.entries(FLOWS).map(([k, f]) => `    <div class="glance-col"><h4>${esc(f.label)}</h4><ol>${(glance[k] || []).map(t => `<li>${esc(t)}</li>`).join('')}</ol></div>`).join('\n')}
   </div>
 ${sections}
   <footer><span><b>Run:</b> ${steps.length} steps · ${pass}/${steps.length} PASS</span><span><b>Spec:</b> ayphen-hms/e2e/walkthrough.spec.ts</span><span><b>Re-run:</b> npx playwright test walkthrough.spec.ts &amp;&amp; node build-walkthrough-gallery.mjs</span></footer>

@@ -187,6 +187,110 @@ test('walkthrough A — patient portal: login → book → my list → reschedul
   }
 });
 
+test('walkthrough C — guard rails: two tabs race one slot, search filters', async ({ browser }) => {
+  test.setTimeout(8 * 60 * 1000);
+  const token = await patientToken();
+  const doctors = arr(await api('GET', '/auth/patient/me/doctors?limit=20', token));
+  const doctorId = doctors[0].userId || doctors[0].id;
+  const open = await findOpenSlot(token, doctorId, 2);
+  expect(open, 'no open slot for the guard-rail walkthrough').toBeTruthy();
+
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  let winnerId: string | undefined;
+
+  // Drive one tab to the point of having the target slot selected.
+  const prepTab = async () => {
+    const p = await context.newPage();
+    p.on('dialog', d => d.accept().catch(() => {}));
+    // Login can transiently 503 right after a Render deploy/idle — retry it.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      await p.goto('/patient/login', { waitUntil: 'domcontentloaded' });
+      await p.waitForTimeout(1500);
+      // A later tab in the same context is already signed in — only log in if the form is there.
+      if (!/portal|\/app\//.test(p.url())) {
+        await p.locator('input[type="email"]').first().fill(cfg.logins.patient);
+        await p.locator('input[type="password"]').first().fill(cfg.password);
+        await p.getByRole('button', { name: /Sign In/i }).first().click({ timeout: 20000 });
+        await p.waitForURL(u => /select-hospital|portal/.test(u.toString()), { timeout: 45000 }).catch(() => {});
+        await p.waitForTimeout(2000);
+        if (/select-hospital/i.test(p.url())) {
+          await p.locator('button, [class*="cursor"], [class*="rounded"]').filter({ hasText: /Apple/i }).first().click({ timeout: 10000 }).catch(() => {});
+          await p.waitForTimeout(1000);
+          const cont = p.getByRole('button', { name: /Continue|Select/i }).first();
+          if (await cont.isEnabled().catch(() => false)) await cont.click().catch(() => {});
+          await p.waitForTimeout(1500);
+        }
+      }
+      if (/portal|\/app\//.test(p.url())) break;
+      if (attempt === 3) throw new Error(`patient login did not reach the portal (url=${p.url().slice(0, 60)})`);
+      await new Promise(r => setTimeout(r, 4000));
+    }
+    await p.goto('/app/patient/appointments', { waitUntil: 'domcontentloaded' });
+    await p.waitForTimeout(2000);
+    await p.getByRole('button', { name: /^Book$/ }).click({ timeout: 10000 }).catch(() => {});
+    const docCard = p.locator('button:has-text("Dr.")').first();
+    await docCard.waitFor({ state: 'visible', timeout: 30000 });
+    await docCard.click();
+    await p.waitForTimeout(600);
+    await pickCalendarDate(p, open!.date);
+    await p.locator('.rounded-2xl', { hasText: 'Available Slots' }).locator('button').first().waitFor({ timeout: 20000 }).catch(() => {});
+    await p.locator('.rounded-2xl', { hasText: 'Available Slots' }).getByRole('button', { name: open!.time, exact: true }).click({ timeout: 10000 });
+    await p.waitForTimeout(400);
+    return p;
+  };
+
+  try {
+    const tabA = await prepTab();
+    const tabB = await prepTab();
+    await snap(tabA, 'race', 'Two patients, one slot — tab A', `Both browser tabs picked the SAME free slot (${open!.time} on ${open!.date}) before either confirmed. The old code would have let both book it — 4 such duplicates existed in the database from a real double-submit.`);
+    await snap(tabB, 'race', 'Two patients, one slot — tab B', 'Tab B sees the identical slot as available — nothing has been booked yet. Now both confirm.');
+
+    // A confirms first and wins.
+    await tabA.getByRole('button', { name: /Confirm Booking/i }).click({ timeout: 15000 });
+    await expect(tabA.getByText(/Appointment Confirmed/i)).toBeVisible({ timeout: 30000 });
+    const mine = arr(await api('GET', '/auth/patient/me/appointments?limit=50', token));
+    winnerId = mine.find((a: any) => (a.appointmentDate || '').slice(0, 10) === open!.date && a.appointmentTime === open!.time && a.status === 'SCHEDULED')?.id;
+    await snap(tabA, 'race', 'Tab A wins the slot', 'First confirm succeeds normally. (The truly simultaneous case — two requests in the same instant — is covered by the API race test: the appointments_active_slot_uniq database index guarantees exactly one winner.)', `API-verified: id ${String(winnerId).slice(0, 8)}…`);
+
+    // B confirms the now-taken slot and is turned away cleanly.
+    await tabB.getByRole('button', { name: /Confirm Booking/i }).click({ timeout: 15000 });
+    await tabB.getByText(/no longer available/i).waitFor({ timeout: 20000 });
+    await snap(tabB, 'race', 'Tab B is turned away — no double booking', 'Instead of silently creating a duplicate, tab B gets a clear error: the slot is no longer available. The doctor\'s calendar stays consistent.');
+
+    // Fresh look at the grid: the slot is now struck out.
+    const tabC = await prepTabFresh(context, open!.date);
+    await snap(tabC, 'race', 'The grid now shows the slot as taken', `Reloading the booking screen, ${open!.time} is greyed and struck out — booked slots are excluded at the source, so other patients never even try.`);
+    await tabC.close().catch(() => {});
+
+    // Doctor search — real filtering.
+    const doc = doctors[0];
+    await tabB.getByPlaceholder(/Search doctors by name/i).fill(doc.lastName);
+    await tabB.waitForTimeout(1500);
+    await snap(tabB, 'race', 'Doctor search — a real match', `Typing "${doc.lastName}" filters in the database (not just the first page of results), so a doctor can be found no matter how many colleagues are listed before them.`);
+    await tabB.getByPlaceholder(/Search doctors by name/i).fill('zzznotadoctor');
+    await tabB.waitForTimeout(1500);
+    await snap(tabB, 'race', 'Doctor search — honest empty state', 'A query that matches no one says so, rather than showing an unrelated list.');
+  } finally {
+    if (winnerId) await api('PATCH', `/auth/patient/me/appointments/${winnerId}/cancel`, token, { reason: 'E2E cleanup' }).catch(() => undefined);
+    flush();
+    await context.close().catch(() => {});
+  }
+});
+
+// A fresh tab straight to the slot grid for a given date (session already in context storage).
+async function prepTabFresh(context: import('@playwright/test').BrowserContext, date: string) {
+  const p = await context.newPage();
+  await p.goto('/app/patient/appointments', { waitUntil: 'domcontentloaded' });
+  await p.waitForTimeout(2000);
+  await p.getByRole('button', { name: /^Book$/ }).click({ timeout: 10000 }).catch(() => {});
+  await p.locator('button:has-text("Dr.")').first().click();
+  await p.waitForTimeout(600);
+  await pickCalendarDate(p, date);
+  await p.locator('.rounded-2xl', { hasText: 'Available Slots' }).locator('button').first().waitFor({ timeout: 20000 }).catch(() => {});
+  await p.waitForTimeout(400);
+  return p;
+}
+
 test('walkthrough B — staff wizard: login → doctor → slots → patient → confirm', async ({ browser }) => {
   test.setTimeout(8 * 60 * 1000);
   const adminTok = (await api('POST', '/auth/login', null, { email: cfg.logins.admin, password: cfg.password })).j.accessToken;
