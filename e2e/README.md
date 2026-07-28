@@ -30,6 +30,20 @@ Version-controlled here so it survives and can run in CI.
 > production and passes once the frontend fix is deployed. Verified locally against the prod backend
 > with `FE_URL=http://localhost:5555` (point the vite dev `/api` proxy at the prod backend first).
 
+## CI
+
+`.github/workflows/ci.yml` runs this suite automatically:
+
+- **Every PR/push** — frontend + backend typecheck (gates the actual code in the ref).
+- **Push to main** — waits until `GET /api/health` reports the pushed commit (Render sets
+  `RENDER_GIT_COMMIT`), so the suite never runs against the previous deploy, then runs
+  the regression smoke + all Playwright specs against production.
+- **Nightly (03:00 IST) + manual dispatch** — same suite, no commit wait.
+
+One-time setup: add a repo secret **`E2E_ORG_JSON`** containing the full contents of your
+filled-in `org.json` (Settings → Secrets and variables → Actions, or
+`gh secret set E2E_ORG_JSON < org.json`). Without it the e2e job skips with a notice.
+
 ## Setup
 
 ```bash

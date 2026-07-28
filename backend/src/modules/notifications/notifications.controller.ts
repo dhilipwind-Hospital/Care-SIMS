@@ -16,6 +16,18 @@ export class NotificationsController {
 
 @ApiTags('Health') @Controller('health')
 export class EmailHealthController {
+  // Public liveness + deployed-commit probe. CI polls this after a push until
+  // `commit` matches the pushed SHA, so the e2e suite never runs against the
+  // previous deploy. RENDER_GIT_COMMIT is injected by Render at build/runtime.
+  @Get()
+  health() {
+    return {
+      status: 'ok',
+      commit: process.env.RENDER_GIT_COMMIT || null,
+      uptimeSeconds: Math.round(process.uptime()),
+    };
+  }
+
   @Get('email')
   emailConfig() {
     const provider = getEmailProvider();

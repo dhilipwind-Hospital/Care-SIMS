@@ -1,0 +1,137 @@
+name: CI
+
+# Two layers:
+#   typecheck — runs on every PR and push; tests the ACTUAL code in the ref.
+#   e2e       — runs after a push to main (once Render has finished deploying
+#               that exact commit), nightly, and on manual dispatch. It drives
+#               the LIVE production stack (Vercel FE + Render BE), because
+#               that is what the suite was built for. All specs self-clean.
+#
+# Required repo secret:
+#   E2E_ORG_JSON — the full contents of e2e/org.json (api URL, seed password,
+#                  role logins). Without it the e2e job skips with a notice.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '30 21 * * *'   # 03:00 IST nightly
+  workflow_dispatch:
+
+concurrency:
+  # Serialize e2e runs — parallel suites would race for the same live slots.
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || 'e2e-prod' }}
+  cancel-in-progress: false
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Frontend typecheck
+        working-directory: frontend
+        run: |
+          npm ci
+          npx tsc -b
+      - name: Backend typecheck
+        working-directory: backend
+        run: |
+          npm ci
+          npx prisma generate
+          npx tsc --noEmit -p tsconfig.json
+
+  e2e:
+    # Post-deploy verification against production — not for PRs (a PR's code
+    # isn't deployed, so testing prod would tell us nothing about the PR).
+    if: github.event_name != 'pull_request'
+    needs: typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check secret
+        id: secret
+        env:
+          E2E_ORG_JSON: ${{ secrets.E2E_ORG_JSON }}
+        run: |
+          if [ -z "$E2E_ORG_JSON" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::E2E_ORG_JSON secret not set — skipping e2e run. Add it under Settings → Secrets and variables → Actions."
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wait for Render to deploy this commit
+        if: steps.secret.outputs.present == 'true' && github.event_name == 'push'
+        run: |
+          # Poll /api/health until the deployed commit matches this push.
+          # Render free tier can take a while to build; give it 25 minutes.
+          echo "Waiting for backend to serve commit ${GITHUB_SHA}"
+          deadline=$(( $(date +%s) + 1500 ))
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            body=$(curl -s --max-time 90 https://care-sims.onrender.com/api/health || true)
+            commit=$(echo "$body" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).commit||'')}catch{console.log('')}})")
+            echo "  deployed commit: ${commit:-<none>}"
+            if [ "$commit" = "$GITHUB_SHA" ]; then
+              echo "Backend is serving this commit."
+              # Vercel deploys in ~1-2 min — far faster than Render — but add a
+              # small grace period so the frontend is certainly the new build too.
+              sleep 60
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::Backend never served commit ${GITHUB_SHA} within 25 min — deploy failed or is stuck. Not running e2e against the old build."
+          exit 1
+
+      - name: Warm backend (Render free-tier cold start)
+        if: steps.secret.outputs.present == 'true'
+        run: |
+          for i in 1 2 3; do
+            curl -s -o /dev/null --max-time 90 https://care-sims.onrender.com/api/health && break
+          done
+
+      - name: Install e2e deps
+        if: steps.secret.outputs.present == 'true'
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Write org.json
+        if: steps.secret.outputs.present == 'true'
+        working-directory: e2e
+        env:
+          E2E_ORG_JSON: ${{ secrets.E2E_ORG_JSON }}
+        run: printf '%s' "$E2E_ORG_JSON" > org.json
+
+      - name: API regression smoke
+        if: steps.secret.outputs.present == 'true'
+        working-directory: e2e
+        run: npm run regression
+
+      - name: Playwright suites
+        if: steps.secret.outputs.present == 'true'
+        working-directory: e2e
+        run: npx playwright test
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-${{ github.run_id }}
+          path: |
+            e2e/test-results/
+            e2e/shots/
+            e2e/results.json
+          if-no-files-found: ignore
+          retention-days: 14
