@@ -223,6 +223,53 @@ test('patient self-booking — UI (book via portal, API-verified)', async ({ bro
   }
 });
 
+// Double-booking race: two SIMULTANEOUS bookings for the same open slot must
+// yield exactly one winner. The findFirst pre-check can't stop this (both
+// requests pass it before either row exists) — the appointments_active_slot_uniq
+// partial unique DB index + P2002 handling is what makes this pass.
+test('patient self-booking — concurrent bookings for one slot: exactly one wins', async () => {
+  const { token } = await patientPortal();
+  const doctors = arr(await api('GET', '/auth/patient/me/doctors?limit=20', token));
+  const doc = doctors[0];
+  const doctorId = doc.userId || doc.id;
+  const open = await findOpenSlot(token, doctorId, 5);
+  expect(open, 'no open slot for the race test').toBeTruthy();
+
+  const book = () => api('POST', '/auth/patient/me/appointments', token, {
+    doctorId, appointmentDate: open!.date, appointmentTime: open!.time, chiefComplaint: 'E2E race check',
+  });
+  const [a, b] = await Promise.all([book(), book()]);
+  const wins = [a, b].filter(r => r.s < 300);
+  const losses = [a, b].filter(r => r.s === 400);
+  try {
+    expect(wins.length, `expected exactly 1 winner, got ${wins.length} (statuses ${a.s}/${b.s})`).toBe(1);
+    expect(losses.length, `loser must get a clean 400, got statuses ${a.s}/${b.s}`).toBe(1);
+    expect(String(losses[0].j?.message || '')).toMatch(/no longer available/i);
+  } finally {
+    for (const w of wins) {
+      const id = pick(w, 'id');
+      if (id) await api('PATCH', `/auth/patient/me/appointments/${id}/cancel`, token, { reason: 'E2E cleanup' }).catch(() => undefined);
+    }
+  }
+});
+
+// Doctor search must filter in the DB (before `take`), and match full names.
+test('patient self-booking — doctor search filters correctly', async () => {
+  const { token } = await patientPortal();
+  const all = arr(await api('GET', '/auth/patient/me/doctors?limit=20', token));
+  expect(all.length).toBeGreaterThan(0);
+  const doc = all[0];
+
+  // Single-term (last name) and full-name ("first last") queries both hit.
+  for (const q of [doc.lastName, `${doc.firstName} ${doc.lastName}`]) {
+    const hits = arr(await api('GET', `/auth/patient/me/doctors?limit=20&q=${encodeURIComponent(q)}`, token));
+    expect(hits.some((d: any) => d.id === doc.id), `q="${q}" should find ${doc.name}`).toBe(true);
+  }
+  // A nonsense query returns nothing.
+  const none = arr(await api('GET', '/auth/patient/me/doctors?limit=20&q=zzznotadoctor', token));
+  expect(none.length).toBe(0);
+});
+
 // Staff-side self-booking (SelfBookingPage at /app/appointments/self-booking).
 // Deploy guard for the FRONTEND fixes: the deployed page (a) crashed rendering
 // slot objects as React children and (b) had a free-text patient field that

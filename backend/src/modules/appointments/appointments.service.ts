@@ -60,14 +60,22 @@ export class AppointmentsService {
     // FK points to TenantUser. Set to null when no matching staff row.
     const staffCreator = await this.prisma.tenantUser.findUnique({ where: { id: createdById }, select: { id: true } }).catch(() => null);
     const safeCreatedById = staffCreator?.id || null;
-    const appointment = await this.prisma.$transaction(async (tx) => {
-      const conflict = await tx.appointment.findFirst({ where: { tenantId, doctorId: dto.doctorId, appointmentDate: new Date(dto.appointmentDate), appointmentTime: dto.appointmentTime || dto.slotTime, status: { notIn: ['CANCELLED', 'NO_SHOW'] } } });
-      if (conflict) throw new BadRequestException('Doctor already has an appointment at this time slot');
-      return tx.appointment.create({
-        data: { tenantId, locationId, patientId: dto.patientId, doctorId: dto.doctorId, departmentId: dto.departmentId, appointmentDate: new Date(dto.appointmentDate), appointmentTime: dto.appointmentTime || dto.slotTime, durationMinutes: dto.durationMinutes || 15, type: dto.type || dto.appointmentType || 'NEW', source: dto.source || 'RECEPTION', chiefComplaint: dto.chiefComplaint, notes: dto.notes, status: 'SCHEDULED', createdById: safeCreatedById },
-        include: { patient: { select: { patientId: true, firstName: true, lastName: true, mobile: true } } },
+    let appointment;
+    try {
+      appointment = await this.prisma.$transaction(async (tx) => {
+        const conflict = await tx.appointment.findFirst({ where: { tenantId, doctorId: dto.doctorId, appointmentDate: new Date(dto.appointmentDate), appointmentTime: dto.appointmentTime || dto.slotTime, status: { notIn: ['CANCELLED', 'NO_SHOW'] } } });
+        if (conflict) throw new BadRequestException('Doctor already has an appointment at this time slot');
+        return tx.appointment.create({
+          data: { tenantId, locationId, patientId: dto.patientId, doctorId: dto.doctorId, departmentId: dto.departmentId, appointmentDate: new Date(dto.appointmentDate), appointmentTime: dto.appointmentTime || dto.slotTime, durationMinutes: dto.durationMinutes || 15, type: dto.type || dto.appointmentType || 'NEW', source: dto.source || 'RECEPTION', chiefComplaint: dto.chiefComplaint, notes: dto.notes, status: 'SCHEDULED', createdById: safeCreatedById },
+          include: { patient: { select: { patientId: true, firstName: true, lastName: true, mobile: true } } },
+        });
       });
-    });
+    } catch (err: any) {
+      // appointments_active_slot_uniq (partial unique DB index) closes the
+      // check-then-create race the findFirst above can't.
+      if (err?.code === 'P2002') throw new BadRequestException('Doctor already has an appointment at this time slot');
+      throw err;
+    }
 
     // Non-blocking email notification to patient
     Promise.all([
@@ -97,21 +105,28 @@ export class AppointmentsService {
   }
 
   async update(tenantId: string, id: string, dto: any) {
-    return this.prisma.$transaction(async (tx) => {
-      const appt = await tx.appointment.findFirst({ where: { id, tenantId } });
-      if (!appt) throw new NotFoundException('Appointment not found');
-      const data: any = {};
-      if (dto.appointmentDate !== undefined) data.appointmentDate = new Date(dto.appointmentDate);
-      if (dto.appointmentTime !== undefined) data.appointmentTime = dto.appointmentTime;
-      if (dto.durationMinutes !== undefined) data.durationMinutes = dto.durationMinutes;
-      if (dto.doctorId !== undefined) data.doctorId = dto.doctorId;
-      if (dto.departmentId !== undefined) data.departmentId = dto.departmentId;
-      if (dto.type !== undefined) data.type = dto.type;
-      if (dto.chiefComplaint !== undefined) data.chiefComplaint = dto.chiefComplaint;
-      if (dto.notes !== undefined) data.notes = dto.notes;
-      if (dto.status !== undefined) data.status = dto.status;
-      return tx.appointment.update({ where: { id }, data });
-    });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const appt = await tx.appointment.findFirst({ where: { id, tenantId } });
+        if (!appt) throw new NotFoundException('Appointment not found');
+        const data: any = {};
+        if (dto.appointmentDate !== undefined) data.appointmentDate = new Date(dto.appointmentDate);
+        if (dto.appointmentTime !== undefined) data.appointmentTime = dto.appointmentTime;
+        if (dto.durationMinutes !== undefined) data.durationMinutes = dto.durationMinutes;
+        if (dto.doctorId !== undefined) data.doctorId = dto.doctorId;
+        if (dto.departmentId !== undefined) data.departmentId = dto.departmentId;
+        if (dto.type !== undefined) data.type = dto.type;
+        if (dto.chiefComplaint !== undefined) data.chiefComplaint = dto.chiefComplaint;
+        if (dto.notes !== undefined) data.notes = dto.notes;
+        if (dto.status !== undefined) data.status = dto.status;
+        return tx.appointment.update({ where: { id }, data });
+      });
+    } catch (err: any) {
+      // Reschedule-into-occupied-slot: update has no conflict pre-check, so the
+      // appointments_active_slot_uniq index is the guard — surface it as a 400.
+      if (err?.code === 'P2002') throw new BadRequestException('Doctor already has an appointment at this time slot');
+      throw err;
+    }
   }
 
   async cancel(tenantId: string, id: string, reason: string, cancelledById: string) {

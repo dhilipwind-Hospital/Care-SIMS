@@ -583,15 +583,30 @@ export class AuthService {
   // so PATIENT_TENANT tokens (which carry no staff role) can drive the booking UI.
   async getPatientFacingDoctors(tenantId: string, query: any) {
     const { q, specialty, limit = 20 } = query;
+    // Filter in the DB, BEFORE take — filtering after take silently hid any
+    // doctor beyond the first `limit` affiliations from search results.
+    const doctorFilters: any[] = [];
+    if (q) {
+      // Each search term must match first OR last name ("rahul sharma" works).
+      for (const term of String(q).trim().split(/\s+/)) {
+        doctorFilters.push({
+          OR: [
+            { firstName: { contains: term, mode: 'insensitive' } },
+            { lastName: { contains: term, mode: 'insensitive' } },
+          ],
+        });
+      }
+    }
+    if (specialty && specialty !== 'All') doctorFilters.push({ specialties: { has: String(specialty) } });
     const affiliations = await this.prisma.doctorOrgAffiliation.findMany({
-      where: { tenantId, isActive: true },
+      where: { tenantId, isActive: true, ...(doctorFilters.length ? { doctor: { AND: doctorFilters } } : {}) },
       include: {
         doctor: { select: { id: true, firstName: true, lastName: true, specialties: true, photoUrl: true } },
         location: { select: { id: true, name: true, city: true } },
       },
       take: Number(limit),
     });
-    let data = affiliations
+    const data = affiliations
       .filter(a => a.doctor)
       .map(a => ({
         id: a.doctor!.id,
@@ -604,13 +619,6 @@ export class AuthService {
         locationId: a.locationId,
         locationName: a.location?.name || null,
       }));
-    if (q) {
-      const needle = String(q).toLowerCase();
-      data = data.filter(d => `${d.firstName} ${d.lastName}`.toLowerCase().includes(needle));
-    }
-    if (specialty && specialty !== 'All') {
-      data = data.filter(d => Array.isArray(d.specialties) && d.specialties.includes(specialty));
-    }
     return { data, meta: { total: data.length } };
   }
 
@@ -720,22 +728,53 @@ export class AuthService {
       where: { tenantId, doctorId: dto.doctorId, appointmentDate: new Date(dto.appointmentDate), appointmentTime: dto.appointmentTime, status: { notIn: ['CANCELLED', 'NO_SHOW'] } },
     });
     if (conflict) throw new BadRequestException('This slot is no longer available. Please select another time.');
-    return this.prisma.appointment.create({
-      data: {
-        tenantId,
-        locationId: patient.locationId,
-        patientId: patient.id,
-        doctorId: dto.doctorId,
-        appointmentDate: new Date(dto.appointmentDate),
-        appointmentTime: dto.appointmentTime,
-        durationMinutes: 15,
-        type: 'CONSULTATION',
-        source: 'PATIENT_PORTAL',
-        chiefComplaint: dto.chiefComplaint || null,
-        status: 'SCHEDULED',
-        createdById: patientAccountId,
-      },
-    });
+    let appointment;
+    try {
+      appointment = await this.prisma.appointment.create({
+        data: {
+          tenantId,
+          locationId: patient.locationId,
+          patientId: patient.id,
+          doctorId: dto.doctorId,
+          appointmentDate: new Date(dto.appointmentDate),
+          appointmentTime: dto.appointmentTime,
+          durationMinutes: 15,
+          type: 'CONSULTATION',
+          source: 'PATIENT_PORTAL',
+          chiefComplaint: dto.chiefComplaint || null,
+          status: 'SCHEDULED',
+          createdById: patientAccountId,
+        },
+      });
+    } catch (err: any) {
+      // appointments_active_slot_uniq (partial unique index) closes the
+      // check-then-create race — two simultaneous bookings can both pass the
+      // findFirst above, but only one create wins.
+      if (err?.code === 'P2002') throw new BadRequestException('This slot is no longer available. Please select another time.');
+      throw err;
+    }
+
+    // Confirmation email — parity with staff-side booking. Non-blocking.
+    if (patient.email) {
+      this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { tradeName: true, legalName: true } })
+        .then(tenant => {
+          const orgName = tenant?.tradeName || tenant?.legalName || 'Hospital';
+          const apptDate = new Date(dto.appointmentDate).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+          const html = `
+            <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
+              <h2 style="color: #0F766E;">Appointment Confirmed</h2>
+              <p>Dear ${patient.firstName} ${patient.lastName},</p>
+              <p>Your appointment at <strong>${orgName}</strong> is confirmed:</p>
+              <p><strong>Date:</strong> ${apptDate}<br/><strong>Time:</strong> ${dto.appointmentTime}</p>
+              <p>Please arrive 15 minutes early. You can reschedule or cancel any time from your patient portal.</p>
+              <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
+              <p style="color:#aaa;font-size:12px;">${orgName} · via Ayphen HMS</p>
+            </div>`;
+          return sendEmail(patient.email!, `Appointment Confirmed - ${orgName}`, html);
+        })
+        .catch(err => this.logger.error('Failed to send portal booking confirmation email', err));
+    }
+    return appointment;
   }
 
   async getPatientPrescriptions(tenantId: string, patientAccountId: string, query: any) {
@@ -861,15 +900,21 @@ export class AuthService {
       },
     });
     if (conflict) throw new BadRequestException('That slot is no longer available');
-    return this.prisma.appointment.update({
-      where: { id: appointmentId },
-      data: {
-        appointmentDate: newDate,
-        appointmentTime: dto.appointmentTime,
-        rescheduledFromId: appt.id,
-        status: 'SCHEDULED',
-      } as any,
-    });
+    try {
+      return await this.prisma.appointment.update({
+        where: { id: appointmentId },
+        data: {
+          appointmentDate: newDate,
+          appointmentTime: dto.appointmentTime,
+          rescheduledFromId: appt.id,
+          status: 'SCHEDULED',
+        } as any,
+      });
+    } catch (err: any) {
+      // Race closed by the appointments_active_slot_uniq partial unique index.
+      if (err?.code === 'P2002') throw new BadRequestException('That slot is no longer available');
+      throw err;
+    }
   }
 
   async getPatientVitals(tenantId: string, patientAccountId: string) {
