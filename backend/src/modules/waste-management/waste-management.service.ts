@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 
 @Injectable()
@@ -19,6 +19,10 @@ export class WasteManagementService {
   }
 
   async update(tenantId: string, id: string, dto: any) {
+    // Tenant guard: the record must belong to the caller's org. Without this,
+    // a PATCH by id alone lets any tenant mutate another tenant's record (IDOR).
+    const existing = await this.prisma.wasteCollection.findFirst({ where: { id, tenantId } });
+    if (!existing) throw new NotFoundException('Waste collection record not found');
     const data: any = {};
     const allowed = ['vendorName', 'manifestNumber', 'disposalMethod', 'notes', 'handedToVendor', 'handedAt'];
     allowed.forEach(k => { if (dto[k] !== undefined) data[k] = dto[k]; });
@@ -29,6 +33,8 @@ export class WasteManagementService {
   async updateManifestStatus(tenantId: string, id: string, dto: any) {
     const valid = ['PENDING', 'SUBMITTED', 'ACKNOWLEDGED', 'COMPLETED'];
     if (!valid.includes(dto.manifestStatus)) throw new Error('Invalid status');
+    const existing = await this.prisma.wasteCollection.findFirst({ where: { id, tenantId } });
+    if (!existing) throw new NotFoundException('Waste collection record not found');
     return this.prisma.wasteCollection.update({ where: { id }, data: { manifestStatus: dto.manifestStatus } });
   }
 
