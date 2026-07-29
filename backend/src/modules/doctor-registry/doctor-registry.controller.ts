@@ -112,7 +112,9 @@ export class DoctorRegistryController {
   }
 
   @Get('by-location/:locationId')
-  @Roles('SYS_ORG_ADMIN', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_RECEPTIONIST', 'SYS_NURSE')
+  // All nurse tiers do triage and assign doctors, plus front office — not just SYS_NURSE.
+  // Missing ward/charge nurse here made the triage "Assign Doctor" modal 403 → "No doctors available".
+  @Roles('SYS_ORG_ADMIN', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_HOD', 'SYS_RECEPTIONIST', 'SYS_FRONT_OFFICE', 'SYS_NURSE', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE')
   byLocation(@CurrentUser('tenantId') tid: string, @Param('locationId') lid: string) { return this.svc.getDoctorsByLocation(tid, lid); }
 
   @Get(':id')
