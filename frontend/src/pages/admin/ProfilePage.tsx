@@ -6,6 +6,7 @@ import {
 import toast from 'react-hot-toast';
 import TopBar from '../../components/layout/TopBar';
 import api from '../../lib/api';
+import { getUser } from '../../lib/auth';
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<any>(null);
@@ -165,7 +166,7 @@ export default function ProfilePage() {
               { icon: Shield, label: 'Role', value: roleLabel },
               { icon: Phone, label: 'Phone', value: profile.phone || profile.mobile || '—' },
               { icon: Building2, label: 'Department', value: profile.department?.name || profile.departmentName || '—' },
-              { icon: Building2, label: 'Organization', value: profile.tenant?.name || profile.organizationName || profile.tenantId || '—' },
+              { icon: Building2, label: 'Organization', value: profile.tenant?.name || profile.organizationName || getUser()?.tenantName || profile.tenantId || '—' },
               { icon: Clock, label: 'Last Login', value: profile.lastLoginAt ? new Date(profile.lastLoginAt).toLocaleString('en-IN') : '—' },
               ...(profile.employeeId ? [{ icon: IdCard, label: 'Employee ID', value: profile.employeeId }] : []),
             ].map(({ icon: Icon, label, value }) => (
