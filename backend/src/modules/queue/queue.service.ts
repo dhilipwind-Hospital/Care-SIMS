@@ -20,14 +20,25 @@ function emailTemplate(title: string, body: string, orgName?: string): string {
 </div>`;
 }
 
+// queueDate is a `@db.Date` (date-only) column. `new Date().setHours(0,0,0,0)`
+// gives LOCAL midnight — on a non-UTC server (this one runs in IST) that instant's
+// UTC date is the PREVIOUS day, and Prisma serializes a @db.Date WHERE filter by
+// UTC date. Result: the value written and the value filtered on disagreed, so
+// "today's queue" (doctor queue, reception dashboard, stats) always came back
+// empty even with patients checked in. Compute the day at UTC midnight so write
+// and read are always identical regardless of server timezone.
+function startOfDayUtc(input?: string | Date): Date {
+  const d = input ? new Date(input) : new Date();
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
 @Injectable()
 export class QueueService {
   private readonly logger = new Logger(QueueService.name);
   constructor(private prisma: PrismaService, private ws: WsGateway) {}
 
   async getTodayQueue(tenantId: string, locationId: string, doctorId?: string, date?: string) {
-    const queueDate = date ? new Date(date) : new Date();
-    queueDate.setHours(0, 0, 0, 0);
+    const queueDate = startOfDayUtc(date);
     const where: any = { tenantId, locationId, queueDate };
     if (doctorId) where.doctorId = doctorId;
     const tokens = await this.prisma.queueToken.findMany({
@@ -47,8 +58,7 @@ export class QueueService {
   }
 
   async issueToken(tenantId: string, dto: any, createdById: string) {
-    const queueDate = new Date();
-    queueDate.setHours(0, 0, 0, 0);
+    const queueDate = startOfDayUtc();
 
     const lastToken = await this.prisma.queueToken.findFirst({
       where: { tenantId, locationId: dto.locationId, queueDate },
@@ -167,7 +177,7 @@ Inform a staff member if your condition worsens while you wait.`;
   }
 
   async getStats(tenantId: string, locationId: string) {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const today = startOfDayUtc();
     const [waiting, inConsult, completed, total] = await Promise.all([
       this.prisma.queueToken.count({ where: { tenantId, locationId, queueDate: today, status: 'WAITING' } }),
       this.prisma.queueToken.count({ where: { tenantId, locationId, queueDate: today, status: { in: ['CALLED', 'IN_CONSULTATION'] } } }),
@@ -178,7 +188,7 @@ Inform a staff member if your condition worsens while you wait.`;
   }
 
   async getDoctorQueue(tenantId: string, doctorId: string, limit?: number) {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const today = startOfDayUtc();
     const tokens = await this.prisma.queueToken.findMany({
       where: { tenantId, doctorId, queueDate: today },
       include: { patient: { select: { id: true, patientId: true, firstName: true, lastName: true, gender: true, ageYears: true, dateOfBirth: true, mobile: true, allergies: true } } },

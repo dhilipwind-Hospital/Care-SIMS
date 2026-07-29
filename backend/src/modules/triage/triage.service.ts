@@ -100,7 +100,10 @@ export class TriageService {
       //   3. Else mint a fresh one.
       let queueTokenId: string | undefined = dto.queueTokenId;
       let queueTokenChanged = false;
-      const today = new Date(); today.setHours(0, 0, 0, 0);
+      // UTC-midnight to match the queue's @db.Date column (see queue.service
+      // startOfDayUtc — local midnight mismatches the write/read on a non-UTC server).
+      const now = new Date();
+      const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
       if (!queueTokenId && locationId) {
         const existing = await tx.queueToken.findFirst({
