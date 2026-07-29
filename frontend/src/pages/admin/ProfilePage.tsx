@@ -100,6 +100,15 @@ export default function ProfilePage() {
   }
 
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(' ') || profile.name || 'User';
+  // profile.role may be a string (some accounts) OR the tenant role object
+  // { id, name, systemRoleId }. Rendering the object directly crashed the page
+  // (React error #31). Normalise to a display string.
+  const roleLabel = (() => {
+    const r: any = profile.role;
+    if (!r) return profile.roleName || profile.systemRoleId || '—';
+    if (typeof r === 'string') return r;
+    return r.name || r.systemRoleId || '—';
+  })();
 
   return (
     <div className="p-6 space-y-6 max-w-2xl mx-auto">
@@ -120,7 +129,7 @@ export default function ProfilePage() {
             <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
           </div>
           <h2 className="text-lg font-semibold text-gray-900">{displayName}</h2>
-          <span className="px-3 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-700 mt-1">{profile.role}</span>
+          <span className="px-3 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-700 mt-1">{roleLabel}</span>
           <p className="text-xs text-gray-400 mt-1">Click avatar to change photo</p>
         </div>
 
@@ -153,7 +162,7 @@ export default function ProfilePage() {
             {[
               { icon: User, label: 'Name', value: displayName },
               { icon: Mail, label: 'Email', value: profile.email || '—' },
-              { icon: Shield, label: 'Role', value: profile.role || '—' },
+              { icon: Shield, label: 'Role', value: roleLabel },
               { icon: Phone, label: 'Phone', value: profile.phone || profile.mobile || '—' },
               { icon: Building2, label: 'Department', value: profile.department?.name || profile.departmentName || '—' },
               { icon: Building2, label: 'Organization', value: profile.tenant?.name || profile.organizationName || profile.tenantId || '—' },

@@ -724,7 +724,7 @@ export default function OrgDetailPanel({ org, onClose, onRefresh }: Props) {
                   <div className="space-y-1">
                     {(starterResult.staff || []).map((s: any) => (
                       <div key={s.email} className="flex items-center gap-2 p-2 rounded-lg border border-gray-100 hover:bg-gray-50">
-                        <span className="text-xs font-semibold text-gray-700 w-40 truncate">{s.role}</span>
+                        <span className="text-xs font-semibold text-gray-700 w-40 truncate">{typeof s.role === 'object' && s.role !== null ? (s.role.name || s.role.systemRoleId || '—') : (s.role || '—')}</span>
                         <code className="font-mono text-xs text-teal-700 flex-1 truncate">{s.email}</code>
                         <button
                           onClick={() => { navigator.clipboard?.writeText(s.email); toast.success('Copied'); }}

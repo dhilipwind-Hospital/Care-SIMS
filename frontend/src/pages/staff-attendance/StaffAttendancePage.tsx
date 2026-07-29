@@ -446,7 +446,7 @@ export default function StaffAttendancePage() {
                               }}
                               className="w-full text-left px-4 py-2.5 hover:bg-gray-50 text-sm border-b border-gray-50 last:border-0">
                               <span className="font-medium text-gray-900">{userName}</span>
-                              <span className="text-gray-400 text-xs ml-2">{u.email} {u.role ? `· ${u.role}` : ''}</span>
+                              <span className="text-gray-400 text-xs ml-2">{u.email} {u.role ? `· ${typeof u.role === 'object' ? (u.role.name || u.role.systemRoleId || '') : u.role}` : ''}</span>
                             </button>
                           );
                         })}
