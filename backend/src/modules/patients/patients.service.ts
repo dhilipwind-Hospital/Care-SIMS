@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { generateSequentialId } from '../../common/utils/id-generator';
 import { v4 as uuidv4 } from 'uuid';
@@ -240,7 +241,26 @@ export class PatientsService {
     if (dto.mobile !== undefined) data.mobile = dto.mobile;
     if (dto.alternatePhone !== undefined) data.alternatePhone = dto.alternatePhone;
     if (dto.email !== undefined) data.email = dto.email;
-    if (dto.address !== undefined) data.address = dto.address;
+    // `address` is a JSON column. Accept the structured object, the flat
+    // addressLine1/city/... fields, or a legacy bare string — always persist
+    // the same {line1,line2,city,state,pinCode} shape so readers don't have
+    // to branch on it.
+    if (dto.address !== undefined && dto.address !== null && typeof dto.address === 'object') {
+      data.address = dto.address;
+    } else if (dto.addressLine1 || dto.addressLine2 || dto.city || dto.state || dto.pinCode) {
+      data.address = {
+        line1: dto.addressLine1 || undefined,
+        line2: dto.addressLine2 || undefined,
+        city: dto.city || undefined,
+        state: dto.state || undefined,
+        pinCode: dto.pinCode || undefined,
+      };
+    } else if (typeof dto.address === 'string') {
+      // Prisma 5 rejects a bare `null` on a nullable Json column.
+      data.address = dto.address.trim() ? { line1: dto.address.trim() } : Prisma.DbNull;
+    } else if (dto.address === null) {
+      data.address = Prisma.DbNull;
+    }
     if (dto.emergencyContact !== undefined) data.emergencyContact = dto.emergencyContact;
     if (dto.allergies !== undefined) data.allergies = dto.allergies;
     if (dto.allergyDetails !== undefined) data.allergyDetails = dto.allergyDetails;

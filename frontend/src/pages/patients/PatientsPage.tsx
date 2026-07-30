@@ -23,6 +23,36 @@ const EMPTY_FORM = {
   registrationType: 'WALK_IN',
 };
 
+const INDIAN_STATES = ['Tamil Nadu','Karnataka','Maharashtra','Delhi','Kerala','Andhra Pradesh','Telangana','Gujarat'];
+
+// The API stores `address` as a JSON object; older rows may hold a bare string.
+// Normalise either shape into the edit form's flat fields.
+function splitAddress(address: any) {
+  if (address && typeof address === 'object') {
+    return {
+      addressLine1: address.line1 || '',
+      addressLine2: address.line2 || '',
+      city: address.city || '',
+      state: address.state || '',
+      pinCode: address.pinCode || '',
+    };
+  }
+  return { addressLine1: typeof address === 'string' ? address : '', addressLine2: '', city: '', state: '', pinCode: '' };
+}
+
+// Inverse of splitAddress. Returns null when every part is blank so the API
+// clears the column rather than storing an object full of undefineds.
+function joinAddress(f: any) {
+  const parts = {
+    line1: f.addressLine1?.trim() || undefined,
+    line2: f.addressLine2?.trim() || undefined,
+    city: f.city?.trim() || undefined,
+    state: f.state?.trim() || undefined,
+    pinCode: f.pinCode?.trim() || undefined,
+  };
+  return Object.values(parts).some(Boolean) ? parts : null;
+}
+
 export default function PatientsPage() {
   const [view, setView] = useState<'list' | 'register'>('list');
   const [patients, setPatients] = useState<any[]>([]);
@@ -94,8 +124,9 @@ export default function PatientsPage() {
         firstName: form.firstName, lastName: form.lastName, phone: form.phone,
         email: form.email || undefined, gender: form.gender,
         dateOfBirth: form.dateOfBirth || undefined, bloodGroup: form.bloodGroup || undefined,
-        addressLine1: form.addressLine1 || undefined, city: form.city || undefined,
-        state: form.state || undefined,
+        addressLine1: form.addressLine1 || undefined, addressLine2: form.addressLine2 || undefined,
+        city: form.city || undefined, state: form.state || undefined,
+        pinCode: form.pinCode || undefined,
         knownAllergies: form.knownAllergies || undefined,
         emergencyContactName: form.emergencyContactName || undefined,
         emergencyContactPhone: form.emergencyPhone || undefined,
@@ -119,7 +150,10 @@ export default function PatientsPage() {
       dateOfBirth: p.dateOfBirth ? p.dateOfBirth.slice(0, 10) : '',
       gender: p.gender || 'MALE', bloodGroup: p.bloodGroup || '',
       phone: p.phone || p.mobile || '', email: p.email || '',
-      address: p.address || p.addressLine1 || '',
+      // patient.address is a JSON column ({line1,line2,city,state,pinCode}).
+      // Binding the object straight to a text input rendered "[object Object]"
+      // and round-tripped that garbage on save — split it into real fields.
+      ...splitAddress(p.address ?? p.addressLine1),
       emergencyContactName: p.emergencyContactName || p.emergencyContact?.name || '',
       emergencyContactPhone: p.emergencyContactPhone || p.emergencyContact?.phone || '',
       knownAllergies: p.knownAllergies || (Array.isArray(p.allergies) ? p.allergies.join(', ') : ''),
@@ -176,7 +210,7 @@ export default function PatientsPage() {
         bloodGroup: editForm.bloodGroup || undefined,
         mobile: editForm.phone,
         email: editForm.email || undefined,
-        address: editForm.address || undefined,
+        address: joinAddress(editForm),
         emergencyContact: editForm.emergencyContactName ? {
           name: editForm.emergencyContactName,
           phone: editForm.emergencyContactPhone,
@@ -300,7 +334,7 @@ export default function PatientsPage() {
                 <div><label className={lbl}>State</label>
                   <select value={form.state} onChange={sf('state')} className={inp}>
                     <option value="">Select State</option>
-                    {['Tamil Nadu','Karnataka','Maharashtra','Delhi','Kerala','Andhra Pradesh','Telangana','Gujarat'].map(s => <option key={s}>{s}</option>)}
+                    {INDIAN_STATES.map(s => <option key={s}>{s}</option>)}
                   </select>
                 </div>
                 <div><label className={lbl}>PIN Code</label><input placeholder="6-digit PIN" value={form.pinCode} onChange={sf('pinCode')} className={inp} /></div>
@@ -617,8 +651,30 @@ export default function PatientsPage() {
                   {editErrors.email && <p className="text-xs text-red-500 mt-1">{editErrors.email}</p>}
                 </div>
                 <div className="col-span-2">
-                  <label className={lbl}>Address</label>
-                  <input value={editForm.address} onChange={esf('address')} className={inp} />
+                  <label className={lbl}>Address Line 1</label>
+                  <input placeholder="House/Flat No., Street Name" value={editForm.addressLine1} onChange={esf('addressLine1')} className={inp} />
+                </div>
+                <div className="col-span-2">
+                  <label className={lbl}>Address Line 2</label>
+                  <input placeholder="Landmark, Area" value={editForm.addressLine2} onChange={esf('addressLine2')} className={inp} />
+                </div>
+                <div>
+                  <label className={lbl}>City</label>
+                  <input placeholder="Enter city" value={editForm.city} onChange={esf('city')} className={inp} />
+                </div>
+                <div>
+                  <label className={lbl}>State</label>
+                  <select value={editForm.state} onChange={esf('state')} className={inp}>
+                    <option value="">Select State</option>
+                    {/* Keep a stored state that isn't in the shortlist selectable,
+                        otherwise opening the modal would silently blank it. */}
+                    {Array.from(new Set([...INDIAN_STATES, editForm.state].filter(Boolean)))
+                      .map(s => <option key={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <label className={lbl}>PIN Code</label>
+                  <input placeholder="6-digit PIN" value={editForm.pinCode} onChange={esf('pinCode')} className={inp} />
                 </div>
               </div>
               <div className="border-t border-gray-100 pt-4">
