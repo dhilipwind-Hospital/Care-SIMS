@@ -30,11 +30,66 @@ export class AppointmentsService {
     if (date) where.appointmentDate = new Date(date);
     if (status) where.status = status;
     if (patientId) where.patientId = patientId;
-    const [data, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       this.prisma.appointment.findMany({ where, skip, take: Number(limit), orderBy: [{ appointmentDate: 'asc' }, { appointmentTime: 'asc' }], include: { patient: { select: { patientId: true, firstName: true, lastName: true, mobile: true } } } }),
       this.prisma.appointment.count({ where }),
     ]);
+    const data = await this.withDoctorAndDepartment(tenantId, rows);
     return { data, meta: { total, page: Number(page), limit: Number(limit) } };
+  }
+
+  // Appointment has no `doctor`/`department` relation — doctorId is a bare
+  // string that may point at either a TenantUser (in-house staff) or a
+  // DoctorRegistry row (affiliated doctor), and departmentId is usually null
+  // because reception books by doctor, not department. Resolve both here so
+  // the list screen has names to render, and expose the field aliases the
+  // frontend reads (slotTime / appointmentType / appointmentNumber).
+  // Same resolution shape as OT's getBookings surgeon lookup.
+  private async withDoctorAndDepartment(tenantId: string, rows: any[]) {
+    if (!rows.length) return rows;
+
+    const doctorIds = [...new Set(rows.map(r => r.doctorId).filter(Boolean))];
+    const departmentIds = [...new Set(rows.map(r => r.departmentId).filter(Boolean))];
+
+    const [users, registry, affiliations, departments] = await Promise.all([
+      doctorIds.length
+        ? this.prisma.tenantUser.findMany({ where: { id: { in: doctorIds }, tenantId }, select: { id: true, firstName: true, lastName: true } })
+        : [],
+      doctorIds.length
+        ? this.prisma.doctorRegistry.findMany({ where: { id: { in: doctorIds } }, select: { id: true, firstName: true, lastName: true, pgSpecialization: true } })
+        : [],
+      doctorIds.length
+        ? this.prisma.doctorOrgAffiliation.findMany({ where: { tenantId, doctorId: { in: doctorIds } }, select: { doctorId: true, departmentName: true } })
+        : [],
+      departmentIds.length
+        ? this.prisma.department.findMany({ where: { id: { in: departmentIds }, tenantId }, select: { id: true, name: true } })
+        : [],
+    ]);
+
+    // TenantUser wins over DoctorRegistry when an id somehow matches both.
+    const doctorMap = new Map<string, any>([...registry, ...users].map(d => [d.id, d]));
+    const affMap = new Map<string, string | null>(affiliations.map(a => [a.doctorId, a.departmentName] as [string, string | null]));
+    const deptMap = new Map<string, string>(departments.map(d => [d.id, d.name] as [string, string]));
+
+    return rows.map(r => {
+      const doc = r.doctorId ? doctorMap.get(r.doctorId) : null;
+      // Department: explicit link first, then the doctor's affiliation
+      // department, then their PG specialisation as a last resort.
+      const deptName =
+        (r.departmentId && deptMap.get(r.departmentId)) ||
+        affMap.get(r.doctorId) ||
+        doc?.pgSpecialization ||
+        null;
+      return {
+        ...r,
+        doctor: doc ? { id: doc.id, firstName: doc.firstName, lastName: doc.lastName } : null,
+        department: deptName ? { id: r.departmentId || null, name: deptName } : null,
+        specialization: doc?.pgSpecialization || null,
+        slotTime: r.appointmentTime,
+        appointmentType: r.type,
+        appointmentNumber: `APT-${String(r.id).slice(0, 8).toUpperCase()}`,
+      };
+    });
   }
 
   async create(tenantId: string, dto: any, createdById: string) {

@@ -182,7 +182,7 @@ export default function QueueDashboard() {
                   <td className="px-4 py-4">
                     <StatusBadge status={t.priority || t.priorityLevel || t.status} />
                   </td>
-                  <td className="px-4 py-4 text-sm text-gray-600">{t.waitMins ? `${t.waitMins} min` : '—'}</td>
+                  <td className="px-4 py-4 text-sm text-gray-600">{t.waitMins != null ? `${t.waitMins} min` : '—'}</td>
                   <td className="px-4 py-4">
                     <div className="flex gap-2">
                       {t.status === 'WAITING' && (

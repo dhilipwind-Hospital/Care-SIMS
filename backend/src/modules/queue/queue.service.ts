@@ -54,7 +54,35 @@ export class QueueService {
       completed: tokens.filter(t => t.status === 'COMPLETED').length,
       skipped: tokens.filter(t => t.status === 'SKIPPED').length,
     };
-    return { tokens, stats };
+    return { tokens: await this.withDoctor(tenantId, tokens), stats };
+  }
+
+  // QueueToken.doctorId has no relation and may point at a TenantUser or a
+  // DoctorRegistry row, so the dashboard's Doctor column rendered "—" for every
+  // token. Resolve names here, and derive the wait time the table shows.
+  private async withDoctor(tenantId: string, tokens: any[]) {
+    if (!tokens.length) return tokens;
+    const doctorIds = [...new Set(tokens.map(t => t.doctorId).filter(Boolean))] as string[];
+    const [users, registry] = await Promise.all([
+      doctorIds.length
+        ? this.prisma.tenantUser.findMany({ where: { id: { in: doctorIds }, tenantId }, select: { id: true, firstName: true, lastName: true } })
+        : [],
+      doctorIds.length
+        ? this.prisma.doctorRegistry.findMany({ where: { id: { in: doctorIds } }, select: { id: true, firstName: true, lastName: true } })
+        : [],
+    ]);
+    const map = new Map<string, any>([...registry, ...users].map(d => [d.id, d] as [string, any]));
+    const now = Date.now();
+    return tokens.map(t => {
+      // Waiting patients accrue time; once called/consulting the clock stops.
+      const until = t.completedAt || t.consultStart || t.calledTime;
+      const end = until ? new Date(until).getTime() : now;
+      return {
+        ...t,
+        doctor: t.doctorId ? map.get(t.doctorId) || null : null,
+        waitMins: t.checkInTime ? Math.max(0, Math.round((end - new Date(t.checkInTime).getTime()) / 60000)) : null,
+      };
+    });
   }
 
   async issueToken(tenantId: string, dto: any, createdById: string) {

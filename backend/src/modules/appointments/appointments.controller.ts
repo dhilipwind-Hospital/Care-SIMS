@@ -30,8 +30,10 @@ export class AppointmentsController {
       { header: 'Patient Name', key: 'patient', transform: (_v, row) => `${row.patient?.firstName || ''} ${row.patient?.lastName || ''}`.trim() },
       { header: 'Date', key: 'appointmentDate', transform: (v) => v ? new Date(v).toLocaleDateString() : '' },
       { header: 'Time', key: 'appointmentTime' },
+      { header: 'Doctor', key: 'doctor', transform: (_v, row) => row.doctor ? `Dr. ${row.doctor.firstName || ''} ${row.doctor.lastName || ''}`.trim() : '' },
+      { header: 'Department', key: 'department.name' },
       { header: 'Status', key: 'status' },
-      { header: 'Visit Type', key: 'visitType' },
+      { header: 'Visit Type', key: 'type' },
     ];
     sendCsvResponse(res, `appointments-${new Date().toISOString().slice(0, 10)}.csv`, generateCsv(columns, data));
   }

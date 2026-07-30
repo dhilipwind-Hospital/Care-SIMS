@@ -338,7 +338,7 @@ export default function AppointmentsPage() {
 <hr style="border:none;border-top:2px solid #0F766E;margin:12px 0;"/>
 <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px;font-weight:700;color:#0f766e;text-align:center;letter-spacing:0.5px;">PLEASE ARRIVE 15 MINUTES BEFORE YOUR APPOINTMENT TIME</div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;margin-bottom:20px;font-size:13px;">
-  <div><span style="color:#555;font-weight:600;">Appointment #:</span> ${(a.id||a.appointmentNumber||'').toString().slice(0,8)}</div>
+  <div><span style="color:#555;font-weight:600;">Appointment #:</span> ${a.appointmentNumber || (a.id||'').toString().slice(0,8)}</div>
   <div><span style="color:#555;font-weight:600;">Date:</span> ${a.appointmentDate ? new Date(a.appointmentDate).toLocaleDateString() : '—'}</div>
   <div><span style="color:#555;font-weight:600;">Time:</span> ${a.appointmentTime||a.slotTime||a.slot||'—'}</div>
   <div><span style="color:#555;font-weight:600;">Patient Name:</span> ${a.patient ? (a.patient.firstName+' '+a.patient.lastName) : '—'}</div>
