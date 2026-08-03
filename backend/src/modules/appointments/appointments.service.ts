@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { sendEmail } from '../../common/utils/mailer';
+import { startOfDayUtc } from '../../common/utils/queue-token';
 
 function emailTemplate(title: string, body: string, orgName?: string): string {
   return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
@@ -50,8 +51,9 @@ export class AppointmentsService {
 
     const doctorIds = [...new Set(rows.map(r => r.doctorId).filter(Boolean))];
     const departmentIds = [...new Set(rows.map(r => r.departmentId).filter(Boolean))];
+    const patientIds = [...new Set(rows.map(r => r.patientId).filter(Boolean))];
 
-    const [users, registry, affiliations, departments] = await Promise.all([
+    const [users, registry, affiliations, departments, liveTokens] = await Promise.all([
       doctorIds.length
         ? this.prisma.tenantUser.findMany({ where: { id: { in: doctorIds }, tenantId }, select: { id: true, firstName: true, lastName: true } })
         : [],
@@ -64,12 +66,33 @@ export class AppointmentsService {
       departmentIds.length
         ? this.prisma.department.findMany({ where: { id: { in: departmentIds }, tenantId }, select: { id: true, name: true } })
         : [],
+      // Has this patient already been checked in today? Without this the
+      // Check In button stayed enabled and the row looked untouched after a
+      // successful check-in — the only feedback was a toast that faded, so a
+      // receptionist had no way to tell whether it had worked.
+      // Matched on patient (not appointmentId) to mirror the endpoint's own
+      // idempotency: a patient with any live token today cannot be queued again.
+      patientIds.length
+        ? this.prisma.queueToken.findMany({
+            where: {
+              tenantId,
+              patientId: { in: patientIds },
+              queueDate: startOfDayUtc(),
+              status: { in: ['WAITING', 'CALLED', 'IN_CONSULTATION'] },
+            },
+            select: { patientId: true, tokenNumber: true, status: true },
+            orderBy: { createdAt: 'desc' },
+          })
+        : [],
     ]);
 
     // TenantUser wins over DoctorRegistry when an id somehow matches both.
     const doctorMap = new Map<string, any>([...registry, ...users].map(d => [d.id, d]));
     const affMap = new Map<string, string | null>(affiliations.map(a => [a.doctorId, a.departmentName] as [string, string | null]));
     const deptMap = new Map<string, string>(departments.map(d => [d.id, d.name] as [string, string]));
+    // orderBy desc + first-wins = the patient's most recent live token today.
+    const tokenMap = new Map<string, any>();
+    for (const t of liveTokens) if (!tokenMap.has(t.patientId)) tokenMap.set(t.patientId, t);
 
     return rows.map(r => {
       const doc = r.doctorId ? doctorMap.get(r.doctorId) : null;
@@ -88,6 +111,9 @@ export class AppointmentsService {
         slotTime: r.appointmentTime,
         appointmentType: r.type,
         appointmentNumber: `APT-${String(r.id).slice(0, 8).toUpperCase()}`,
+        checkedIn: tokenMap.get(r.patientId)
+          ? { tokenNumber: tokenMap.get(r.patientId).tokenNumber, status: tokenMap.get(r.patientId).status }
+          : null,
       };
     });
   }

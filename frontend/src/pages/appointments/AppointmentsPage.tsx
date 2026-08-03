@@ -491,13 +491,22 @@ export default function AppointmentsPage() {
                   <td className="px-4 py-3"><StatusBadge status={a.status} /></td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
-                      {a.status === 'SCHEDULED' && (
+                      {/* Once checked in, show the token instead of the button.
+                          Previously the button stayed enabled and the row looked
+                          identical after a successful check-in, so the only
+                          feedback was a toast that faded. */}
+                      {a.status === 'SCHEDULED' && (a.checkedIn ? (
+                        <span title={`In today's queue as token #${a.checkedIn.tokenNumber}`}
+                          className="flex items-center gap-1 text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md font-medium whitespace-nowrap">
+                          <CheckCircle size={11} /> Checked in #{a.checkedIn.tokenNumber}
+                        </span>
+                      ) : (
                         <button onClick={() => handleCheckIn(a)} disabled={checkingInId === a.id}
                           title="Issue a queue token so the patient reaches triage and the doctor"
-                          className="flex items-center gap-1 text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 font-medium disabled:opacity-50">
+                          className="flex items-center gap-1 text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 font-medium disabled:opacity-50 whitespace-nowrap">
                           <LogIn size={11} /> {checkingInId === a.id ? 'Checking in…' : 'Check In'}
                         </button>
-                      )}
+                      ))}
                       {a.status !== 'CANCELLED' && a.status !== 'COMPLETED' && (
                         <button onClick={() => openEditModal(a)}
                           className="flex items-center gap-1 text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">
