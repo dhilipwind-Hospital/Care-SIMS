@@ -1,11 +1,12 @@
 import { useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { UserPlus, Search, Eye, X, ArrowLeft, Pencil, History, Stethoscope, Pill, FlaskConical, BedDouble, FileText, Activity, Camera, Loader2, ScrollText, MapPin } from 'lucide-react';
+import { UserPlus, Search, Eye, X, ArrowLeft, ArrowRightCircle, Pencil, History, Stethoscope, Pill, FlaskConical, BedDouble, FileText, Activity, Camera, Loader2, ScrollText, MapPin } from 'lucide-react';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
 import ExportButton from '../../components/ui/ExportButton';
 import api from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 import { SPECIALTIES } from '../../lib/specialties';
 import { LineChart, Line, ResponsiveContainer, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend } from 'recharts';
 
@@ -15,8 +16,9 @@ const EMPTY_FORM = {
   phone: '', email: '', maritalStatus: '',
   addressLine1: '', addressLine2: '', city: '', state: '', pinCode: '',
   idType: '', idNumber: '',
-  visitType: 'OPD', department: 'General Medicine',
-  preferredDoctor: '', priority: 'Normal', chiefComplaint: '',
+  visitType: 'OPD - Walk-in', department: '',
+  preferredDoctorId: '', priority: 'Normal', chiefComplaint: '',
+  addToQueue: true,
   knownAllergies: '', preExistingConditions: '', currentMedications: '',
   emergencyContactName: '', emergencyRelationship: '', emergencyPhone: '',
   paymentMode: 'Cash', insuranceProvider: '', policyNumber: '',
@@ -24,6 +26,16 @@ const EMPTY_FORM = {
 };
 
 const INDIAN_STATES = ['Tamil Nadu','Karnataka','Maharashtra','Delhi','Kerala','Andhra Pradesh','Telangana','Gujarat'];
+
+// Where a patient sits in today's workflow — computed server-side in
+// patients.service.withVisitStatus. Drives the reception status pill and
+// whether "Advance to Triage" is still actionable.
+const VISIT_STAGE: Record<string, { label: string; cls: string }> = {
+  AWAITING_TRIAGE: { label: 'Awaiting triage', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  TRIAGED:         { label: 'Triaged',         cls: 'bg-teal-50 text-teal-700 border-teal-200' },
+  IN_CONSULTATION: { label: 'With doctor',     cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  COMPLETED:       { label: 'Completed',       cls: 'bg-gray-100 text-gray-500 border-gray-200' },
+};
 
 // The API stores `address` as a JSON object; older rows may hold a bare string.
 // Normalise either shape into the edit form's flat fields.
@@ -54,6 +66,7 @@ function joinAddress(f: any) {
 }
 
 export default function PatientsPage() {
+  const { user } = useAuth();
   const [view, setView] = useState<'list' | 'register'>('list');
   const [patients, setPatients] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -88,6 +101,24 @@ export default function PatientsPage() {
   const [accessLogData, setAccessLogData] = useState<any[]>([]);
   const [accessLogLoading, setAccessLogLoading] = useState(false);
 
+  // Doctors for the "Preferred Doctor" picker. Reception is already authorised
+  // on /doctors/by-location (see doctor-registry.controller). Falls back to the
+  // tenant-wide list when the user has no primary location.
+  const [doctors, setDoctors] = useState<any[]>([]);
+  useEffect(() => {
+    if (view !== 'register') return;
+    const url = user?.locationId ? `/doctors/by-location/${user.locationId}` : '/doctors/affiliations/tenant';
+    api.get(url)
+      .then(({ data }) => setDoctors(Array.isArray(data) ? data : data?.data || []))
+      .catch(() => setDoctors([]));
+  }, [view, user?.locationId]);
+
+  // Only offer departments that actually have a doctor behind them — picking
+  // "Cardiology" when no such department exists just creates orphan data.
+  const deptOptions = Array.from(
+    new Set(doctors.map((d: any) => (d.departmentName || '').trim()).filter(Boolean)),
+  ).sort();
+
   const fetchPatients = async () => {
     setLoading(true);
     try {
@@ -120,7 +151,7 @@ export default function PatientsPage() {
     setFormErrors({});
     setSubmitting(true);
     try {
-      await api.post('/patients', {
+      const { data } = await api.post('/patients', {
         firstName: form.firstName, lastName: form.lastName, phone: form.phone,
         email: form.email || undefined, gender: form.gender,
         dateOfBirth: form.dateOfBirth || undefined, bloodGroup: form.bloodGroup || undefined,
@@ -131,15 +162,45 @@ export default function PatientsPage() {
         emergencyContactName: form.emergencyContactName || undefined,
         emergencyContactPhone: form.emergencyPhone || undefined,
         registrationType: form.registrationType,
+        // Visit details — these used to be collected and silently discarded.
         chiefComplaint: form.chiefComplaint || undefined,
+        addToQueue: form.addToQueue,
+        preferredDoctorId: form.preferredDoctorId || undefined,
+        departmentName: form.department || undefined,
+        visitType: form.visitType || undefined,
+        priority: form.priority || undefined,
       });
-      toast.success('Patient registered successfully');
+      const token = (data as any)?.queueToken;
+      toast.success(
+        token
+          ? `Registered — queue token #${token.tokenNumber} issued`
+          : 'Patient registered successfully',
+      );
       setForm({ ...EMPTY_FORM });
       setView('list');
       fetchPatients();
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Registration failed');
     } finally { setSubmitting(false); }
+  };
+
+  // "Advance to Triage" — issues today's queue token so the patient shows up in
+  // the nurse's worklist. Backend is idempotent, but we also disable the button
+  // in-flight so an impatient double-click can't fire twice.
+  const [advancingId, setAdvancingId] = useState<string | null>(null);
+  const advanceToTriage = async (p: any) => {
+    setAdvancingId(p.id);
+    try {
+      const { data } = await api.post(`/patients/${p.id}/advance-to-triage`, {});
+      toast.success(
+        data?.reused
+          ? `${p.firstName} is already in today's queue (token #${data.tokenNumber})`
+          : `${p.firstName} sent to triage — token #${data?.tokenNumber}`,
+      );
+      fetchPatients();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to send to triage');
+    } finally { setAdvancingId(null); }
   };
 
   const openEdit = (p: any) => {
@@ -360,12 +421,34 @@ export default function PatientsPage() {
                     {['OPD - Walk-in','OPD - Appointment','Emergency','IPD'].map(t => <option key={t}>{t}</option>)}
                   </select>
                 </div>
-                <div><label className={lbl}>Department *</label>
-                  <select value={form.department} onChange={sf('department')} className={inp}>
-                    {SPECIALTIES.map(d => <option key={d}>{d}</option>)}
+                {/* Departments come from the doctors actually affiliated here,
+                    not a hardcoded specialty list — so every option has someone
+                    behind it. Falls back to SPECIALTIES only if no doctor has a
+                    department recorded. */}
+                <div><label className={lbl}>Department</label>
+                  <select
+                    value={form.department}
+                    onChange={e => setForm(f => ({ ...f, department: e.target.value, preferredDoctorId: '' }))}
+                    className={inp}
+                  >
+                    <option value="">All departments</option>
+                    {(deptOptions.length ? deptOptions : SPECIALTIES).map(d => <option key={d}>{d}</option>)}
                   </select>
                 </div>
-                <div><label className={lbl}>Preferred Doctor</label><input placeholder="Dr. Rajesh Kumar" value={form.preferredDoctor} onChange={sf('preferredDoctor')} className={inp} /></div>
+                <div><label className={lbl}>Preferred Doctor</label>
+                  <select value={form.preferredDoctorId} onChange={sf('preferredDoctorId')} className={inp}>
+                    <option value="">Select doctor…</option>
+                    {doctors
+                      .filter((d: any) => !form.department || (d.departmentName || '').trim().toLowerCase() === form.department.toLowerCase())
+                      .map((d: any) => (
+                        <option key={d.doctorId || d.id} value={d.doctorId || d.id}>
+                          Dr. {d.doctor?.firstName || d.firstName} {d.doctor?.lastName || d.lastName}
+                          {d.departmentName ? ` — ${d.departmentName}` : ''}
+                        </option>
+                      ))}
+                  </select>
+                  {doctors.length === 0 && <p className="text-xs text-gray-400 mt-1">No doctors available at this location</p>}
+                </div>
                 <div><label className={lbl}>Priority</label>
                   <select value={form.priority} onChange={sf('priority')} className={inp}>
                     {['Normal','Urgent','Emergency'].map(p => <option key={p}>{p}</option>)}
@@ -373,6 +456,25 @@ export default function PatientsPage() {
                 </div>
                 <div className="col-span-2"><label className={lbl}>Chief Complaint</label>
                   <textarea rows={2} placeholder="Describe the reason for visit…" value={form.chiefComplaint} onChange={sf('chiefComplaint')} className={`${inp} resize-none`} />
+                </div>
+                {/* The whole point of this section: registration now starts a
+                    visit. Unticking it registers the patient record only. */}
+                <div className="col-span-2">
+                  <label className="flex items-start gap-2.5 p-3 rounded-xl bg-teal-50 border border-teal-100 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.addToQueue}
+                      onChange={e => setForm(f => ({ ...f, addToQueue: e.target.checked }))}
+                      className="mt-0.5 accent-teal-600"
+                    />
+                    <span className="text-sm">
+                      <span className="font-semibold text-teal-800">Add to today's queue</span>
+                      <span className="block text-xs text-teal-700/80 mt-0.5">
+                        Issues a queue token so the patient appears in the nurse's triage worklist
+                        {form.preferredDoctorId ? " and the selected doctor's queue" : ''}. Untick to register the record only.
+                      </span>
+                    </span>
+                  </label>
                 </div>
               </div>
             </div>
@@ -478,7 +580,7 @@ export default function PatientsPage() {
           <table className="w-full">
             <thead>
               <tr>
-                {['Patient ID','Name','Age/Gender','Phone','Blood Group','Type','Registered','Actions'].map(h => (
+                {['Patient ID','Name','Age/Gender','Phone','Blood Group','Type','Today','Actions'].map(h => (
                   <th key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 py-3 text-left bg-gray-50">{h}</th>
                 ))}
               </tr>
@@ -504,9 +606,34 @@ export default function PatientsPage() {
                   <td className="px-4 py-3 text-xs">
                     <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full">{p.registrationType}</span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{new Date(p.createdAt).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 text-xs">
+                    {VISIT_STAGE[p.visitStatus] ? (
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border font-medium ${VISIT_STAGE[p.visitStatus].cls}`}>
+                        {p.queueToken?.tokenNumber != null && <span className="font-bold">#{p.queueToken.tokenNumber}</span>}
+                        {VISIT_STAGE[p.visitStatus].label}
+                      </span>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
+                      {/* Disabled once the patient is already moving through the
+                          workflow — re-sending would be a no-op server-side, but
+                          a live button implies there's something left to do. */}
+                      <button
+                        onClick={() => advanceToTriage(p)}
+                        disabled={p.visitStatus !== 'NOT_STARTED' || advancingId === p.id}
+                        title={p.visitStatus !== 'NOT_STARTED' ? 'Already in today’s workflow' : 'Send to triage'}
+                        className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md font-medium transition-colors ${
+                          p.visitStatus !== 'NOT_STARTED'
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                        }`}
+                      >
+                        <ArrowRightCircle size={12} />
+                        {advancingId === p.id ? 'Sending…' : 'Triage'}
+                      </button>
                       <button onClick={() => setSelectedPatient(p)} className="text-teal-600 hover:text-teal-800" title="View"><Eye size={16} /></button>
                       <button onClick={() => openEdit(p)} className="text-blue-600 hover:text-blue-800" title="Edit"><Pencil size={15} /></button>
                       <button onClick={() => openHistory(p)} className="text-purple-600 hover:text-purple-800" title="History"><History size={15} /></button>

@@ -104,6 +104,17 @@ export class CreatePatientDto {
 
   @IsOptional() @IsString() chiefComplaint?: string;
 
+  // ── Visit details ──
+  // Opt-in: when true, registration also issues a queue token so the patient
+  // reaches the triage worklist and the selected doctor's queue. Off by
+  // default so seeding/import callers keep their old behaviour.
+  @IsOptional() @IsBoolean() addToQueue?: boolean;
+  /** DoctorRegistry id — see the comment at the token create in patients.service. */
+  @IsOptional() @IsString() preferredDoctorId?: string;
+  @IsOptional() @IsString() departmentId?: string;
+  /** Resolved to a real Department row by name when departmentId isn't known. */
+  @IsOptional() @IsString() departmentName?: string;
+
   @IsOptional() @IsString() insuranceProvider?: string;
   @IsOptional() @IsString() policyNumber?: string;
   @IsOptional() @IsString() paymentMode?: string;

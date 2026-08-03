@@ -48,6 +48,22 @@ export class PatientsController {
   }
   @Post() create(@CurrentUser('tenantId') tid: string, @Body() body: CreatePatientDto, @CurrentUser('sub') uid: string) { return this.svc.create(tid, body, uid); }
 
+  // Reception "Advance to Triage" — puts an already-registered patient into
+  // today's queue so they surface in the nurse's triage worklist.
+  // Front-desk + nursing only; the wide read roles on this controller must not
+  // grant queue writes.
+  @Post(':id/advance-to-triage')
+  @Roles('SYS_ORG_ADMIN', 'SYS_RECEPTIONIST', 'SYS_FRONT_OFFICE', 'SYS_NURSE', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE')
+  advanceToTriage(
+    @CurrentUser('tenantId') tid: string,
+    @Param('id') id: string,
+    @CurrentUser('sub') uid: string,
+    @CurrentUser('locationId') lid: string,
+    @Body() body: any,
+  ) {
+    return this.svc.advanceToTriage(tid, id, uid, { ...(body || {}), locationId: body?.locationId || lid });
+  }
+
   @Get('by-pid/:pid')
   @Roles('SYS_ORG_ADMIN', 'SYS_RECEPTIONIST', 'SYS_FRONT_OFFICE', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_NURSE', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE', 'SYS_PHARMACIST', 'SYS_PHARMACY_INCHARGE', 'SYS_BILLING', 'SYS_BILLING_MANAGER', 'SYS_LAB_TECHNICIAN', 'SYS_LAB_INCHARGE', 'SYS_RADIOLOGIST', 'SYS_OT_INCHARGE', 'SYS_OT_TECHNICIAN', 'SYS_BLOOD_BANK_INCHARGE', 'SYS_AMBULANCE_DRIVER', 'SYS_AMBULANCE_INCHARGE')
   findByPid(@CurrentUser('tenantId') tid: string, @Param('pid') pid: string) { return this.svc.findByPatientId(tid, pid); }

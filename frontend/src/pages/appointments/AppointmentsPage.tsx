@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Calendar, Clock, Users, CheckCircle, Plus, X, Search, XCircle, Edit3, Loader2, Printer } from 'lucide-react';
+import { Calendar, Clock, Users, CheckCircle, Plus, X, Search, XCircle, Edit3, Loader2, Printer, LogIn } from 'lucide-react';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
 import TopBar from '../../components/layout/TopBar';
 import KpiCard from '../../components/ui/KpiCard';
@@ -11,6 +11,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
 import ExportButton from '../../components/ui/ExportButton';
 import api from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 import { formatSlotTime } from '../../lib/format';
 
 const EMPTY_FORM = {
@@ -129,6 +130,7 @@ function AvailabilityTab() {
 }
 
 export default function AppointmentsPage() {
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabKey>('list');
 
@@ -289,6 +291,30 @@ export default function AppointmentsPage() {
     } catch (err: any) {
       setFormError(err.response?.data?.message || 'Failed to book appointment');
     } finally { setSubmitting(false); }
+  };
+
+  // Check-in: booking an appointment doesn't put anyone in the queue, so a
+  // patient who arrived was invisible to triage and to their own doctor. This
+  // issues today's token, stamped with the appointment so the two records link.
+  const [checkingInId, setCheckingInId] = useState<string | null>(null);
+  const handleCheckIn = async (a: any) => {
+    if (!user?.locationId) { toast.error('No location assigned to your account'); return; }
+    setCheckingInId(a.id);
+    try {
+      const { data } = await api.post('/queue/token', {
+        patientId: a.patientId,
+        locationId: user.locationId,
+        doctorId: a.doctorId || undefined,
+        departmentId: a.departmentId || undefined,
+        appointmentId: a.id,
+        visitType: 'APPOINTMENT',
+        notes: a.chiefComplaint || undefined,
+      });
+      toast.success(`Checked in — token #${data?.tokenNumber}`);
+      fetchAppts();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Check-in failed');
+    } finally { setCheckingInId(null); }
   };
 
   const handleCancel = async (id: string) => {
@@ -465,6 +491,13 @@ export default function AppointmentsPage() {
                   <td className="px-4 py-3"><StatusBadge status={a.status} /></td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
+                      {a.status === 'SCHEDULED' && (
+                        <button onClick={() => handleCheckIn(a)} disabled={checkingInId === a.id}
+                          title="Issue a queue token so the patient reaches triage and the doctor"
+                          className="flex items-center gap-1 text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 font-medium disabled:opacity-50">
+                          <LogIn size={11} /> {checkingInId === a.id ? 'Checking in…' : 'Check In'}
+                        </button>
+                      )}
                       {a.status !== 'CANCELLED' && a.status !== 'COMPLETED' && (
                         <button onClick={() => openEditModal(a)}
                           className="flex items-center gap-1 text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">

@@ -21,6 +21,15 @@ export default function TriagePage() {
   const [saved,      setSaved]      = useState(false);
   const [currentToken, setCurrentToken] = useState<string | null>(null);
 
+  // Worklist of patients checked in at reception and not yet triaged. Before
+  // this the station was blind — the nurse had to already know who had walked
+  // in and search for them by name.
+  const [pending, setPending] = useState<any[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(true);
+  // Token the current triage is being recorded against. Passed to POST /triage
+  // so it reuses that token instead of minting a second one for the patient.
+  const [activeTokenId, setActiveTokenId] = useState<string | null>(null);
+
   const [patSearch,   setPatSearch]   = useState('');
   const [patResults,  setPatResults]  = useState<any[]>([]);
   const [selectedPat, setSelectedPat] = useState<any>(null);
@@ -189,7 +198,31 @@ export default function TriagePage() {
     } catch (err) { toast.error('Failed to load data'); } finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchTriages(); }, []);
+  const fetchPending = async () => {
+    setPendingLoading(true);
+    try {
+      const { data } = await api.get('/triage/pending');
+      setPending(data.data || []);
+    } catch (err) { setPending([]); } finally { setPendingLoading(false); }
+  };
+
+  useEffect(() => { fetchTriages(); fetchPending(); }, []);
+
+  // Pick a waiting patient off the worklist: fill the form from their token so
+  // the nurse isn't retyping what reception already captured.
+  const pickPending = (t: any) => {
+    setSelectedPat(t.patient);
+    setActiveTokenId(t.id);
+    setForm(f => ({
+      ...f,
+      patientId: t.patient?.id || '',
+      // Reception records the complaint on the token's notes.
+      chiefComplaint: t.notes || f.chiefComplaint,
+    }));
+    setPatSearch('');
+    setPatResults([]);
+    setSaved(false);
+  };
 
   // IDs of patients already triaged today — used to filter the search dropdown
   // so a nurse can't re-pick someone whose triage is already done.
@@ -279,6 +312,9 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
     try {
       await api.post('/triage', {
         patientId: form.patientId,
+        // Ties the triage to the token reception issued, so the backend updates
+        // that token rather than minting a second one for the same patient.
+        queueTokenId: activeTokenId || undefined,
         chiefComplaint: form.chiefComplaint,
         triageLevel: form.triageLevel,
         briefHistory: form.briefHistory || undefined,
@@ -299,8 +335,9 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
       toast.success(selectedDoctor ? `Triage saved and assigned to Dr. ${selectedDoctor.firstName} ${selectedDoctor.lastName}` : 'Triage saved');
       setSaved(true);
       fetchTriages();
+      fetchPending(); // the patient just triaged drops off the worklist
       // Reset after a beat so the success state is visible
-      setTimeout(() => { resetForm(); setSelectedDoctor(null); }, 1200);
+      setTimeout(() => { resetForm(); setSelectedDoctor(null); setActiveTokenId(null); }, 1200);
     } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to save triage'); }
     finally { setSaving(false); }
   };
@@ -401,6 +438,69 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
 
         {/* Left Column: Patient + Vitals + Chief Complaint */}
         <div className="flex-1 space-y-4">
+
+          {/* Waiting for Triage — patients checked in at reception. */}
+          <div className="hms-card p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-gray-800">Waiting for Triage</span>
+                {!pendingLoading && (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                    {pending.length}
+                  </span>
+                )}
+              </div>
+              <button onClick={fetchPending} className="text-xs text-teal-700 hover:text-teal-900 font-medium">
+                Refresh
+              </button>
+            </div>
+
+            {pendingLoading ? (
+              <div className="text-sm text-gray-400 py-3">Loading…</div>
+            ) : pending.length === 0 ? (
+              <div className="text-sm text-gray-400 py-3">
+                Nobody is waiting. Patients appear here once reception checks them in.
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {pending.map(t => {
+                  const active = activeTokenId === t.id;
+                  const urgent = t.priority === 'EMERGENCY' || t.priority === 'URGENT';
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => pickPending(t)}
+                      className={`w-full text-left px-3 py-2.5 rounded-xl border transition-all flex items-center gap-3 ${
+                        active ? 'border-teal-500 bg-teal-50' : 'border-gray-150 hover:border-teal-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className={`text-xs font-bold px-2 py-1 rounded-lg flex-shrink-0 ${
+                        urgent ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        #{t.tokenNumber}
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm font-medium text-gray-900 truncate">
+                          {t.patient?.firstName} {t.patient?.lastName}
+                        </span>
+                        <span className="block text-xs text-gray-500 truncate">
+                          {t.patient?.patientId}
+                          {t.doctor ? ` • Dr. ${t.doctor.firstName} ${t.doctor.lastName}` : ''}
+                          {t.notes ? ` • ${t.notes}` : ''}
+                        </span>
+                      </span>
+                      {t.waitMins != null && (
+                        <span className={`text-xs flex-shrink-0 ${t.waitMins >= 30 ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
+                          {t.waitMins} min
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {/* Patient Banner */}
           <div className="hms-card p-5 overflow-visible relative z-30">

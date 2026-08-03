@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { generateSequentialId } from '../../common/utils/id-generator';
+import { startOfDayUtc, nextQueueTokenNumber, findLiveToken, normalizePriority, normalizeVisitType } from '../../common/utils/queue-token';
 import { v4 as uuidv4 } from 'uuid';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
@@ -25,11 +26,102 @@ export class PatientsService {
       { patientId: { contains: q, mode: 'insensitive' } },
       { nationalId: { contains: q } },
     ];
-    const [data, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       this.prisma.patient.findMany({ where, skip, take: Number(limit), orderBy: { createdAt: 'desc' } }),
       this.prisma.patient.count({ where }),
     ]);
+    const data = await this.withVisitStatus(tenantId, rows);
     return { data, meta: { total, page: Number(page), limit: Number(limit), pages: Math.ceil(total / Number(limit)) } };
+  }
+
+  /**
+   * Annotate each patient with where they are in today's workflow, so reception
+   * can see at a glance who still needs advancing and disable the button for
+   * those already moving.
+   *
+   *   NOT_STARTED     — no visit today; "Advance to Triage" is actionable
+   *   AWAITING_TRIAGE — token issued, nurse hasn't triaged yet
+   *   TRIAGED         — triage recorded, waiting on the doctor
+   *   IN_CONSULTATION — doctor has called them in
+   *   COMPLETED       — done for the day
+   *
+   * Two queries for the whole page regardless of page size — a per-row lookup
+   * would N+1 across every patient list render.
+   */
+  private async withVisitStatus(tenantId: string, rows: any[]) {
+    if (!rows.length) return rows;
+    const queueDate = startOfDayUtc();
+    const patientIds = rows.map(p => p.id);
+
+    const tokens = await this.prisma.queueToken.findMany({
+      where: { tenantId, queueDate, patientId: { in: patientIds } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, patientId: true, status: true, tokenNumber: true, doctorId: true },
+    });
+    if (!tokens.length) {
+      return rows.map(p => ({ ...p, visitStatus: 'NOT_STARTED', queueToken: null }));
+    }
+
+    const triaged = await this.prisma.triageRecord.findMany({
+      where: { tenantId, queueTokenId: { in: tokens.map(t => t.id) } },
+      select: { queueTokenId: true },
+    });
+    const triagedTokens = new Set(triaged.map(t => t.queueTokenId));
+
+    // orderBy desc + first-wins = the patient's most recent token today.
+    const byPatient = new Map<string, any>();
+    for (const t of tokens) if (!byPatient.has(t.patientId)) byPatient.set(t.patientId, t);
+
+    return rows.map(p => {
+      const t = byPatient.get(p.id);
+      if (!t) return { ...p, visitStatus: 'NOT_STARTED', queueToken: null };
+      let visitStatus: string;
+      if (t.status === 'COMPLETED') visitStatus = 'COMPLETED';
+      else if (t.status === 'IN_CONSULTATION' || t.status === 'CALLED') visitStatus = 'IN_CONSULTATION';
+      else if (triagedTokens.has(t.id)) visitStatus = 'TRIAGED';
+      else if (t.status === 'WAITING') visitStatus = 'AWAITING_TRIAGE';
+      else visitStatus = 'NOT_STARTED'; // SKIPPED / NO_SHOW — let reception re-advance
+      return { ...p, visitStatus, queueToken: { id: t.id, tokenNumber: t.tokenNumber, status: t.status } };
+    });
+  }
+
+  /**
+   * Reception's "Advance to Triage": put an already-registered patient into
+   * today's queue. Idempotent — reuses a live token rather than minting a
+   * second one, so a double-click can't queue the patient twice.
+   */
+  async advanceToTriage(
+    tenantId: string,
+    patientId: string,
+    actorId: string,
+    opts: { doctorId?: string; priority?: string; notes?: string; locationId?: string } = {},
+  ) {
+    const patient = await this.findOne(tenantId, patientId);
+    const queueDate = startOfDayUtc();
+    // Queue at the desk doing the advancing, not the patient's home location —
+    // otherwise a receptionist at site A pushes the patient into site B's queue
+    // where neither they nor their nurses can see them. Falls back to the
+    // patient's own location for callers with no location on their token.
+    const locationId = opts.locationId || patient.locationId;
+
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await findLiveToken(tx, { tenantId, locationId, patientId, queueDate });
+      if (existing) return { ...existing, reused: true };
+
+      const tokenNumber = await nextQueueTokenNumber(tx, { tenantId, locationId, queueDate });
+      const token = await tx.queueToken.create({
+        data: {
+          tenantId, tokenNumber, locationId, queueDate, patientId,
+          doctorId: opts.doctorId,
+          visitType: 'NEW',
+          priority: normalizePriority(opts.priority),
+          status: 'WAITING',
+          notes: opts.notes,
+          createdById: actorId,
+        },
+      });
+      return { ...token, reused: false };
+    });
   }
 
   async create(tenantId: string, dto: any, registeredById: string) {
@@ -105,13 +197,32 @@ export class PatientsService {
       };
     }
 
+    // ── Visit details ──────────────────────────────────────────────────────
+    // Registration used to be a dead end: it wrote a Patient row and nothing
+    // else, so the doctor/department/priority/complaint the receptionist typed
+    // went nowhere and no downstream station ever learned the patient existed.
+    // When the caller opts in (addToQueue), we now also start the visit by
+    // minting a queue token — which is what puts the patient in the triage
+    // worklist AND the selected doctor's queue.
+    //
+    // Off by default so existing callers (seeding, imports, portal self-reg)
+    // keep their old behaviour.
+    let visitDepartmentId: string | undefined = dto.departmentId;
+    if (!visitDepartmentId && dto.departmentName) {
+      const dept = await this.prisma.department.findFirst({
+        where: { tenantId, name: { equals: dto.departmentName, mode: 'insensitive' }, isActive: true },
+        select: { id: true },
+      });
+      visitDepartmentId = dept?.id;
+    }
+
     const created = await generateSequentialId(this.prisma, {
       table: 'Patient',
       idColumn: 'patientId',
       prefix,
       tenantId,
       callback: async (tx, patientId) => {
-        return tx.patient.create({
+        const patient = await tx.patient.create({
           data: {
             tenantId, patientId,
             locationId,
@@ -136,6 +247,30 @@ export class PatientsService {
             registeredById,
           },
         });
+
+        if (!dto.addToQueue) return patient;
+
+        // Same transaction as the patient insert: nextQueueTokenNumber holds an
+        // advisory lock that is only valid until this transaction commits.
+        const queueDate = startOfDayUtc();
+        const tokenNumber = await nextQueueTokenNumber(tx, { tenantId, locationId, queueDate });
+        const queueToken = await tx.queueToken.create({
+          data: {
+            tenantId, tokenNumber, locationId, queueDate,
+            patientId: patient.id,
+            // DoctorRegistry id — that is what a doctor's JWT `sub` holds and
+            // what GET /queue/doctor/:id matches on. A TenantUser id here would
+            // silently never surface in the doctor's queue.
+            doctorId: dto.preferredDoctorId || undefined,
+            departmentId: visitDepartmentId,
+            visitType: normalizeVisitType(dto.visitType),
+            priority: normalizePriority(dto.priority),
+            status: 'WAITING',
+            notes: dto.chiefComplaint,
+            createdById: registeredById,
+          },
+        });
+        return Object.assign(patient, { queueToken });
       },
     });
 

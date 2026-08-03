@@ -18,6 +18,11 @@ export class TriageController {
   constructor(private svc: TriageService) {}
   @Get() list(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.list(tid, q); }
   @Post() create(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: any, @CurrentUser('sub') uid: string) { return this.svc.create(tid, { ...body, locationId: body.locationId || lid }, uid); }
+  // Patients waiting to be triaged — the nurse's worklist. Must be declared
+  // before any @Get(':id')-style route or Nest would match "pending" as a param.
+  @Get('pending') pending(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Query() q: any) {
+    return this.svc.pending(tid, q.locationId || lid, q.date);
+  }
   @Get('by-token/:tokenId') byToken(@CurrentUser('tenantId') tid: string, @Param('tokenId') id: string) { return this.svc.getByToken(tid, id); }
   @Get('by-patient/:patientId') byPatient(@CurrentUser('tenantId') tid: string, @Param('patientId') pid: string) { return this.svc.getByPatient(tid, pid); }
   @Put(':id') update(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.update(tid, id, body); }
