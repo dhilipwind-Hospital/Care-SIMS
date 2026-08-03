@@ -228,6 +228,46 @@ export class TriageService {
           notes, triagedById,
         },
       });
+
+      // Allergies and current medications the nurse elicits at triage used to
+      // live only inside this record's free-text `notes` blob — so an allergy
+      // discovered today never reached patient.allergies and nothing would warn
+      // anyone at the next visit. Merge them onto the patient record.
+      //
+      // UNION ONLY, never remove: the nurse is recording what this patient told
+      // them today, which is not authority to delete a previously documented
+      // allergy they simply didn't mention. Case-insensitive de-dupe so
+      // "Penicillin" and "penicillin" don't both accumulate.
+      const nurseAllergies = typeof dto.knownAllergies === 'string'
+        ? dto.knownAllergies.split(',').map((s: string) => s.trim()).filter(Boolean)
+        : [];
+      if (nurseAllergies.length || dto.currentMedications) {
+        const patient = await tx.patient.findFirst({
+          where: { id: dto.patientId, tenantId },
+          select: { allergies: true, currentMedications: true },
+        });
+        if (patient) {
+          const data: any = {};
+          if (nurseAllergies.length) {
+            const seen = new Map<string, string>();
+            for (const a of [...(patient.allergies || []), ...nurseAllergies]) {
+              const k = a.trim().toLowerCase();
+              if (k && !seen.has(k)) seen.set(k, a.trim());
+            }
+            const merged = [...seen.values()];
+            if (merged.length !== (patient.allergies || []).length) data.allergies = merged;
+          }
+          // currentMedications is a Json? column; only fill it when empty so a
+          // triage note can't clobber a reconciled medication list.
+          if (dto.currentMedications && !patient.currentMedications) {
+            data.currentMedications = dto.currentMedications;
+          }
+          if (Object.keys(data).length) {
+            await tx.patient.update({ where: { id: dto.patientId }, data });
+          }
+        }
+      }
+
       return { triage, queueTokenChanged };
     });
 

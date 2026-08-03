@@ -159,8 +159,18 @@ export default function PatientsPage() {
         city: form.city || undefined, state: form.state || undefined,
         pinCode: form.pinCode || undefined,
         knownAllergies: form.knownAllergies || undefined,
+        // Collected by the form and previously dropped on the floor. Each of
+        // these has a working backend path: idNumber -> nationalId,
+        // preExistingConditions -> existingConditions[], the emergency and
+        // insurance fields fold into their JSON columns.
+        preExistingConditions: form.preExistingConditions || undefined,
+        currentMedications: form.currentMedications || undefined,
+        idNumber: form.idNumber || undefined,
         emergencyContactName: form.emergencyContactName || undefined,
         emergencyContactPhone: form.emergencyPhone || undefined,
+        emergencyRelationship: form.emergencyRelationship || undefined,
+        insuranceProvider: form.insuranceProvider || undefined,
+        policyNumber: form.policyNumber || undefined,
         registrationType: form.registrationType,
         // Visit details — these used to be collected and silently discarded.
         chiefComplaint: form.chiefComplaint || undefined,

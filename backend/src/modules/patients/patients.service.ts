@@ -241,6 +241,10 @@ export class PatientsService {
             emergencyContact: emergencyContactJson,
             allergies: allergiesArray,
             existingConditions: existingConditionsArray,
+            // The column and the update() path both existed; only create()
+            // never wrote it, so medications captured at registration were lost
+            // while the same field edited later saved fine.
+            currentMedications: dto.currentMedications,
             pastSurgeries: dto.pastSurgeries,
             familyHistory: dto.familyHistory,
             insurance: insuranceJson,

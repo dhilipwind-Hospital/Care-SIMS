@@ -210,7 +210,12 @@ export default function DoctorQueuePage() {
               ) : filteredTokens.map(t => {
                 const pri = getPriority(t);
                 const inConsult = isInConsult(t.status);
-                const age = t.patient?.ageYears ?? t.patient?.age;
+                // Registration collects date of birth, never ageYears — so
+                // reading the column alone meant the doctor always saw "—"
+                // while reception and the nurse both showed a real age.
+                const age = t.patient?.ageYears ?? t.patient?.age ?? (t.patient?.dateOfBirth
+                  ? Math.floor((Date.now() - new Date(t.patient.dateOfBirth).getTime()) / 31557600000)
+                  : undefined);
                 return (
                 <tr key={t.id} className={`hover:bg-gray-50 border-t border-gray-50 transition-colors ${pri === 'EMERGENCY' ? 'bg-red-50/60' : pri === 'URGENT' ? 'bg-amber-50/30' : ''}`}>
                   <td className="px-4 py-3">
