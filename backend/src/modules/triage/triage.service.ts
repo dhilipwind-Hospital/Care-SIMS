@@ -3,6 +3,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { WsGateway } from '../ws-gateway/ws-gateway.gateway';
 import { AiService } from '../ai/ai.service';
 import { sendEmail } from '../../common/utils/mailer';
+import { startOfDayUtc, nextQueueTokenNumber, findLiveToken } from '../../common/utils/queue-token';
 
 // Same shell as admissions/discharge-summary — kept inline to avoid a shared
 // dependency.
@@ -54,6 +55,64 @@ export class TriageService {
     return { data: flat, meta: { total, page, limit } };
   }
 
+  /**
+   * Patients waiting to be triaged: today's live queue tokens with no
+   * TriageRecord pointing at them.
+   *
+   * Before this existed the triage station was blind — the nurse had to already
+   * know who had walked in and type their name into a search box, because
+   * nothing upstream ever marked a patient as waiting.
+   *
+   * Deliberately derived rather than stored: "pending" is the absence of a
+   * triage record, so there is no extra status column to keep in sync (and no
+   * migration). TriageRecord.queueTokenId already links the two.
+   */
+  async pending(tenantId: string, locationId?: string, date?: string) {
+    const queueDate = startOfDayUtc(date);
+    const where: any = { tenantId, queueDate, status: { in: ['WAITING', 'CALLED'] } };
+    if (locationId) where.locationId = locationId;
+
+    const tokens = await this.prisma.queueToken.findMany({
+      where,
+      include: {
+        patient: {
+          select: {
+            id: true, patientId: true, firstName: true, lastName: true,
+            gender: true, ageYears: true, dateOfBirth: true, mobile: true, allergies: true,
+          },
+        },
+      },
+      orderBy: [{ priority: 'asc' }, { tokenNumber: 'asc' }],
+      take: 200,
+    });
+    if (!tokens.length) return { data: [], meta: { total: 0 } };
+
+    // One query for the whole page rather than a lookup per token.
+    const triaged = await this.prisma.triageRecord.findMany({
+      where: { tenantId, queueTokenId: { in: tokens.map(t => t.id) } },
+      select: { queueTokenId: true },
+    });
+    const done = new Set(triaged.map(t => t.queueTokenId));
+    const pending = tokens.filter(t => !done.has(t.id));
+
+    // Doctor names: doctorId is a bare string that may point at a TenantUser or
+    // a DoctorRegistry row, with no relation either way.
+    const doctorIds = [...new Set(pending.map(t => t.doctorId).filter(Boolean))] as string[];
+    const [users, registry] = await Promise.all([
+      doctorIds.length ? this.prisma.tenantUser.findMany({ where: { id: { in: doctorIds }, tenantId }, select: { id: true, firstName: true, lastName: true } }) : [],
+      doctorIds.length ? this.prisma.doctorRegistry.findMany({ where: { id: { in: doctorIds } }, select: { id: true, firstName: true, lastName: true } }) : [],
+    ]);
+    const docMap = new Map<string, any>([...registry, ...users].map(d => [d.id, d] as [string, any]));
+
+    const now = Date.now();
+    const data = pending.map(t => ({
+      ...t,
+      doctor: t.doctorId ? docMap.get(t.doctorId) || null : null,
+      waitMins: t.checkInTime ? Math.max(0, Math.round((now - new Date(t.checkInTime).getTime()) / 60000)) : null,
+    }));
+    return { data, meta: { total: data.length } };
+  }
+
   async create(tenantId: string, dto: any, triagedById: string) {
     // Auto-resolve locationId from user's primary location if not provided
     let locationId = dto.locationId;
@@ -100,19 +159,10 @@ export class TriageService {
       //   3. Else mint a fresh one.
       let queueTokenId: string | undefined = dto.queueTokenId;
       let queueTokenChanged = false;
-      // UTC-midnight to match the queue's @db.Date column (see queue.service
-      // startOfDayUtc — local midnight mismatches the write/read on a non-UTC server).
-      const now = new Date();
-      const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      const today = startOfDayUtc();
 
       if (!queueTokenId && locationId) {
-        const existing = await tx.queueToken.findFirst({
-          where: {
-            tenantId, locationId, patientId: dto.patientId, queueDate: today,
-            status: { in: ['WAITING', 'CALLED', 'IN_CONSULTATION'] },
-          },
-          orderBy: { createdAt: 'desc' },
-        });
+        const existing = await findLiveToken(tx, { tenantId, locationId, patientId: dto.patientId, queueDate: today });
         if (existing) {
           queueTokenId = existing.id;
           await tx.queueToken.update({
@@ -126,14 +176,11 @@ export class TriageService {
           });
           queueTokenChanged = true;
         } else {
-          const last = await tx.queueToken.findFirst({
-            where: { tenantId, locationId, queueDate: today },
-            orderBy: { tokenNumber: 'desc' },
-          });
+          const tokenNumber = await nextQueueTokenNumber(tx, { tenantId, locationId, queueDate: today });
           const created = await tx.queueToken.create({
             data: {
               tenantId,
-              tokenNumber: (last?.tokenNumber || 0) + 1,
+              tokenNumber,
               locationId,
               queueDate: today,
               patientId: dto.patientId,

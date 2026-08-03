@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { PrismaService } from '../../database/prisma.service';
 import { WsGateway } from '../ws-gateway/ws-gateway.gateway';
 import { sendEmail } from '../../common/utils/mailer';
+import { startOfDayUtc, nextQueueTokenNumber, findLiveToken, normalizePriority, normalizeVisitType } from '../../common/utils/queue-token';
 
 // Same shell as admissions/discharge-summary — kept inline to avoid a shared
 // dependency.
@@ -18,18 +19,6 @@ function emailTemplate(title: string, body: string, orgName?: string): string {
     This is an automated message from ${orgName || 'Ayphen HMS'}. Do not reply.
   </p>
 </div>`;
-}
-
-// queueDate is a `@db.Date` (date-only) column. `new Date().setHours(0,0,0,0)`
-// gives LOCAL midnight — on a non-UTC server (this one runs in IST) that instant's
-// UTC date is the PREVIOUS day, and Prisma serializes a @db.Date WHERE filter by
-// UTC date. Result: the value written and the value filtered on disagreed, so
-// "today's queue" (doctor queue, reception dashboard, stats) always came back
-// empty even with patients checked in. Compute the day at UTC midnight so write
-// and read are always identical regardless of server timezone.
-function startOfDayUtc(input?: string | Date): Date {
-  const d = input ? new Date(input) : new Date();
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 
 @Injectable()
@@ -88,28 +77,50 @@ export class QueueService {
   async issueToken(tenantId: string, dto: any, createdById: string) {
     const queueDate = startOfDayUtc();
 
-    const lastToken = await this.prisma.queueToken.findFirst({
-      where: { tenantId, locationId: dto.locationId, queueDate },
-      orderBy: { tokenNumber: 'desc' },
-    });
-    const tokenNumber = (lastToken?.tokenNumber || 0) + 1;
+    // Token numbering runs under an advisory lock inside the transaction —
+    // see nextQueueTokenNumber. The create MUST stay in the same transaction
+    // or the lock is released before the row lands and the race reopens.
+    const token = await this.prisma.$transaction(async (tx) => {
+      // Never mint a second live token for a patient already in today's queue;
+      // reception, triage and appointment check-in can all fire for the same
+      // person. Reuse and update instead, matching triage.create's behaviour.
+      const existing = await findLiveToken(tx, {
+        tenantId, locationId: dto.locationId, patientId: dto.patientId, queueDate,
+      });
+      if (existing) {
+        return tx.queueToken.update({
+          where: { id: existing.id },
+          data: {
+            ...(dto.doctorId ? { doctorId: dto.doctorId } : {}),
+            ...(dto.departmentId ? { departmentId: dto.departmentId } : {}),
+            ...(dto.priority ? { priority: normalizePriority(dto.priority) } : {}),
+            ...(dto.appointmentId ? { appointmentId: dto.appointmentId } : {}),
+            ...(dto.notes ? { notes: dto.notes } : {}),
+          },
+          include: { patient: { select: { patientId: true, firstName: true, lastName: true, mobile: true } } },
+        });
+      }
 
-    const token = await this.prisma.queueToken.create({
-      data: {
-        tenantId, tokenNumber,
-        locationId: dto.locationId,
-        queueDate,
-        patientId: dto.patientId,
-        appointmentId: dto.appointmentId,
-        doctorId: dto.doctorId,
-        departmentId: dto.departmentId,
-        visitType: dto.visitType || 'NEW',
-        priority: dto.priority || 'NORMAL',
-        status: 'WAITING',
-        notes: dto.notes,
-        createdById,
-      },
-      include: { patient: { select: { patientId: true, firstName: true, lastName: true, mobile: true } } },
+      const tokenNumber = await nextQueueTokenNumber(tx, {
+        tenantId, locationId: dto.locationId, queueDate,
+      });
+      return tx.queueToken.create({
+        data: {
+          tenantId, tokenNumber,
+          locationId: dto.locationId,
+          queueDate,
+          patientId: dto.patientId,
+          appointmentId: dto.appointmentId,
+          doctorId: dto.doctorId,
+          departmentId: dto.departmentId,
+          visitType: normalizeVisitType(dto.visitType),
+          priority: normalizePriority(dto.priority),
+          status: 'WAITING',
+          notes: dto.notes,
+          createdById,
+        },
+        include: { patient: { select: { patientId: true, firstName: true, lastName: true, mobile: true } } },
+      });
     });
     this.ws.emitToTenant(tenantId, 'queue:updated', { action: 'token_issued', token });
 
