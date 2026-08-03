@@ -61,14 +61,30 @@ export class QueueService {
         : [],
     ]);
     const map = new Map<string, any>([...registry, ...users].map(d => [d.id, d] as [string, any]));
+
+    // QueueToken has no chiefComplaint column — the doctor's queue rendered "—"
+    // for every patient even though reception and the nurse had both recorded
+    // one. The nurse's assessment is the better source when it exists; the
+    // token's `notes` is what reception wrote at check-in.
+    const triage = await this.prisma.triageRecord.findMany({
+      where: { tenantId, queueTokenId: { in: tokens.map(t => t.id) } },
+      select: { queueTokenId: true, chiefComplaint: true, triageLevel: true },
+    });
+    const triageMap = new Map<string, any>(
+      triage.filter(r => r.queueTokenId).map(r => [r.queueTokenId as string, r] as [string, any]),
+    );
+
     const now = Date.now();
     return tokens.map(t => {
       // Waiting patients accrue time; once called/consulting the clock stops.
       const until = t.completedAt || t.consultStart || t.calledTime;
       const end = until ? new Date(until).getTime() : now;
+      const tr = triageMap.get(t.id);
       return {
         ...t,
         doctor: t.doctorId ? map.get(t.doctorId) || null : null,
+        chiefComplaint: tr?.chiefComplaint || t.notes || null,
+        triageLevel: tr?.triageLevel || null,
         waitMins: t.checkInTime ? Math.max(0, Math.round((end - new Date(t.checkInTime).getTime()) / 60000)) : null,
       };
     });
@@ -240,6 +256,6 @@ Inform a staff member if your condition worsens while you wait.`;
       inConsultation: tokens.filter(t => t.status === 'IN_CONSULTATION').length,
       completed: tokens.filter(t => t.status === 'COMPLETED').length,
     };
-    return { tokens, stats };
+    return { tokens: await this.withDoctor(tenantId, tokens), stats };
   }
 }
