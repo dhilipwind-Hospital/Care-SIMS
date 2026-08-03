@@ -157,45 +157,61 @@ export class TriageService {
       //   1. If the nurse triaged off an existing token, use that.
       //   2. Else if the patient already has a live token today at this location, reuse it.
       //   3. Else mint a fresh one.
-      let queueTokenId: string | undefined = dto.queueTokenId;
+      let queueTokenId: string | undefined;
       let queueTokenChanged = false;
       const today = startOfDayUtc();
 
-      if (!queueTokenId && locationId) {
-        const existing = await findLiveToken(tx, { tenantId, locationId, patientId: dto.patientId, queueDate: today });
-        if (existing) {
-          queueTokenId = existing.id;
-          await tx.queueToken.update({
-            where: { id: existing.id },
-            data: {
-              priority,
-              ...(dto.assignedDoctorId ? { doctorId: dto.assignedDoctorId } : {}),
-              ...(dto.assignedDeptId ? { departmentId: dto.assignedDeptId } : {}),
-              ...(existing.status === 'WAITING' ? {} : { status: 'WAITING' }),
-            },
-          });
-          queueTokenChanged = true;
-        } else {
-          const tokenNumber = await nextQueueTokenNumber(tx, { tenantId, locationId, queueDate: today });
-          const created = await tx.queueToken.create({
-            data: {
-              tenantId,
-              tokenNumber,
-              locationId,
-              queueDate: today,
-              patientId: dto.patientId,
-              doctorId: dto.assignedDoctorId,
-              departmentId: dto.assignedDeptId,
-              visitType: 'NEW',
-              priority,
-              status: 'WAITING',
-              notes: dto.chiefComplaint,
-              createdById: triagedById,
-            },
-          });
-          queueTokenId = created.id;
-          queueTokenChanged = true;
-        }
+      // Which token does this triage belong to?
+      //   1. The one the nurse picked off the worklist (dto.queueTokenId), or
+      //   2. the patient's live token for today, or
+      //   3. none yet — mint one.
+      //
+      // Case 1 must be looked up and UPDATED like case 2, not just accepted.
+      // It previously short-circuited the whole block, so triaging from the
+      // worklist silently applied neither the assigned doctor nor the triage
+      // priority — the patient never reached the doctor's queue even though
+      // the toast said "assigned to Dr. X".
+      // Scoped by tenantId so a token id from another tenant can't be adopted.
+      let token: any = null;
+      if (dto.queueTokenId) {
+        token = await tx.queueToken.findFirst({ where: { id: dto.queueTokenId, tenantId } });
+      }
+      if (!token && locationId) {
+        token = await findLiveToken(tx, { tenantId, locationId, patientId: dto.patientId, queueDate: today });
+      }
+
+      if (token) {
+        queueTokenId = token.id;
+        await tx.queueToken.update({
+          where: { id: token.id },
+          data: {
+            priority,
+            ...(dto.assignedDoctorId ? { doctorId: dto.assignedDoctorId } : {}),
+            ...(dto.assignedDeptId ? { departmentId: dto.assignedDeptId } : {}),
+            ...(token.status === 'WAITING' ? {} : { status: 'WAITING' }),
+          },
+        });
+        queueTokenChanged = true;
+      } else if (locationId) {
+        const tokenNumber = await nextQueueTokenNumber(tx, { tenantId, locationId, queueDate: today });
+        const created = await tx.queueToken.create({
+          data: {
+            tenantId,
+            tokenNumber,
+            locationId,
+            queueDate: today,
+            patientId: dto.patientId,
+            doctorId: dto.assignedDoctorId,
+            departmentId: dto.assignedDeptId,
+            visitType: 'NEW',
+            priority,
+            status: 'WAITING',
+            notes: dto.chiefComplaint,
+            createdById: triagedById,
+          },
+        });
+        queueTokenId = created.id;
+        queueTokenChanged = true;
       }
 
       const triage = await tx.triageRecord.create({
