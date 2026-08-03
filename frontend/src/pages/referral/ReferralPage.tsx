@@ -47,7 +47,8 @@ export default function ReferralPage() {
     </div>
     <table style="margin-bottom:16px;">
       <tr><td style="width:25%;background:#f9fafb;font-weight:600;">Referral #</td><td>${r.referralNumber || (r.id || '').slice(0,8).toUpperCase()}</td><td style="width:25%;background:#f9fafb;font-weight:600;">Date</td><td>${r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '—'}</td></tr>
-      <tr><td style="background:#f9fafb;font-weight:600;">Patient Name</td><td>${r.patientName || r.patientId || '—'}</td><td style="background:#f9fafb;font-weight:600;">Age / DOB</td><td>${r.patientAge || r.dob || '—'}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Patient Name</td><td>${r.patientName || '—'}</td><td style="background:#f9fafb;font-weight:600;">Patient ID</td><td>${r.patientMrn || '—'}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Age / Gender</td><td>${r.patientAge != null ? r.patientAge + 'y' : '—'}${r.patient?.gender ? ' / ' + r.patient.gender : ''}</td><td style="background:#f9fafb;font-weight:600;">Contact</td><td>${r.patient?.mobile || '—'}</td></tr>
       <tr><td style="background:#f9fafb;font-weight:600;">Diagnosis</td><td>${r.diagnosis || '—'}</td><td style="background:#f9fafb;font-weight:600;">Urgency</td><td><span style="color:${urgencyColor(r.urgency)};font-weight:700;">${r.urgency || 'ROUTINE'}</span></td></tr>
     </table>
     <div style="font-weight:700;margin-bottom:6px;color:#0F766E;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Reason for Referral</div>
@@ -207,7 +208,13 @@ export default function ReferralPage() {
       ) : referrals.slice((page - 1) * 20, page * 20).map(r => (
         <tr key={r.id} className={`border-b hover:bg-gray-50 ${r.urgency === 'EMERGENCY' ? 'bg-red-50/40' : ''}`}>
           <td className="p-3 font-medium text-teal-700">{r.referralNumber}</td>
-          <td className="p-3">{r.patientId}</td><td className="p-3">{r.referredToDeptName || r.referredToDeptId || '—'}</td>
+          {/* r.patientId is the Patient PK (a UUID) — it used to be rendered
+              raw here. The API now resolves the name and MRN alongside it. */}
+          <td className="p-3">
+            <div className="font-medium text-gray-900">{r.patientName || '—'}</div>
+            {r.patientMrn && <div className="text-xs text-gray-400">{r.patientMrn}</div>}
+          </td>
+          <td className="p-3">{r.referredToDeptName || r.referredToDeptId || '—'}</td>
           <td className="p-3 max-w-[150px] truncate">{r.reason}</td>
           <td className="p-3"><StatusBadge status={r.urgency || 'ROUTINE'} /></td>
           <td className="p-3"><StatusBadge status={r.status} /></td>
