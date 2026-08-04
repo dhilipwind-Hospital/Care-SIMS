@@ -559,6 +559,7 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
                         </span>
                         <span className="block text-xs text-gray-500 truncate">
                           {t.patient?.patientId}
+                          {t.department?.name ? ` • ${t.department.name}` : ''}
                           {t.doctor ? ` • Dr. ${t.doctor.firstName} ${t.doctor.lastName}` : ''}
                           {t.notes ? ` • ${t.notes}` : ''}
                         </span>

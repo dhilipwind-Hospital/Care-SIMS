@@ -43,4 +43,10 @@ export class CreateUserDto {
   @IsOptional()
   @IsArray()
   allowedLocations?: string[];
+
+  // Departments this user covers. Empty/absent = no restriction. Drives the
+  // department scoping on the nurse's triage worklist.
+  @IsOptional()
+  @IsArray()
+  allowedDepartments?: string[];
 }

@@ -75,12 +75,14 @@ export default function UsersPage() {
 
   const fetchMeta = async () => {
     try {
-      const [r, l] = await Promise.all([
+      const [r, l, d] = await Promise.all([
         api.get('/roles', { params: { limit: 50 } }),
         api.get('/org/locations').catch((err) => { console.error('Failed to fetch locations:', err); return { data: [] }; }),
+        api.get('/org/departments').catch(() => ({ data: [] })),
       ]);
       setRoles(r.data.data || r.data || []);
       setLocations(l.data.data || l.data || []);
+      setDepartments(d.data.data || d.data || []);
     } catch (err) { toast.error('Failed to load roles and departments'); }
   };
 
@@ -178,6 +180,7 @@ export default function UsersPage() {
       lastName: u.lastName,
       roleId: u.roleId || u.role?.id || '',
       primaryLocationId: u.primaryLocationId || '',
+      allowedDepartments: u.allowedDepartments || [],
     });
     setEditError('');
   };
@@ -349,6 +352,35 @@ export default function UsersPage() {
                   <option value="">No location</option>
                   {locations.map((l: any) => <option key={l.id} value={l.id}>{l.name}{l.city ? ` — ${l.city}` : ''}</option>)}
                 </select>
+              </div>
+              {/* Department scoping. Drives which patients this user sees on the
+                  nurse triage worklist. None ticked = sees every department,
+                  which is how every existing user behaves. */}
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Departments <span className="text-gray-400 font-normal">— triage worklist scope; none selected means all</span>
+                </label>
+                {departments.length === 0 ? (
+                  <p className="text-xs text-gray-400">No departments configured for this organisation.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {departments.map((d: any) => {
+                      const on = (editForm.allowedDepartments || []).includes(d.id);
+                      return (
+                        <button key={d.id} type="button"
+                          onClick={() => setEditForm((f: any) => {
+                            const cur: string[] = f.allowedDepartments || [];
+                            return { ...f, allowedDepartments: on ? cur.filter(x => x !== d.id) : [...cur, d.id] };
+                          })}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                            on ? 'bg-teal-600 text-white border-teal-600' : 'border-gray-200 text-gray-600 hover:border-teal-400'
+                          }`}>
+                          {d.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
               {editError && <div className="col-span-2 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">{editError}</div>}
               <div className="col-span-2 flex justify-end gap-3 pt-2 border-t border-gray-100">

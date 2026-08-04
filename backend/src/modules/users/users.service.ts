@@ -40,7 +40,7 @@ export class UsersService {
     const [data, total] = await Promise.all([
       this.prisma.tenantUser.findMany({
         where, skip, take: Number(limit),
-        select: { id: true, email: true, firstName: true, lastName: true, phone: true, employeeId: true, isActive: true, lastLogin: true, primaryLocationId: true, locationScope: true, createdAt: true, role: { select: { id: true, name: true, systemRoleId: true } } },
+        select: { id: true, email: true, firstName: true, lastName: true, phone: true, employeeId: true, isActive: true, lastLogin: true, primaryLocationId: true, locationScope: true, allowedDepartments: true, createdAt: true, role: { select: { id: true, name: true, systemRoleId: true } } },
         orderBy: { firstName: 'asc' },
       }),
       this.prisma.tenantUser.count({ where }),
@@ -116,7 +116,7 @@ export class UsersService {
       if (!user) throw new NotFoundException('User not found');
       return tx.tenantUser.update({
         where: { id },
-        data: { firstName: dto.firstName, lastName: dto.lastName, phone: dto.phone, employeeId: dto.employeeId, primaryLocationId: dto.primaryLocationId, locationScope: dto.locationScope, allowedLocations: dto.allowedLocations },
+        data: { firstName: dto.firstName, lastName: dto.lastName, phone: dto.phone, employeeId: dto.employeeId, primaryLocationId: dto.primaryLocationId, locationScope: dto.locationScope, allowedLocations: dto.allowedLocations, ...(dto.allowedDepartments !== undefined ? { allowedDepartments: dto.allowedDepartments } : {}) },
       });
     });
   }

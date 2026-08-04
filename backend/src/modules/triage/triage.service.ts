@@ -239,13 +239,25 @@ export class TriageService {
           data: {
             priority,
             ...(dto.assignedDoctorId ? { doctorId: dto.assignedDoctorId } : {}),
-            ...(dto.assignedDeptId ? { departmentId: dto.assignedDeptId } : {}),
+            ...(await (async () => {
+              if (dto.assignedDeptId) return { departmentId: dto.assignedDeptId };
+              // Only fill a blank — never overwrite a department reception set.
+              if (token.departmentId || !dto.assignedDoctorId) return {};
+              const d = await resolveDepartmentId(tx, tenantId, { doctorId: dto.assignedDoctorId });
+              return d ? { departmentId: d } : {};
+            })()),
             ...(token.status === 'WAITING' ? {} : { status: 'WAITING' }),
           },
         });
         queueTokenChanged = true;
       } else if (locationId) {
         const tokenNumber = await nextQueueTokenNumber(tx, { tenantId, locationId, queueDate: today });
+        // Fall back to the assigned doctor's department, same as every other
+        // token-creating path — otherwise a nurse-minted token has no
+        // department and drops into the "Unassigned" bucket.
+        const deptId = await resolveDepartmentId(tx, tenantId, {
+          departmentId: dto.assignedDeptId, doctorId: dto.assignedDoctorId,
+        });
         const created = await tx.queueToken.create({
           data: {
             tenantId,
@@ -254,7 +266,7 @@ export class TriageService {
             queueDate: today,
             patientId: dto.patientId,
             doctorId: dto.assignedDoctorId,
-            departmentId: dto.assignedDeptId,
+            departmentId: deptId,
             visitType: 'NEW',
             priority,
             status: 'WAITING',
