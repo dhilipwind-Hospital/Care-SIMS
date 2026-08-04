@@ -20,9 +20,11 @@ manual detour through Queue Dashboard → Issue Token; that step is gone.
 - ⚠ **Use a ≥1600px window.** At 1280px the Appointments *Actions* column clips "Cancel"/"Print".
   (Measured at 1600px: no clipping, no horizontal scroll. The "Check In" label used to wrap to two
   lines even at 1600px — fixed with `whitespace-nowrap`.)
-- ⚠ **Two locations exist.** Priya is at *Branch Clinic* → she only sees **Dr. Meera Iyer**.
-  Dr. Rahul Sharma is at *Main Campus*. This is correct location scoping, but it means the
-  Department filter has nothing to filter (one department, one doctor). Don't demo the filter.
+- ⚠ **Two locations exist.** Priya is at *Branch Clinic*, so she sees the three doctors affiliated
+  there — **Dr. Meera Iyer** (General Medicine), **Dr. Anjali Krishnan** (Pediatrics) and
+  **Dr. Sanjay Pillai** (Emergency). Dr. Rahul Sharma is at *Main Campus* and correctly never
+  appears. Registering patients against different doctors is what makes the nurse's department
+  chips appear.
 
 ---
 
