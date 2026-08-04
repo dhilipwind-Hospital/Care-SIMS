@@ -53,6 +53,21 @@
   --shadow-card: 0 4px 20px rgba(52, 89, 154, 0.08);
 
   --topbar-height: 64px;
+
+  /* ── Aliases for the two names the app actually uses ──
+     `var(--accent)` (70 uses) and `var(--surface)` (31 uses) were never
+     defined anywhere — only the --hms-* originals were. An undefined custom
+     property makes the whole declaration invalid at computed-value time, so
+     `background: var(--accent)` fell back to transparent and every primary
+     button rendered white-on-white: present and clickable, but unreadable.
+
+     Defined as aliases rather than literals so they inherit the dark-mode
+     overrides below (--hms-table-header-bg is redefined for .dark).
+     --accent maps to --hms-primary, not --hms-accent: these are all
+     `text-white` buttons, and #0F766E clears WCAG AA against white where the
+     lighter #14B8A6 does not. */
+  --accent: var(--hms-primary);
+  --surface: var(--hms-table-header-bg);
 }
 
 /* ─── Dark mode variable overrides ─── */

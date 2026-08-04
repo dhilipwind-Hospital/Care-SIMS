@@ -57,7 +57,12 @@ export default function LabResultsPage() {
     setResultsLoading(true);
     try {
       const { data } = await api.get('/lab/results', { params: { q: resultSearch || undefined, limit: 100 } });
-      setResults(data.data || []);
+      // GET /lab/results returns a BARE ARRAY, not { data }. Reading data.data
+      // yielded undefined, so this table and its Pending/Validated/Critical
+      // KPIs were permanently empty even while the endpoint returned rows.
+      // Tolerate both shapes — LabPage already does exactly this — rather than
+      // change the response, which LabPage and any other caller depend on.
+      setResults(Array.isArray(data) ? data : (data?.data || []));
     } catch { toast.error('Failed to load lab results'); }
     finally { setResultsLoading(false); }
   }, [resultSearch]);

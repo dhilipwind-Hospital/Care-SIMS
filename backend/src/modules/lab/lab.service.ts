@@ -143,7 +143,23 @@ export class LabService {
     const result = await this.prisma.labResult.findFirst({ where: { id: resultId, tenantId } });
     if (!result) throw new NotFoundException('Lab result not found');
     const updated = await this.prisma.labResult.update({ where: { id: resultId }, data: { status: 'VALIDATED', validatedById, validatedAt: new Date() } });
-    await this.prisma.labOrder.update({ where: { id: result.labOrderId }, data: { status: 'RESULTED' } });
+
+    // The parent order used to be written back to RESULTED here, so it could
+    // never reach VALIDATED: the worklist status never changed and the
+    // "✓ Validate" button (gated on status === 'RESULTED') never cleared —
+    // clicking it again just re-validated the same rows.
+    //
+    // Only promote the ORDER once every one of its results is validated. An
+    // order can carry several result rows (one per test, and re-entering
+    // results appends rather than replaces), so validating one of three must
+    // leave the order at RESULTED with the button still available.
+    const outstanding = await this.prisma.labResult.count({
+      where: { tenantId, labOrderId: result.labOrderId, status: { not: 'VALIDATED' } },
+    });
+    await this.prisma.labOrder.update({
+      where: { id: result.labOrderId },
+      data: { status: outstanding === 0 ? 'VALIDATED' : 'RESULTED' },
+    });
     return updated;
   }
 
