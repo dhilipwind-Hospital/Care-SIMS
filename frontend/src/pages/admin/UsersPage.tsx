@@ -21,6 +21,7 @@ export default function UsersPage() {
   const [page, setPage]             = useState(1);
   const [roles, setRoles]           = useState<any[]>([]);
   const [locations, setLocations]   = useState<any[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
 
   // Pending approvals
   const [pending, setPending]             = useState<any[]>([]);
