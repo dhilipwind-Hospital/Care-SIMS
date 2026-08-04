@@ -3,7 +3,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { WsGateway } from '../ws-gateway/ws-gateway.gateway';
 import { AiService } from '../ai/ai.service';
 import { sendEmail } from '../../common/utils/mailer';
-import { startOfDayUtc, nextQueueTokenNumber, findLiveToken } from '../../common/utils/queue-token';
+import { startOfDayUtc, nextQueueTokenNumber, findLiveToken, byUrgency, resolveDepartmentId } from '../../common/utils/queue-token';
 
 // Same shell as admissions/discharge-summary — kept inline to avoid a shared
 // dependency.
@@ -67,10 +67,33 @@ export class TriageService {
    * triage record, so there is no extra status column to keep in sync (and no
    * migration). TriageRecord.queueTokenId already links the two.
    */
-  async pending(tenantId: string, locationId?: string, date?: string) {
+  async pending(
+    tenantId: string,
+    locationId?: string,
+    date?: string,
+    opts: { departmentId?: string; userId?: string } = {},
+  ) {
     const queueDate = startOfDayUtc(date);
     const where: any = { tenantId, queueDate, status: { in: ['WAITING', 'CALLED'] } };
     if (locationId) where.locationId = locationId;
+
+    // Department scoping. Precedence:
+    //   1. an explicit ?departmentId= (the nurse picked one in the UI)
+    //   2. otherwise the nurse's own allowedDepartments
+    //   3. otherwise everything
+    // allowedDepartments defaults to [] for every existing user, so step 3 is
+    // what they all get — nobody's worklist empties out because of this change.
+    let scopedDepartments: string[] = [];
+    if (opts.departmentId) {
+      where.departmentId = opts.departmentId;
+    } else if (opts.userId) {
+      const me = await this.prisma.tenantUser.findFirst({
+        where: { id: opts.userId, tenantId },
+        select: { allowedDepartments: true },
+      });
+      scopedDepartments = me?.allowedDepartments || [];
+      if (scopedDepartments.length) where.departmentId = { in: scopedDepartments };
+    }
 
     const tokens = await this.prisma.queueToken.findMany({
       where,
@@ -82,9 +105,10 @@ export class TriageService {
           },
         },
       },
-      orderBy: [{ priority: 'asc' }, { tokenNumber: 'asc' }],
+      orderBy: [{ tokenNumber: 'asc' }],
       take: 200,
     });
+    tokens.sort(byUrgency);
     if (!tokens.length) return { data: [], meta: { total: 0 } };
 
     // One query for the whole page rather than a lookup per token.
@@ -104,13 +128,41 @@ export class TriageService {
     ]);
     const docMap = new Map<string, any>([...registry, ...users].map(d => [d.id, d] as [string, any]));
 
+    // Department names for the worklist's grouping/filter chips.
+    const deptIds = [...new Set(pending.map(t => t.departmentId).filter(Boolean))] as string[];
+    const depts = deptIds.length
+      ? await this.prisma.department.findMany({ where: { id: { in: deptIds }, tenantId }, select: { id: true, name: true } })
+      : [];
+    const deptMap = new Map<string, string>(depts.map(d => [d.id, d.name] as [string, string]));
+
     const now = Date.now();
     const data = pending.map(t => ({
       ...t,
       doctor: t.doctorId ? docMap.get(t.doctorId) || null : null,
+      department: t.departmentId ? { id: t.departmentId, name: deptMap.get(t.departmentId) || null } : null,
       waitMins: t.checkInTime ? Math.max(0, Math.round((now - new Date(t.checkInTime).getTime()) / 60000)) : null,
     }));
-    return { data, meta: { total: data.length } };
+
+    // The department options actually present in this queue right now, so the
+    // UI can offer a filter without needing the admin-only departments endpoint.
+    // Counted before any explicit ?departmentId= narrowing would hide them.
+    const counts = new Map<string, { id: string; name: string; count: number }>();
+    for (const t of data) {
+      const key = t.department?.id || 'UNASSIGNED';
+      const name = t.department?.name || 'Unassigned';
+      const cur = counts.get(key) || { id: key, name, count: 0 };
+      cur.count++;
+      counts.set(key, cur);
+    }
+
+    return {
+      data,
+      meta: {
+        total: data.length,
+        departments: [...counts.values()].sort((a, b) => a.name.localeCompare(b.name)),
+        scopedToDepartments: scopedDepartments.length ? scopedDepartments : null,
+      },
+    };
   }
 
   async create(tenantId: string, dto: any, triagedById: string) {

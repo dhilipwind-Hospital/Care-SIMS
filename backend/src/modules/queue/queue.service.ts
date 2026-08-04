@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { PrismaService } from '../../database/prisma.service';
 import { WsGateway } from '../ws-gateway/ws-gateway.gateway';
 import { sendEmail } from '../../common/utils/mailer';
-import { startOfDayUtc, nextQueueTokenNumber, findLiveToken, normalizePriority, normalizeVisitType } from '../../common/utils/queue-token';
+import { startOfDayUtc, nextQueueTokenNumber, findLiveToken, normalizePriority, normalizeVisitType, byUrgency, priorityRank, resolveDepartmentId } from '../../common/utils/queue-token';
 
 // Same shell as admissions/discharge-summary — kept inline to avoid a shared
 // dependency.
@@ -33,9 +33,12 @@ export class QueueService {
     const tokens = await this.prisma.queueToken.findMany({
       where,
       include: { patient: { select: { id: true, patientId: true, firstName: true, lastName: true, gender: true, ageYears: true, dateOfBirth: true, mobile: true, allergies: true } } },
-      orderBy: [{ priority: 'asc' }, { tokenNumber: 'asc' }],
+      // Chronological fetch; urgency ordering applied in memory because a
+      // String `priority` column sorts alphabetically (see byUrgency).
+      orderBy: [{ tokenNumber: 'asc' }],
       take: 500,
     });
+    tokens.sort(byUrgency);
     const stats = {
       total: tokens.length,
       waiting: tokens.filter(t => t.status === 'WAITING').length,
@@ -120,6 +123,9 @@ export class QueueService {
       const tokenNumber = await nextQueueTokenNumber(tx, {
         tenantId, locationId: dto.locationId, queueDate,
       });
+      const departmentId = await resolveDepartmentId(tx, tenantId, {
+        departmentId: dto.departmentId, doctorId: dto.doctorId,
+      });
       return tx.queueToken.create({
         data: {
           tenantId, tokenNumber,
@@ -128,7 +134,7 @@ export class QueueService {
           patientId: dto.patientId,
           appointmentId: dto.appointmentId,
           doctorId: dto.doctorId,
-          departmentId: dto.departmentId,
+          departmentId,
           visitType: normalizeVisitType(dto.visitType),
           priority: normalizePriority(dto.priority),
           status: 'WAITING',
@@ -202,13 +208,66 @@ Inform a staff member if your condition worsens while you wait.`;
       .catch((err) => this.logger.error(`Queue patient token email failed: ${err?.message || err}`));
   }
 
+  /**
+   * Manually reorder the queue.
+   *
+   * Accepts the token ids in the order the user dragged them. Positions are
+   * assigned per priority band, NOT across the whole list — so a nurse can
+   * sequence the routine patients however they like, but cannot drag a routine
+   * patient above an urgent one. Acuity always wins; `byUrgency` compares
+   * `sortOrder` only after `priority`.
+   *
+   * Rejects ids that aren't in the same location-day, so one queue's reorder
+   * can't reach into another's.
+   */
+  async reorder(tenantId: string, orderedIds: string[], actorId: string) {
+    if (!Array.isArray(orderedIds) || !orderedIds.length) {
+      throw new BadRequestException('orderedIds must be a non-empty array');
+    }
+    const tokens = await this.prisma.queueToken.findMany({
+      where: { id: { in: orderedIds }, tenantId },
+      select: { id: true, priority: true, locationId: true, queueDate: true, tokenNumber: true },
+    });
+    if (tokens.length !== orderedIds.length) {
+      throw new BadRequestException('One or more tokens were not found in this tenant');
+    }
+    const scopes = new Set(tokens.map(t => `${t.locationId}|${t.queueDate.toISOString().slice(0, 10)}`));
+    if (scopes.size > 1) {
+      throw new BadRequestException('All tokens must belong to the same location and day');
+    }
+
+    const byId = new Map(tokens.map(t => [t.id, t] as [string, any]));
+    // Walk the user's order, numbering each priority band independently.
+    const seen = new Map<number, number>();
+    const updates: { id: string; sortOrder: number }[] = [];
+    for (const id of orderedIds) {
+      const t = byId.get(id);
+      if (!t) continue;
+      const band = priorityRank(t.priority);
+      const next = (seen.get(band) ?? 0) + 1;
+      seen.set(band, next);
+      updates.push({ id, sortOrder: next });
+    }
+
+    await this.prisma.$transaction(
+      updates.map(u => this.prisma.queueToken.update({ where: { id: u.id }, data: { sortOrder: u.sortOrder } })),
+    );
+    this.logger.log(`Queue reordered by ${actorId}: ${updates.map(u => `${u.id.slice(0, 8)}#${u.sortOrder}`).join(' ')}`);
+    this.ws.emitToTenant(tenantId, 'queue:updated', { action: 'reordered', by: actorId });
+    return { updated: updates.length, order: updates };
+  }
+
   async callNext(tenantId: string, locationId: string, doctorId: string) {
     const called = await this.prisma.$transaction(async (tx) => {
-      const next = await tx.queueToken.findFirst({
+      // findFirst with orderBy cannot express clinical urgency, and the old
+      // alphabetical sort made Call Next reach for a NORMAL patient ahead of an
+      // URGENT one — disagreeing with the list the doctor was looking at.
+      const waiting = await tx.queueToken.findMany({
         where: { tenantId, locationId, doctorId, status: 'WAITING' },
-        orderBy: [{ priority: 'asc' }, { tokenNumber: 'asc' }],
+        orderBy: [{ tokenNumber: 'asc' }],
         include: { patient: true },
       });
+      const next = [...waiting].sort(byUrgency)[0];
       if (!next) throw new NotFoundException('No waiting patients');
       return tx.queueToken.update({ where: { id: next.id }, data: { status: 'CALLED', calledTime: new Date() }, include: { patient: true } });
     });
@@ -247,9 +306,10 @@ Inform a staff member if your condition worsens while you wait.`;
     const tokens = await this.prisma.queueToken.findMany({
       where: { tenantId, doctorId, queueDate: today },
       include: { patient: { select: { id: true, patientId: true, firstName: true, lastName: true, gender: true, ageYears: true, dateOfBirth: true, mobile: true, allergies: true } } },
-      orderBy: [{ priority: 'asc' }, { tokenNumber: 'asc' }],
+      orderBy: [{ tokenNumber: 'asc' }],
       take: limit ? Number(limit) : 50,
     });
+    tokens.sort(byUrgency);
     const stats = {
       total: tokens.length,
       waiting: tokens.filter(t => t.status === 'WAITING').length,

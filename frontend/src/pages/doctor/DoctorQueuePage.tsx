@@ -45,12 +45,16 @@ export default function DoctorQueuePage() {
         toast('New patient in queue', { icon: '🔔' });
       }
       prevCountRef.current = result.filter((t: any) => t.status === 'WAITING').length;
-      // Sort: EMERGENCY first, then URGENT, then by token number.
-      // Backend column is `priority`; older code expected `priorityLevel`.
+      // Mirrors the backend `byUrgency` comparator exactly: urgency band first,
+      // then any manual position, then arrival. Without the sortOrder term a
+      // manual reorder would be silently undone by the next 30s poll.
       result.sort((a, b) => {
         const pa = PRIORITY_ORDER[a.priority || a.priorityLevel] ?? 2;
         const pb = PRIORITY_ORDER[b.priority || b.priorityLevel] ?? 2;
         if (pa !== pb) return pa - pb;
+        const sa = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+        const sb = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+        if (sa !== sb) return sa - sb;
         return (a.tokenNumber ?? 0) - (b.tokenNumber ?? 0);
       });
       setTokens(result);
@@ -64,6 +68,26 @@ export default function DoctorQueuePage() {
     const interval = setInterval(() => fetchQueue(true), 30000);
     return () => clearInterval(interval);
   }, [fetchQueue]);
+
+  // Manual queue ordering, mirroring the nurse's worklist. Sends the full
+  // visible order; the backend numbers positions per priority band so a drag
+  // can never lift a routine patient above an emergency one.
+  const [reordering, setReordering] = useState(false);
+  const moveToken = async (index: number, dir: -1 | 1) => {
+    const target = index + dir;
+    if (target < 0 || target >= tokens.length) return;
+    const next = [...tokens];
+    [next[index], next[target]] = [next[target], next[index]];
+    setTokens(next);
+    setReordering(true);
+    try {
+      await api.post('/queue/reorder', { orderedIds: next.map(x => x.id) });
+      fetchQueue(true);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Could not reorder');
+      fetchQueue(true);
+    } finally { setReordering(false); }
+  };
 
   const startConsult = async (token: any) => {
     setActionId(token.id);
@@ -207,8 +231,14 @@ export default function DoctorQueuePage() {
                 <tr><td colSpan={8} className="p-0">
                   <EmptyState title="No patients" description={search || statusFilter || priorityFilter ? 'No matches for current filters' : 'Queue is empty. Patients will appear when checked in.'} />
                 </td></tr>
-              ) : filteredTokens.map(t => {
+              ) : filteredTokens.map((t, idx) => {
                 const pri = getPriority(t);
+                // Swap only with a neighbour of equal urgency; the backend
+                // numbers positions per priority band and would refuse to move
+                // a patient across bands anyway.
+                const sameBand = (a: any, b: any) => a && b && getPriority(a) === getPriority(b);
+                const canUp = sameBand(t, filteredTokens[idx - 1]);
+                const canDown = sameBand(t, filteredTokens[idx + 1]);
                 const inConsult = isInConsult(t.status);
                 // Registration collects date of birth, never ageYears — so
                 // reading the column alone meant the doctor always saw "—"
@@ -219,7 +249,17 @@ export default function DoctorQueuePage() {
                 return (
                 <tr key={t.id} className={`hover:bg-gray-50 border-t border-gray-50 transition-colors ${pri === 'EMERGENCY' ? 'bg-red-50/60' : pri === 'URGENT' ? 'bg-amber-50/30' : ''}`}>
                   <td className="px-4 py-3">
-                    <span className="text-sm font-bold text-teal-700">{t.tokenNumber}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="flex flex-col leading-none">
+                        <button type="button" aria-label="Move up" disabled={!canUp || reordering}
+                          onClick={() => moveToken(idx, -1)}
+                          className="text-[10px] text-gray-400 hover:text-teal-700 disabled:opacity-25 disabled:hover:text-gray-400">▲</button>
+                        <button type="button" aria-label="Move down" disabled={!canDown || reordering}
+                          onClick={() => moveToken(idx, 1)}
+                          className="text-[10px] text-gray-400 hover:text-teal-700 disabled:opacity-25 disabled:hover:text-gray-400">▼</button>
+                      </span>
+                      <span className="text-sm font-bold text-teal-700">{t.tokenNumber}</span>
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="text-sm font-medium text-gray-900">{t.patient?.firstName} {t.patient?.lastName}</div>

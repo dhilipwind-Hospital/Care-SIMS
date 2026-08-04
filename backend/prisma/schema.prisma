@@ -322,6 +322,10 @@ model TenantUser {
   primaryLocationId    String    @map("primary_location_id")
   locationScope        String    @default("SINGLE") @map("location_scope")
   allowedLocations     String[]  @map("allowed_locations")
+  // Departments this user covers. Empty = no restriction (sees every
+  // department), which keeps every existing user working unchanged.
+  // Array rather than a single FK because nurses routinely cover more than one.
+  allowedDepartments   String[]  @map("allowed_departments")
   doctorRegistryId     String?   @map("doctor_registry_id")
   lastLogin            DateTime? @map("last_login")
   passwordChangedAt    DateTime? @map("password_changed_at")
@@ -480,6 +484,10 @@ model QueueToken {
   consultStart          DateTime? @map("consult_start")
   completedAt           DateTime? @map("completed_at")
   estimatedWaitMinutes  Int?      @map("estimated_wait_minutes")
+  // Manual queue position set by a nurse/doctor. Only ever compared WITHIN the
+  // same priority band (see byUrgency), so hand-ordering can never float a
+  // routine patient above an emergency one. Null = fall back to arrival order.
+  sortOrder             Int?      @map("sort_order")
   notes                 String?
   createdById           String?   @map("created_by")
   createdAt             DateTime  @default(now()) @map("created_at")

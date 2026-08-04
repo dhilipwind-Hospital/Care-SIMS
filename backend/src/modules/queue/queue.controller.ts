@@ -41,6 +41,12 @@ export class QueueController {
   @Get('stats') stats(@CurrentUser('tenantId') tid: string, @Query('locationId') lid: string) { return this.svc.getStats(tid, lid); }
   @Post('token') issue(@CurrentUser('tenantId') tid: string, @Body() body: IssueTokenDto, @CurrentUser('sub') uid: string) { return this.svc.issueToken(tid, body, uid); }
   @Post('call-next') callNext(@CurrentUser('tenantId') tid: string, @Body() body: CallNextDto) { return this.svc.callNext(tid, body.locationId, body.doctorId); }
+  // Manual queue ordering. Positions are numbered per priority band, so a
+  // hand-drag can sequence patients of equal urgency but can never move a
+  // routine patient ahead of an emergency one.
+  @Post('reorder') reorder(@CurrentUser('tenantId') tid: string, @Body() body: any, @CurrentUser('sub') uid: string) {
+    return this.svc.reorder(tid, body?.orderedIds, uid);
+  }
   @Patch(':id/status') updateStatus(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: UpdateTokenStatusDto) { return this.svc.updateStatus(tid, id, body.status, body); }
   @Patch(':id/no-show') noShow(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.updateStatus(tid, id, 'NO_SHOW'); }
 }

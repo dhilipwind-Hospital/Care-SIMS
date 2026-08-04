@@ -198,12 +198,43 @@ export default function TriagePage() {
     } catch (err) { toast.error('Failed to load data'); } finally { setLoading(false); }
   };
 
-  const fetchPending = async () => {
+  // Department scoping. Empty filter = whatever the nurse's own
+  // allowedDepartments allow (and everything, if unset) — so this defaults to
+  // exactly the previous behaviour.
+  const [deptFilter, setDeptFilter] = useState('');
+  const [deptOptions, setDeptOptions] = useState<any[]>([]);
+  const [reordering, setReordering] = useState(false);
+
+  const fetchPending = async (dept = deptFilter) => {
     setPendingLoading(true);
     try {
-      const { data } = await api.get('/triage/pending');
+      const { data } = await api.get('/triage/pending', {
+        params: dept ? { departmentId: dept } : {},
+      });
       setPending(data.data || []);
+      // Only refresh the chip list on an unfiltered load, otherwise filtering
+      // to one department would erase the other chips and trap the nurse.
+      if (!dept) setDeptOptions(data.meta?.departments || []);
     } catch (err) { setPending([]); } finally { setPendingLoading(false); }
+  };
+
+  // Move a patient up/down. Sends the full visible order; the backend numbers
+  // positions per priority band, so this can never lift someone above a more
+  // urgent patient.
+  const movePending = async (index: number, dir: -1 | 1) => {
+    const target = index + dir;
+    if (target < 0 || target >= pending.length) return;
+    const next = [...pending];
+    [next[index], next[target]] = [next[target], next[index]];
+    setPending(next); // optimistic
+    setReordering(true);
+    try {
+      await api.post('/queue/reorder', { orderedIds: next.map(t => t.id) });
+      fetchPending();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Could not reorder');
+      fetchPending();
+    } finally { setReordering(false); }
   };
 
   useEffect(() => { fetchTriages(); fetchPending(); }, []);
@@ -450,10 +481,30 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
                   </span>
                 )}
               </div>
-              <button onClick={fetchPending} className="text-xs text-teal-700 hover:text-teal-900 font-medium">
+              <button onClick={() => fetchPending()} className="text-xs text-teal-700 hover:text-teal-900 font-medium">
                 Refresh
               </button>
             </div>
+
+            {/* Department chips — only shown when the queue actually spans more
+                than one department, so a single-department site sees no clutter. */}
+            {deptOptions.length > 1 && (
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {[{ id: '', name: 'All', count: deptOptions.reduce((s, d) => s + d.count, 0) }, ...deptOptions].map(d => (
+                  <button
+                    key={d.id || 'all'}
+                    onClick={() => { setDeptFilter(d.id); fetchPending(d.id); }}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      deptFilter === d.id
+                        ? 'bg-teal-600 text-white border-teal-600'
+                        : 'border-gray-200 text-gray-600 hover:border-teal-400'
+                    }`}
+                  >
+                    {d.name} <span className="opacity-70">{d.count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             {pendingLoading ? (
               <div className="text-sm text-gray-400 py-3">Loading…</div>
@@ -463,15 +514,37 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
               </div>
             ) : (
               <div className="space-y-2 max-h-64 overflow-y-auto">
-                {pending.map(t => {
+                {pending.map((t, idx) => {
                   const active = activeTokenId === t.id;
                   const urgent = t.priority === 'EMERGENCY' || t.priority === 'URGENT';
+                  // Only offer a swap when the neighbour shares this patient's
+                  // urgency — the backend would refuse to cross bands anyway,
+                  // and a dead arrow is worse than no arrow.
+                  const sameBand = (a: any, b: any) => a && b && a.priority === b.priority;
+                  const canUp = sameBand(t, pending[idx - 1]);
+                  const canDown = sameBand(t, pending[idx + 1]);
                   return (
+                    <div key={t.id} className="flex items-stretch gap-1">
+                    <div className="flex flex-col justify-center gap-0.5">
+                      <button
+                        type="button"
+                        aria-label="Move up"
+                        disabled={!canUp || reordering}
+                        onClick={() => movePending(idx, -1)}
+                        className="px-1 text-gray-400 hover:text-teal-700 disabled:opacity-25 disabled:hover:text-gray-400 leading-none"
+                      >▲</button>
+                      <button
+                        type="button"
+                        aria-label="Move down"
+                        disabled={!canDown || reordering}
+                        onClick={() => movePending(idx, 1)}
+                        className="px-1 text-gray-400 hover:text-teal-700 disabled:opacity-25 disabled:hover:text-gray-400 leading-none"
+                      >▼</button>
+                    </div>
                     <button
-                      key={t.id}
                       type="button"
                       onClick={() => pickPending(t)}
-                      className={`w-full text-left px-3 py-2.5 rounded-xl border transition-all flex items-center gap-3 ${
+                      className={`flex-1 text-left px-3 py-2.5 rounded-xl border transition-all flex items-center gap-3 ${
                         active ? 'border-teal-500 bg-teal-50' : 'border-gray-150 hover:border-teal-300 hover:bg-gray-50'
                       }`}
                     >
@@ -496,6 +569,7 @@ ${r.disposition || r.nurseNotes ? `<div style="margin-top:12px;padding:12px;back
                         </span>
                       )}
                     </button>
+                    </div>
                   );
                 })}
               </div>

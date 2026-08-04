@@ -93,6 +93,84 @@ export async function findLiveToken(
   });
 }
 
+/**
+ * Clinical urgency order. `priority` is a String column, so Prisma's
+ * `orderBy: { priority: 'asc' }` sorts it ALPHABETICALLY —
+ * EMERGENCY, NORMAL, URGENT — which puts every URGENT patient *behind* every
+ * routine one. That affected the nurse worklist, the reception dashboard, the
+ * doctor's queue payload and, worst, `callNext`.
+ *
+ * Prisma cannot express a custom ordering, so callers fetch on a stable key
+ * (tokenNumber) and then sort with `byUrgency` in memory. The sets are a single
+ * location-day, so this is a few hundred rows at most.
+ */
+export const PRIORITY_RANK: Record<string, number> = {
+  EMERGENCY: 0,
+  CRITICAL: 0,
+  URGENT: 1,
+  NORMAL: 2,
+  ROUTINE: 2,
+};
+
+export function priorityRank(p?: string | null): number {
+  return PRIORITY_RANK[(p || '').toUpperCase()] ?? 2;
+}
+
+/**
+ * Canonical queue comparator: urgency first, then any manual position a nurse
+ * has set, then arrival order. `sortOrder` is only ever compared WITHIN a
+ * priority band, so hand-ordering can never float a routine patient above an
+ * emergency one.
+ */
+export function byUrgency(a: any, b: any): number {
+  const ra = priorityRank(a?.priority);
+  const rb = priorityRank(b?.priority);
+  if (ra !== rb) return ra - rb;
+  const sa = a?.sortOrder ?? Number.MAX_SAFE_INTEGER;
+  const sb = b?.sortOrder ?? Number.MAX_SAFE_INTEGER;
+  if (sa !== sb) return sa - sb;
+  return (a?.tokenNumber ?? 0) - (b?.tokenNumber ?? 0);
+}
+
+/**
+ * Resolve which Department a visit belongs to.
+ *
+ * Department-scoped triage queues are only useful if tokens actually carry a
+ * department, and most did not: reception could only set one by picking from a
+ * dropdown, "Advance to Triage" set none at all, and appointment check-in
+ * inherited an `appointment.departmentId` that is almost always null. So nearly
+ * every token landed unassigned.
+ *
+ * The doctor is the reliable signal — their affiliation records the department
+ * they practise in — so fall back to that whenever an explicit one is absent.
+ * Same lookup the appointments list already uses to display a department.
+ *
+ * `prisma` may be a PrismaService or a transaction client.
+ */
+export async function resolveDepartmentId(
+  prisma: any,
+  tenantId: string,
+  opts: { departmentId?: string | null; departmentName?: string | null; doctorId?: string | null },
+): Promise<string | undefined> {
+  if (opts.departmentId) return opts.departmentId;
+
+  let name = opts.departmentName?.trim() || null;
+  if (!name && opts.doctorId) {
+    const aff = await prisma.doctorOrgAffiliation.findFirst({
+      where: { tenantId, doctorId: opts.doctorId, isActive: true },
+      select: { departmentName: true },
+    });
+    name = aff?.departmentName?.trim() || null;
+  }
+  if (!name) return undefined;
+
+  const dept = await prisma.department.findFirst({
+    where: { tenantId, name: { equals: name, mode: 'insensitive' }, isActive: true },
+    select: { id: true },
+  });
+  return dept?.id || undefined;
+}
+
 /** Registration/queue priority vocabulary → the queue's canonical values. */
 export function normalizePriority(input?: string): string {
   const v = (input || '').trim().toUpperCase();

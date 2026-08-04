@@ -2,7 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { generateSequentialId } from '../../common/utils/id-generator';
-import { startOfDayUtc, nextQueueTokenNumber, findLiveToken, normalizePriority, normalizeVisitType } from '../../common/utils/queue-token';
+import { startOfDayUtc, nextQueueTokenNumber, findLiveToken, normalizePriority, normalizeVisitType, resolveDepartmentId } from '../../common/utils/queue-token';
 import { v4 as uuidv4 } from 'uuid';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
@@ -109,10 +109,12 @@ export class PatientsService {
       if (existing) return { ...existing, reused: true };
 
       const tokenNumber = await nextQueueTokenNumber(tx, { tenantId, locationId, queueDate });
+      const departmentId = await resolveDepartmentId(tx, tenantId, { doctorId: opts.doctorId });
       const token = await tx.queueToken.create({
         data: {
           tenantId, tokenNumber, locationId, queueDate, patientId,
           doctorId: opts.doctorId,
+          departmentId,
           visitType: 'NEW',
           priority: normalizePriority(opts.priority),
           status: 'WAITING',
@@ -207,14 +209,14 @@ export class PatientsService {
     //
     // Off by default so existing callers (seeding, imports, portal self-reg)
     // keep their old behaviour.
-    let visitDepartmentId: string | undefined = dto.departmentId;
-    if (!visitDepartmentId && dto.departmentName) {
-      const dept = await this.prisma.department.findFirst({
-        where: { tenantId, name: { equals: dto.departmentName, mode: 'insensitive' }, isActive: true },
-        select: { id: true },
-      });
-      visitDepartmentId = dept?.id;
-    }
+    // Falls back to the chosen doctor's affiliation department when reception
+    // didn't pick one — otherwise most tokens carry no department at all and a
+    // department-scoped triage queue has nothing to segment on.
+    const visitDepartmentId = await resolveDepartmentId(this.prisma, tenantId, {
+      departmentId: dto.departmentId,
+      departmentName: dto.departmentName,
+      doctorId: dto.preferredDoctorId,
+    });
 
     const created = await generateSequentialId(this.prisma, {
       table: 'Patient',
