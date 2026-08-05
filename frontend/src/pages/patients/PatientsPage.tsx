@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { UserPlus, Search, Eye, X, ArrowLeft, ArrowRightCircle, Pencil, History, Stethoscope, Pill, FlaskConical, BedDouble, FileText, Activity, Camera, Loader2, ScrollText, MapPin } from 'lucide-react';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';
@@ -67,7 +68,14 @@ function joinAddress(f: any) {
 
 export default function PatientsPage() {
   const { user } = useAuth();
-  const [view, setView] = useState<'list' | 'register'>('list');
+  // View is derived from the URL, not local state: /app/patients/register
+  // shows the form, /app/patients shows the list. Keeping it in state let the
+  // two drift apart, so the browser back button did nothing.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const view: 'list' | 'register' = location.pathname.endsWith('/register') ? 'register' : 'list';
+  const showList = () => navigate('/app/patients');
+  const showRegister = () => { setForm({ ...EMPTY_FORM }); navigate('/app/patients/register'); };
   const [patients, setPatients] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [searchInput, setSearchInput] = useState('');
@@ -187,7 +195,7 @@ export default function PatientsPage() {
           : 'Patient registered successfully',
       );
       setForm({ ...EMPTY_FORM });
-      setView('list');
+      showList();
       fetchPatients();
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Registration failed');
@@ -342,7 +350,7 @@ export default function PatientsPage() {
               <p className="text-sm text-gray-400 mt-0.5">Register new patient — OPD Walk-in</p>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => { setView('list'); setForm({ ...EMPTY_FORM }); }}
+              <button onClick={() => { setForm({ ...EMPTY_FORM }); showList(); }}
                 className="flex items-center gap-2 px-4 py-2 rounded-full border-2 border-teal-600 text-teal-700 text-sm font-semibold hover:bg-teal-50 transition-all">
                 <ArrowLeft size={14} /> Cancel
               </button>
@@ -545,7 +553,7 @@ export default function PatientsPage() {
                 style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}>
                 {submitting ? 'Registering…' : '✓ Register Patient & Generate Token'}
               </button>
-              <button onClick={() => { setView('list'); setForm({ ...EMPTY_FORM }); }}
+              <button onClick={() => { setForm({ ...EMPTY_FORM }); showList(); }}
                 className="w-full py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 transition-all">
                 Reset Form
               </button>
@@ -567,7 +575,7 @@ export default function PatientsPage() {
         <div className="flex items-center gap-3">
           <ExportButton endpoint="/patients/export" params={{ q: search || undefined }} filename={`patients-${new Date().toISOString().slice(0, 10)}.csv`} />
           <button
-            onClick={() => { setForm({ ...EMPTY_FORM }); setView('register'); }}
+            onClick={showRegister}
             className="flex items-center gap-2 px-4 py-2 rounded-full text-white text-sm font-semibold shadow-sm transition-all hover:opacity-90"
             style={{ background: 'linear-gradient(135deg,#0F766E,#14B8A6)' }}
           >

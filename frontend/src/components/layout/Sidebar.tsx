@@ -22,6 +22,7 @@ export const navByRole: Record<string, NavItem[]> = {
   RECEPTION: [
     { label: 'Queue Dashboard',      icon: LayoutDashboard, path: '/app/queue',           module: 'MOD_QUEUE' },
     { label: 'Patients',             icon: Users,           path: '/app/patients',        module: 'MOD_PAT_REG' },
+    { label: 'Register Patient',     icon: UserPlus,        path: '/app/patients/register', module: 'MOD_PAT_REG' },
     { label: 'Appointments',         icon: Calendar,        path: '/app/appointments',    module: 'MOD_APPT' },
     { label: 'Self Booking',         icon: CalendarCheck,   path: '/app/appointments/self-booking', module: 'MOD_APPT' },
     // Operation Theatre intentionally absent: /app/ot is guarded
@@ -119,6 +120,7 @@ export const navByRole: Record<string, NavItem[]> = {
     { label: 'Doctor Availability', icon: Stethoscope,     path: '/app/admin/doctor-availability' },
     { label: 'Locations',           icon: MapPin,          path: '/app/admin/locations' },
     { label: 'Patients',            icon: UserCheck,       path: '/app/patients' },
+    { label: 'Register Patient',    icon: UserPlus,        path: '/app/patients/register' },
     { label: 'Appointments',        icon: Calendar,        path: '/app/appointments',         module: 'MOD_APPT' },
     { label: 'Consultations',       icon: Stethoscope,     path: '/app/doctor/consultations', module: 'MOD_CONSULT' },
     { label: 'Admissions',          icon: Bed,             path: '/app/nurse/admissions',     module: 'MOD_ADMISSION' },
@@ -287,7 +289,16 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         </p>
         {navItems.map((item) => {
           const Icon = item.icon;
-          const active = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
+          // Only the MOST specific matching item highlights. A plain prefix test
+          // lit up both "Patients" (/app/patients) and "Register Patient"
+          // (/app/patients/register) at once, because the first is a prefix of
+          // the second. Nested paths still highlight their parent when no more
+          // specific sibling matches.
+          const matches = (p: string) => location.pathname === p || location.pathname.startsWith(p + '/');
+          const best = navItems
+            .filter(i => matches(i.path))
+            .reduce((a, b) => (b.path.length > a.path.length ? b : a), { path: '' } as NavItem);
+          const active = matches(item.path) && item.path === best.path;
           return (
             <Link
               key={item.path + item.label}

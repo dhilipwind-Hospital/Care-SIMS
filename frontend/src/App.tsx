@@ -212,6 +212,10 @@ function AppRoutes() {
           {/* ── Reception ── */}
           <Route path="queue" element={<RoleRoute roles={['RECEPTION', 'ADMIN', 'OT']}><QueueDashboard /></RoleRoute>} />
           <Route path="patients" element={<RoleRoute roles={['RECEPTION', 'ADMIN', 'DOCTOR', 'NURSE', 'OT']}><PatientsPage /></RoleRoute>} />
+          {/* Same component and guard — PatientsPage derives which view to show
+              from the URL, so the register form is linkable and the browser
+              back button behaves. */}
+          <Route path="patients/register" element={<RoleRoute roles={['RECEPTION', 'ADMIN', 'DOCTOR', 'NURSE', 'OT']}><PatientsPage /></RoleRoute>} />
           <Route path="appointments" element={<RoleRoute roles={['RECEPTION', 'ADMIN', 'DOCTOR', 'OT']}><AppointmentsPage /></RoleRoute>} />
           <Route path="appointments/self-booking" element={<SelfBookingPage />} />
 
