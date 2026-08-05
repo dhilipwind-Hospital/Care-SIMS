@@ -217,7 +217,11 @@ function AppRoutes() {
               back button behaves. */}
           <Route path="patients/register" element={<RoleRoute roles={['RECEPTION', 'ADMIN', 'DOCTOR', 'NURSE', 'OT']}><PatientsPage /></RoleRoute>} />
           <Route path="appointments" element={<RoleRoute roles={['RECEPTION', 'ADMIN', 'DOCTOR', 'OT']}><AppointmentsPage /></RoleRoute>} />
-          <Route path="appointments/self-booking" element={<SelfBookingPage />} />
+          {/* Was the only completely unguarded staff route: any logged-in user —
+              lab tech, pharmacist, billing clerk — could open this URL and book
+              appointments. Mirrors the guard on `appointments` above, so exactly
+              the people who can already book keep the ability. */}
+          <Route path="appointments/self-booking" element={<RoleRoute roles={['RECEPTION', 'ADMIN', 'DOCTOR', 'OT']}><SelfBookingPage /></RoleRoute>} />
 
           {/* ── Doctor ── */}
           <Route path="doctor/queue" element={<RoleRoute roles={['DOCTOR', 'ADMIN']}><DoctorQueuePage /></RoleRoute>} />

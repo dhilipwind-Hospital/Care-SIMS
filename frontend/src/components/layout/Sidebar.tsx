@@ -12,7 +12,7 @@ import {
   UserPlus, ArrowRightLeft, Sparkles, FileBadge, LogOut, Search, Lock,
   Droplets, ScanLine, ShieldCheck, GitBranch, Monitor, Video,
   HeartPulse, Dumbbell, Ambulance, Clock, Package, Wrench,
-  MessageSquare, Bug, FileCheck, UtensilsCrossed, Skull, Siren, Baby, Award, Star, CalendarCheck,
+  MessageSquare, Bug, FileCheck, UtensilsCrossed, Skull, Siren, Baby, Award, Star,
 } from 'lucide-react';
 
 export type NavItem = { label: string; icon: React.ElementType; path: string; module?: string };
@@ -24,7 +24,12 @@ export const navByRole: Record<string, NavItem[]> = {
     { label: 'Patients',             icon: Users,           path: '/app/patients',        module: 'MOD_PAT_REG' },
     { label: 'Register Patient',     icon: UserPlus,        path: '/app/patients/register', module: 'MOD_PAT_REG' },
     { label: 'Appointments',         icon: Calendar,        path: '/app/appointments',    module: 'MOD_APPT' },
-    { label: 'Self Booking',         icon: CalendarCheck,   path: '/app/appointments/self-booking', module: 'MOD_APPT' },
+    // "Self Booking" removed: it is a 3-step subset of the Appointments page
+    // (same doctors/slots/patients/POST /appointments endpoints) with no list,
+    // reschedule, cancel, check-in, print or export. The name is also wrong for
+    // a staff menu — patients self-book from the portal at
+    // /app/patient/appointments, which is unaffected. The route itself is kept
+    // and now guarded, in case it is later reused as a waiting-room kiosk.
     // Operation Theatre intentionally absent: /app/ot is guarded
     // roles={['OT','DOCTOR','NURSE','ADMIN']}, so the link bounced reception
     // back to their dashboard. Removed rather than widening the guard, which
