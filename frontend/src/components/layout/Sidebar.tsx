@@ -21,10 +21,13 @@ export type NavItem = { label: string; icon: React.ElementType; path: string; mo
 export const navByRole: Record<string, NavItem[]> = {
   RECEPTION: [
     { label: 'Queue Dashboard',      icon: LayoutDashboard, path: '/app/queue',           module: 'MOD_QUEUE' },
-    { label: 'Patient Registration', icon: Users,           path: '/app/patients',        module: 'MOD_PAT_REG' },
+    { label: 'Patients',             icon: Users,           path: '/app/patients',        module: 'MOD_PAT_REG' },
     { label: 'Appointments',         icon: Calendar,        path: '/app/appointments',    module: 'MOD_APPT' },
     { label: 'Self Booking',         icon: CalendarCheck,   path: '/app/appointments/self-booking', module: 'MOD_APPT' },
-    { label: 'Operation Theatre',    icon: Scissors,        path: '/app/ot',              module: 'MOD_OT_SCHEDULE' },
+    // Operation Theatre intentionally absent: /app/ot is guarded
+    // roles={['OT','DOCTOR','NURSE','ADMIN']}, so the link bounced reception
+    // back to their dashboard. Removed rather than widening the guard, which
+    // would grant reception new access nobody asked for.
     { label: 'Billing',              icon: CreditCard,      path: '/app/billing',         module: 'MOD_BILL_OPD' },
     { label: 'Insurance/TPA',        icon: ShieldCheck,     path: '/app/insurance',       module: 'MOD_INSURANCE' },
     { label: 'Ambulance',            icon: Ambulance,       path: '/app/ambulance',       module: 'MOD_AMBULANCE' },
@@ -35,7 +38,9 @@ export const navByRole: Record<string, NavItem[]> = {
     { label: 'Notifications',        icon: Bell,            path: '/app/notifications' },
   ],
   DOCTOR: [
-    { label: 'My Dashboard',       icon: LayoutDashboard,  path: '/app/doctor/queue',        module: 'MOD_QUEUE' },
+    // "My Dashboard" removed: it pointed at /app/doctor/queue, the very same
+    // destination as Patient Queue below. (The PATIENT menu keeps its own
+    // "My Dashboard" — different path, still valid.)
     { label: 'Patient Queue',      icon: ClipboardList,    path: '/app/doctor/queue',        module: 'MOD_QUEUE' },
     { label: 'Consultations',       icon: ClipboardList,    path: '/app/doctor/consultations',module: 'MOD_CONSULT' },
     { label: 'New Consultation',    icon: Stethoscope,      path: '/app/doctor/consultation', module: 'MOD_CONSULT' },
@@ -98,7 +103,7 @@ export const navByRole: Record<string, NavItem[]> = {
   ],
   OT: [
     { label: 'Queue Dashboard',       icon: LayoutDashboard, path: '/app/queue',        module: 'MOD_QUEUE' },
-    { label: 'Patient Registration',  icon: Users,           path: '/app/patients',     module: 'MOD_PAT_REG' },
+    { label: 'Patients',              icon: Users,           path: '/app/patients',     module: 'MOD_PAT_REG' },
     { label: 'Appointments',          icon: Calendar,        path: '/app/appointments', module: 'MOD_APPT' },
     { label: 'Billing',               icon: CreditCard,      path: '/app/billing',      module: 'MOD_BILL_OPD' },
     { label: 'Operation Theatre',     icon: Scissors,        path: '/app/ot',           module: 'MOD_OT_SCHEDULE' },

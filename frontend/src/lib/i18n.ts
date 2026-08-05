@@ -607,6 +607,7 @@ export function translate(key: string, lang: Language): string {
 export const LABEL_TO_I18N_KEY: Record<string, string> = {
   'Queue Dashboard': 'nav.queueDashboard',
   'Patient Registration': 'nav.patientRegistration',
+  'Patients': 'nav.patients',
   'Appointments': 'nav.appointments',
   'Billing': 'nav.billing',
   'Billing & Invoices': 'nav.billingInvoices',
