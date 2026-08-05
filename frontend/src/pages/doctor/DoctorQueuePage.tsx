@@ -219,6 +219,10 @@ export default function DoctorQueuePage() {
           <table className="w-full">
             <thead>
               <tr>
+                {/* Header-less column for the reorder controls, so they get
+                    their own space instead of being crammed against the token
+                    number. Mirrors the nurse worklist layout. */}
+                <th className="w-8 bg-gray-50" aria-label="Reorder" />
                 {['Token', 'Patient', 'Age/Gender', 'Chief Complaint', 'Wait Time', 'Priority', 'Status', 'Actions'].map(h => (
                   <th key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 py-3 text-left bg-gray-50">{h}</th>
                 ))}
@@ -226,9 +230,9 @@ export default function DoctorQueuePage() {
             </thead>
             <tbody>
               {loading ? (
-                Array.from({ length: 5 }).map((_, i) => <SkeletonTableRow key={i} cols={8} />)
+                Array.from({ length: 5 }).map((_, i) => <SkeletonTableRow key={i} cols={9} />)
               ) : filteredTokens.length === 0 ? (
-                <tr><td colSpan={8} className="p-0">
+                <tr><td colSpan={9} className="p-0">
                   <EmptyState title="No patients" description={search || statusFilter || priorityFilter ? 'No matches for current filters' : 'Queue is empty. Patients will appear when checked in.'} />
                 </td></tr>
               ) : filteredTokens.map((t, idx) => {
@@ -248,18 +252,18 @@ export default function DoctorQueuePage() {
                   : undefined);
                 return (
                 <tr key={t.id} className={`hover:bg-gray-50 border-t border-gray-50 transition-colors ${pri === 'EMERGENCY' ? 'bg-red-50/60' : pri === 'URGENT' ? 'bg-amber-50/30' : ''}`}>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5">
-                      <span className="flex flex-col leading-none">
-                        <button type="button" aria-label="Move up" disabled={!canUp || reordering}
-                          onClick={() => moveToken(idx, -1)}
-                          className="text-[10px] text-gray-400 hover:text-teal-700 disabled:opacity-25 disabled:hover:text-gray-400">▲</button>
-                        <button type="button" aria-label="Move down" disabled={!canDown || reordering}
-                          onClick={() => moveToken(idx, 1)}
-                          className="text-[10px] text-gray-400 hover:text-teal-700 disabled:opacity-25 disabled:hover:text-gray-400">▼</button>
-                      </span>
-                      <span className="text-sm font-bold text-teal-700">{t.tokenNumber}</span>
+                  <td className="pl-3 pr-1 py-3 align-middle">
+                    <div className="flex flex-col items-center gap-1">
+                      <button type="button" aria-label="Move up" disabled={!canUp || reordering}
+                        onClick={() => moveToken(idx, -1)}
+                        className="px-1 leading-none text-gray-400 hover:text-teal-700 disabled:opacity-25 disabled:hover:text-gray-400">▲</button>
+                      <button type="button" aria-label="Move down" disabled={!canDown || reordering}
+                        onClick={() => moveToken(idx, 1)}
+                        className="px-1 leading-none text-gray-400 hover:text-teal-700 disabled:opacity-25 disabled:hover:text-gray-400">▼</button>
                     </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="text-sm font-bold text-teal-700">{t.tokenNumber}</span>
                   </td>
                   <td className="px-4 py-3">
                     <div className="text-sm font-medium text-gray-900">{t.patient?.firstName} {t.patient?.lastName}</div>
