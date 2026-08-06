@@ -284,8 +284,9 @@ export default function UsersPage() {
                   {locations.map((l: any) => <option key={l.id} value={l.id}>{l.name}{l.city ? ` — ${l.city}` : ''}</option>)}
                 </select>
               </div>
-              {addError && <div className="col-span-2 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">{addError}</div>}
-              <div className="col-span-2 flex justify-end gap-3 pt-2 border-t border-gray-100">
+              {/* Departments sits ABOVE the footer. It was previously inserted
+                  inside the footer's flex row, so the chips and the Cancel /
+                  Create User buttons fought over the same line. */}
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-gray-600 mb-1">
                   Departments <span className="text-gray-400 font-normal">— triage worklist scope; none selected means all</span>
@@ -312,6 +313,8 @@ export default function UsersPage() {
                   </div>
                 )}
               </div>
+              {addError && <div className="col-span-2 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">{addError}</div>}
+              <div className="col-span-2 flex justify-end gap-3 pt-2 border-t border-gray-100">
                 <button type="button" onClick={() => setShowAdd(false)} className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
                 <button type="submit" disabled={addSaving}
                   className="px-5 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-60"
