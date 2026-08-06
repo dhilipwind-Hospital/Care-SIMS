@@ -79,6 +79,10 @@ export class UsersService {
         primaryLocationId,
         locationScope: dto.locationScope || 'SINGLE',
         allowedLocations: dto.allowedLocations || [],
+        // Was omitted here, so a department picked at creation time was silently
+        // dropped and every new user came out unrestricted. Empty array keeps
+        // the "no restriction" default for callers that don't send it.
+        allowedDepartments: dto.allowedDepartments || [],
         forcePasswordChange: !dto.password, isActive: true,
         createdById, registrationSource: 'ADMIN_INVITE',
       },
@@ -128,6 +132,7 @@ export class UsersService {
       const data: any = {};
       if (dto.isActive === true) { data.isActive = true; data.deactivatedAt = null; }
       if (dto.isActive === false) { data.isActive = false; data.deactivatedAt = new Date(); }
+      if (dto.allowedDepartments !== undefined) data.allowedDepartments = dto.allowedDepartments;
       if (dto.firstName !== undefined) data.firstName = dto.firstName;
       if (dto.lastName !== undefined) data.lastName = dto.lastName;
       if (dto.phone !== undefined) data.phone = dto.phone;
@@ -267,6 +272,7 @@ export class UsersService {
         registrationSource: 'SELF_REGISTER',
         locationScope: 'SINGLE',
         allowedLocations: [],
+        allowedDepartments: [],
       },
     });
 

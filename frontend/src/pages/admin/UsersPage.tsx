@@ -9,7 +9,12 @@ import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import Pagination from '../../components/ui/Pagination';
 import api from '../../lib/api';
 
-const EMPTY_FORM = { firstName: '', lastName: '', email: '', password: '', roleId: '', primaryLocationId: '' };
+const EMPTY_FORM = {
+  firstName: '', lastName: '', email: '', password: '', roleId: '', primaryLocationId: '',
+  // Department scope, settable at creation. Empty = no restriction, matching
+  // how every existing account behaves.
+  allowedDepartments: [] as string[],
+};
 
 type Tab = 'staff' | 'pending';
 
@@ -255,7 +260,7 @@ export default function UsersPage() {
                 { key: 'lastName',  label: 'Last Name',  type: 'text',     req: true,  span: false },
                 { key: 'email',     label: 'Email',      type: 'email',    req: true,  span: true  },
                 { key: 'password',  label: 'Password',   type: 'password', req: true,  span: true  },
-              ] as { key: keyof typeof addForm; label: string; type: string; req: boolean; span: boolean }[]).map(({ key, label, type, req, span }) => (
+              ] as { key: 'firstName' | 'lastName' | 'email' | 'password'; label: string; type: string; req: boolean; span: boolean }[]).map(({ key, label, type, req, span }) => (
                 <div key={key} className={span ? 'col-span-2' : ''}>
                   <label className="block text-xs font-medium text-gray-600 mb-1">{label} {req && <span className="text-red-500">*</span>}</label>
                   <input required={req} type={type} value={addForm[key]}
@@ -281,6 +286,32 @@ export default function UsersPage() {
               </div>
               {addError && <div className="col-span-2 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">{addError}</div>}
               <div className="col-span-2 flex justify-end gap-3 pt-2 border-t border-gray-100">
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Departments <span className="text-gray-400 font-normal">— triage worklist scope; none selected means all</span>
+                </label>
+                {departments.length === 0 ? (
+                  <p className="text-xs text-gray-400">No departments configured for this organisation.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {departments.map((d: any) => {
+                      const on = (addForm.allowedDepartments || []).includes(d.id);
+                      return (
+                        <button key={d.id} type="button"
+                          onClick={() => setAddForm(f => {
+                            const cur: string[] = f.allowedDepartments || [];
+                            return { ...f, allowedDepartments: on ? cur.filter(x => x !== d.id) : [...cur, d.id] };
+                          })}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                            on ? 'bg-teal-600 text-white border-teal-600' : 'border-gray-200 text-gray-600 hover:border-teal-400'
+                          }`}>
+                          {d.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
                 <button type="button" onClick={() => setShowAdd(false)} className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
                 <button type="submit" disabled={addSaving}
                   className="px-5 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-60"
