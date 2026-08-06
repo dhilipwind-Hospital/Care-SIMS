@@ -114,12 +114,13 @@ export default function PatientsPage() {
   // tenant-wide list when the user has no primary location.
   const [doctors, setDoctors] = useState<any[]>([]);
   useEffect(() => {
-    if (view !== 'register') return;
+    // Fetched for both views: the register form's Preferred Doctor picker and
+    // the Send-to-Triage dialog on the list both need it.
     const url = user?.locationId ? `/doctors/by-location/${user.locationId}` : '/doctors/affiliations/tenant';
     api.get(url)
       .then(({ data }) => setDoctors(Array.isArray(data) ? data : data?.data || []))
       .catch(() => setDoctors([]));
-  }, [view, user?.locationId]);
+  }, [user?.locationId]);
 
   // Only offer departments that actually have a doctor behind them — picking
   // "Cardiology" when no such department exists just creates orphan data.
@@ -206,10 +207,25 @@ export default function PatientsPage() {
   // the nurse's worklist. Backend is idempotent, but we also disable the button
   // in-flight so an impatient double-click can't fire twice.
   const [advancingId, setAdvancingId] = useState<string | null>(null);
+  // Which patient the Send-to-Triage dialog is open for, and what it will send.
+  // Previously the button posted an empty body, so every patient queued this way
+  // arrived with no doctor, NORMAL priority and no department — they reached
+  // nobody's doctor queue until a nurse assigned one at triage.
+  const [triageFor, setTriageFor] = useState<any>(null);
+  const [triageForm, setTriageForm] = useState({ doctorId: '', priority: 'Normal' });
+  const openTriage = (p: any) => { setTriageForm({ doctorId: '', priority: 'Normal' }); setTriageFor(p); };
+
   const advanceToTriage = async (p: any) => {
     setAdvancingId(p.id);
     try {
-      const { data } = await api.post(`/patients/${p.id}/advance-to-triage`, {});
+      // Doctor is optional — leaving it blank keeps the old one-step behaviour
+      // and lets the nurse assign at triage. When set, the backend also derives
+      // the department from that doctor's affiliation.
+      const { data } = await api.post(`/patients/${p.id}/advance-to-triage`, {
+        doctorId: triageForm.doctorId || undefined,
+        priority: triageForm.priority || undefined,
+      });
+      setTriageFor(null);
       toast.success(
         data?.reused
           ? `${p.firstName} is already in today's queue (token #${data.tokenNumber})`
@@ -640,7 +656,7 @@ export default function PatientsPage() {
                           workflow — re-sending would be a no-op server-side, but
                           a live button implies there's something left to do. */}
                       <button
-                        onClick={() => advanceToTriage(p)}
+                        onClick={() => openTriage(p)}
                         disabled={p.visitStatus !== 'NOT_STARTED' || advancingId === p.id}
                         title={p.visitStatus !== 'NOT_STARTED' ? 'Already in today’s workflow' : 'Send to triage'}
                         className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md font-medium transition-colors ${
@@ -720,6 +736,56 @@ export default function PatientsPage() {
       )}
 
       {/* Edit Patient Modal */}
+      {/* ── SEND TO TRIAGE ── doctor + priority, both optional ── */}
+      {triageFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div>
+                <h2 className="font-bold text-gray-900">Send to Triage</h2>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {triageFor.firstName} {triageFor.lastName} · {triageFor.patientId}
+                </p>
+              </div>
+              <button onClick={() => setTriageFor(null)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className={lbl}>Assign Doctor</label>
+                <select value={triageForm.doctorId}
+                  onChange={e => setTriageForm(f => ({ ...f, doctorId: e.target.value }))} className={inp}>
+                  <option value="">Leave for the nurse to assign</option>
+                  {doctors.map((d: any) => (
+                    <option key={d.doctorId || d.id} value={d.doctorId || d.id}>
+                      Dr. {d.doctor?.firstName || d.firstName} {d.doctor?.lastName || d.lastName}
+                      {d.departmentName ? ` — ${d.departmentName}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  Picking a doctor also sets the department, and puts the patient straight into that doctor's queue.
+                </p>
+              </div>
+              <div>
+                <label className={lbl}>Priority</label>
+                <select value={triageForm.priority}
+                  onChange={e => setTriageForm(f => ({ ...f, priority: e.target.value }))} className={inp}>
+                  {['Normal', 'Urgent', 'Emergency'].map(x => <option key={x}>{x}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-6 py-4 border-t border-gray-100">
+              <button onClick={() => setTriageFor(null)}
+                className="px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={() => advanceToTriage(triageFor)} disabled={advancingId === triageFor.id}
+                className="btn-primary px-4 py-2 text-sm disabled:opacity-60">
+                {advancingId === triageFor.id ? 'Sending…' : 'Send to Triage'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {editPatient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setEditPatient(null)}>
           <div className="absolute inset-0 bg-black/40" />
