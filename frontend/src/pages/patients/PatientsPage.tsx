@@ -26,6 +26,18 @@ const EMPTY_FORM = {
   registrationType: 'WALK_IN',
 };
 
+// registrationType is stored raw and inconsistently — the frontend sends WALK_IN
+// while patients.service.create defaults to WALKIN, so both spellings of the same
+// thing appear in one column. Display-only normalisation; the stored values are
+// left untouched. Unknown values fall back to a readable form rather than vanishing.
+const REG_TYPE_LABEL: Record<string, string> = {
+  WALK_IN: 'Walk-in', WALKIN: 'Walk-in',
+  APPOINTMENT: 'Appointment', ONLINE: 'Online',
+  REFERRAL: 'Referral', EMERGENCY: 'Emergency',
+};
+const regTypeLabel = (v?: string | null) =>
+  v ? (REG_TYPE_LABEL[v] ?? v.replace(/_/g, ' ')) : '—';
+
 const INDIAN_STATES = ['Tamil Nadu','Karnataka','Maharashtra','Delhi','Kerala','Andhra Pradesh','Telangana','Gujarat'];
 
 // Where a patient sits in today's workflow — computed server-side in
@@ -635,10 +647,14 @@ export default function PatientsPage() {
                   <td className="px-4 py-3 text-sm font-mono text-teal-700 font-medium">{p.patientId}</td>
                   <td className="px-4 py-3 text-sm font-medium text-gray-900">{p.firstName} {p.lastName}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{p.dateOfBirth ? `${new Date().getFullYear() - new Date(p.dateOfBirth).getFullYear()}y` : '—'} / {p.gender?.[0]}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{p.phone}</td>
+                  {/* Patient has no `phone` column — it is `mobile`. Reading p.phone
+                      alone left this blank for every row while the numbers were
+                      there all along. The edit modal and detail panel already
+                      fall back this way. */}
+                  <td className="px-4 py-3 text-sm text-gray-600">{p.mobile || p.phone || '—'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{p.bloodGroup || '—'}</td>
                   <td className="px-4 py-3 text-xs">
-                    <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full">{p.registrationType}</span>
+                    <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full">{regTypeLabel(p.registrationType)}</span>
                   </td>
                   <td className="px-4 py-3 text-xs">
                     {VISIT_STAGE[p.visitStatus] ? (
