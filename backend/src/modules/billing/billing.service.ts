@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { drugPriceMap, unitPriceFor } from '../../common/utils/drug-pricing';
 import { generateSequentialId } from '../../common/utils/id-generator';
 import { sendEmail } from '../../common/utils/mailer';
 
@@ -103,9 +104,12 @@ export class BillingService {
 
     const totalInvoiced = invoices.reduce((s, i) => s + Number(i.netTotal), 0);
     const totalPaid = invoices.reduce((s, i) => s + Number(i.paidAmount), 0);
+    // Clamp per invoice, matching the treatment `recent[].balance` already
+    // gets: without it a single credit balance cancels out real debt on the
+    // patient's other invoices and understates what they owe.
     const outstanding = invoices
       .filter(i => i.status !== 'CANCELLED')
-      .reduce((s, i) => s + (Number(i.netTotal) - Number(i.paidAmount)), 0);
+      .reduce((s, i) => s + Math.max(Number(i.netTotal) - Number(i.paidAmount), 0), 0);
 
     // Category breakdown across all non-cancelled invoices.
     const byCategory: Record<string, number> = {};
@@ -423,11 +427,60 @@ export class BillingService {
     return invoice;
   }
 
+  /**
+   * Tenant-wide billing KPIs.
+   *
+   * The dashboard tiles used to be derived from whatever 20 invoices happened
+   * to be on the current page: "Paid Today" summed the all-time paidAmount of
+   * fully-PAID invoices (missing every partial collection and ignoring the
+   * date entirely) and "Invoices Today" was just the row count. These are real
+   * aggregates over the whole tenant.
+   */
+  async getStats(tenantId: string) {
+    // Server-local midnight, matching how reports.service defines "today".
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+    const [collectedAgg, invoicesToday, open] = await Promise.all([
+      // Sum the Payment rows, not invoice.paidAmount — the only way to get a
+      // true "today" figure, and it picks up partial collections too.
+      this.prisma.payment.aggregate({ _sum: { amount: true }, where: { tenantId, paymentDate: { gte: today, lt: tomorrow } } }),
+      this.prisma.invoice.count({ where: { tenantId, createdAt: { gte: today, lt: tomorrow } } }),
+      this.prisma.invoice.findMany({ where: { tenantId, status: { notIn: ['CANCELLED', 'PAID'] } }, select: { netTotal: true, paidAmount: true, status: true } }),
+    ]);
+    return {
+      collectedToday: Number(collectedAgg._sum.amount ?? 0),
+      invoicesToday,
+      totalDue: open.reduce((s, i) => s + Math.max(0, Number(i.netTotal) - Number(i.paidAmount)), 0),
+      pending: open.filter(i => ['FINALIZED', 'PARTIAL'].includes(i.status)).length,
+    };
+  }
+
   async recordPayment(tenantId: string, invoiceId: string, dto: any, recordedById: string) {
     const result = await this.prisma.$transaction(async (tx) => {
+      // Lock the row before reading the balance we validate against. Without
+      // it two concurrent collections both read a stale paidAmount and both
+      // pass the cap.
+      //
+      // NO ::uuid casts: invoices.id and invoices.tenant_id are TEXT columns
+      // (schema.prisma declares `String @id @default(uuid())` with no
+      // @db.Uuid), so casting the bind parameter makes Postgres reject the
+      // comparison with 42883 "operator does not exist: text = uuid" and every
+      // payment 500s. Verified against prod: cast form fails, uncast returns
+      // the row.
+      await tx.$queryRaw`SELECT id FROM invoices WHERE id = ${invoiceId} AND tenant_id = ${tenantId} FOR UPDATE`;
       const inv = await tx.invoice.findFirst({ where: { id: invoiceId, tenantId }, include: { lineItems: true, payments: true, patient: true } });
       if (!inv) throw new NotFoundException('Invoice not found');
       if (inv.status === 'CANCELLED') throw new BadRequestException('Cannot pay cancelled invoice');
+      // There was no upper bound anywhere on the staff path — the DTO only
+      // required amount > 0 — so ₹999,999 against a ₹730 bill was accepted and
+      // silently corrupted receivables and revenue reporting downstream.
+      // Reject rather than clamp: the cashier has physical cash in hand and
+      // needs to know the figure is wrong, not have it quietly altered.
+      const due = Number(inv.netTotal) - Number(inv.paidAmount);
+      if (due <= 0) throw new BadRequestException('Invoice is already fully paid');
+      if (Number(dto.amount) - due > 0.005) {
+        throw new BadRequestException(`Payment ₹${Number(dto.amount).toFixed(2)} exceeds the outstanding balance of ₹${due.toFixed(2)}`);
+      }
       const payment = await tx.payment.create({
         data: { tenantId, invoiceId, amount: dto.amount, paymentMethod: dto.paymentMethod, referenceNumber: dto.referenceNumber, bankName: dto.bankName, notes: dto.notes, recordedById },
       });
@@ -626,8 +679,6 @@ export class BillingService {
   // Shared `${rxId}:item:${itemId}` referenceId scheme lets cancel() find
   // and reverse the same charges by prefix scan.
   async billPrescription(tenantId: string, prescriptionId: string) {
-    const DEFAULT_DRUG_PRICE = 50;
-    const MARKUP = 1.3;
 
     const rx = await this.prisma.prescription.findFirst({
       where: { id: prescriptionId, tenantId },
@@ -636,26 +687,14 @@ export class BillingService {
     if (!rx) return { skipped: true, reason: 'rx-not-found' };
     if (rx.status === 'CANCELLED') return { skipped: true, reason: 'rx-cancelled' };
 
-    // Pull a price hint per drugId in one query so we don't N+1 the catalog.
+    // Shared with the pharmacy Dispense panel via drug-pricing.ts so the price
+    // the pharmacist sees is the price the patient is charged.
     const drugIds = Array.from(new Set(rx.items.map(i => i.drugId).filter((id): id is string => !!id)));
-    const drugBatchPrices: Record<string, number> = {};
-    if (drugIds.length) {
-      const batches = await this.prisma.drugBatch.findMany({
-        where: { tenantId, drugId: { in: drugIds }, unitCost: { not: null }, quantityInStock: { gt: 0 } },
-        select: { drugId: true, unitCost: true },
-      });
-      for (const b of batches) {
-        if (!drugBatchPrices[b.drugId] && b.unitCost != null) {
-          drugBatchPrices[b.drugId] = Math.round(Number(b.unitCost) * MARKUP * 100) / 100;
-        }
-      }
-    }
+    const drugBatchPrices = await drugPriceMap(this.prisma, tenantId, drugIds);
 
     const results: Array<{ itemId: string; result: any }> = [];
     for (const it of rx.items) {
-      const unitPrice = it.drugId && drugBatchPrices[it.drugId] != null
-        ? drugBatchPrices[it.drugId]
-        : DEFAULT_DRUG_PRICE;
+      const unitPrice = unitPriceFor(it.drugId, drugBatchPrices);
       const r = await this.addChargeToOpenVisit(
         tenantId,
         rx.patientId,

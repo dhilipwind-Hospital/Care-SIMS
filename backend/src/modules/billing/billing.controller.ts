@@ -21,6 +21,8 @@ import { RecordPaymentDto } from './dto/record-payment.dto';
 @Controller('billing')
 export class BillingController {
   constructor(private svc: BillingService) {}
+  @Get('stats') stats(@CurrentUser('tenantId') tid: string) { return this.svc.getStats(tid); }
+
   @Get('invoices') getAll(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.getInvoices(tid, q); }
 
   // Per-patient billing summary used by the New Invoice modal so the billing

@@ -15,7 +15,7 @@ export class ReportsService {
     const [
       totalPatients, todayQueue, activeAdmissions, pendingLabOrders,
       todayAppointments, pendingPrescriptions, pharmacyRevenueAgg, todayRevenueAgg,
-      weeklyRevenueAgg, weeklyAppointments,
+      weeklyRevenueAgg, weeklyAppointments, pharmacyTodayAgg,
     ] = await Promise.all([
       this.prisma.patient.count({ where }),
       this.prisma.queueToken.count({ where: { ...where, createdAt: { gte: today } } }),
@@ -23,9 +23,13 @@ export class ReportsService {
       this.prisma.labOrder.count({ where: { ...where, status: { in: ['ORDERED', 'COLLECTED', 'IN_PROGRESS'] } } }),
       this.prisma.appointment.count({ where: { ...where, appointmentDate: { gte: today } } }),
       this.prisma.prescription.count({ where: { ...where, status: 'SENT_TO_PHARMACY' } }),
-      this.prisma.invoice.aggregate({
-        where: { ...where, invoiceType: 'PHARMACY', status: { in: ['PAID', 'PARTIAL'] }, createdAt: { gte: monthAgo } },
-        _sum: { paidAmount: true },
+      // Pharmacy charges are appended to the patient's open visit invoice, so
+      // almost no invoice ever has invoiceType 'PHARMACY' — this aggregate
+      // returned ₹0 no matter how much was dispensed. Sum the PHARMACY line
+      // items instead.
+      this.prisma.invoiceLineItem.aggregate({
+        where: { category: 'PHARMACY', invoice: { ...where, status: { not: 'CANCELLED' }, createdAt: { gte: monthAgo } } },
+        _sum: { amount: true },
       }),
       this.prisma.invoice.aggregate({
         where: { ...where, status: { in: ['PAID', 'PARTIAL'] }, createdAt: { gte: monthAgo } },
@@ -36,14 +40,19 @@ export class ReportsService {
         _sum: { paidAmount: true },
       }),
       this.prisma.appointment.count({ where: { ...where, appointmentDate: { gte: weekAgo } } }),
+      this.prisma.invoiceLineItem.aggregate({
+        where: { category: 'PHARMACY', invoice: { ...where, status: { not: 'CANCELLED' }, createdAt: { gte: today } } },
+        _sum: { amount: true },
+      }),
     ]);
-    const pharmacyRevenue = Number(pharmacyRevenueAgg._sum.paidAmount ?? 0);
+    const pharmacyRevenue = Number(pharmacyRevenueAgg._sum.amount ?? 0);
+    const pharmacyRevenueToday = Number(pharmacyTodayAgg._sum.amount ?? 0);
     const todayRevenue = Number(todayRevenueAgg._sum.paidAmount ?? 0);
     const weeklyRevenue = Number(weeklyRevenueAgg._sum.paidAmount ?? 0);
     return {
       totalPatients, todayQueue, activeAdmissions, pendingLabOrders,
-      todayAppointments, pendingPrescriptions, pharmacyRevenue, todayRevenue,
-      weeklyRevenue, weeklyAppointments,
+      todayAppointments, pendingPrescriptions, pharmacyRevenue, pharmacyRevenueToday,
+      todayRevenue, weeklyRevenue, weeklyAppointments,
     };
   }
 

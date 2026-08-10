@@ -3,6 +3,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { generateSequentialId } from '../../common/utils/id-generator';
 import { sendEmail } from '../../common/utils/mailer';
 import { BillingService } from '../billing/billing.service';
+import { drugPriceMap, unitPriceFor } from '../../common/utils/drug-pricing';
 
 @Injectable()
 export class PrescriptionsService {
@@ -19,7 +20,7 @@ export class PrescriptionsService {
       padLength: 5,
       callback: async (tx, rxNumber) => {
         return tx.prescription.create({
-          data: { tenantId, rxNumber, locationId: dto.locationId, consultationId: dto.consultationId, patientId: dto.patientId, doctorId: dto.doctorId, validityDate: validity, notes: dto.notes, status: 'PENDING', items: { create: dto.items.map((item: any, i: number) => ({ drugName: item.drugName, genericName: item.genericName, dosageForm: item.dosageForm, strength: item.strength, dosage: item.dosage, frequency: item.frequency, durationDays: item.durationDays, route: item.route, instructions: item.instructions, quantity: item.quantity, refillsAllowed: item.refillsAllowed || 0, isControlled: item.isControlled || false, status: 'PENDING', sortOrder: i })) } },
+          data: { tenantId, rxNumber, locationId: dto.locationId, consultationId: dto.consultationId, patientId: dto.patientId, doctorId: dto.doctorId, validityDate: validity, notes: dto.notes, status: 'PENDING', items: { create: dto.items.map((item: any, i: number) => ({ drugId: item.drugId || null, drugName: item.drugName, genericName: item.genericName, dosageForm: item.dosageForm, strength: item.strength, dosage: item.dosage, frequency: item.frequency, durationDays: item.durationDays, route: item.route, instructions: item.instructions, quantity: item.quantity, refillsAllowed: item.refillsAllowed || 0, isControlled: item.isControlled || false, status: 'PENDING', sortOrder: i })) } },
           include: { items: true, patient: { select: { patientId: true, firstName: true, lastName: true, email: true } } },
         });
       },
@@ -79,11 +80,58 @@ export class PrescriptionsService {
     if (patientId) where.patientId = patientId;
     if (doctorId) where.doctorId = doctorId;
     if (status) where.status = status;
-    const [data, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       this.prisma.prescription.findMany({ where, skip, take: Number(limit), orderBy: { issuedAt: 'desc' }, include: { items: true, patient: { select: { patientId: true, firstName: true, lastName: true } } } }),
       this.prisma.prescription.count({ where }),
     ]);
-    return { data, meta: { total, page: Number(page), limit: Number(limit) } };
+    return { data: await this.withPricing(tenantId, await this.withDoctor(tenantId, rows)), meta: { total, page: Number(page), limit: Number(limit) } };
+  }
+
+  /**
+   * Prescription.doctorId is a bare string with no Prisma @relation and may point
+   * at a TenantUser (in-house) or a DoctorRegistry row (affiliated), so the
+   * pharmacy queue rendered "—" for every prescription and the printed dispense
+   * record showed a raw UUID.
+   *
+   * Fifth occurrence of this pattern after OT surgeons, appointment
+   * doctor/department, queue doctors and referral patients — same batched shape
+   * as appointments.service.withDoctorAndDepartment. One query per page.
+   */
+  /**
+   * PrescriptionItem has no price column, so the pharmacy panel's "Total
+   * Amount" summed fields that never existed and always rendered ₹0 while
+   * billing charged the patient a real amount. Prices are derived here through
+   * the same helper billPrescription uses, so the two agree by construction.
+   */
+  private async withPricing(tenantId: string, rows: any[]) {
+    if (!rows.length) return rows;
+    const drugIds = [...new Set(rows.flatMap(r => (r.items || []).map((i: any) => i.drugId)).filter(Boolean))] as string[];
+    const prices = await drugPriceMap(this.prisma, tenantId, drugIds);
+    return rows.map(r => {
+      const items = (r.items || []).map((it: any) => {
+        const unitPrice = unitPriceFor(it.drugId, prices);
+        const qty = it.quantity != null ? Number(it.quantity) : 1;
+        return { ...it, unitPrice, lineTotal: Math.round(unitPrice * qty * 100) / 100 };
+      });
+      const totalAmount = Math.round(items.reduce((s: number, i: any) => s + i.lineTotal, 0) * 100) / 100;
+      return { ...r, items, totalAmount };
+    });
+  }
+
+  private async withDoctor(tenantId: string, rows: any[]) {
+    if (!rows.length) return rows;
+    const ids = [...new Set(rows.map(r => r.doctorId).filter(Boolean))] as string[];
+    if (!ids.length) return rows.map(r => ({ ...r, doctor: null, doctorName: null }));
+    const [users, registry] = await Promise.all([
+      this.prisma.tenantUser.findMany({ where: { id: { in: ids }, tenantId }, select: { id: true, firstName: true, lastName: true } }),
+      this.prisma.doctorRegistry.findMany({ where: { id: { in: ids } }, select: { id: true, firstName: true, lastName: true } }),
+    ]);
+    // TenantUser wins if an id somehow matches both.
+    const map = new Map<string, any>([...registry, ...users].map(d => [d.id, d] as [string, any]));
+    return rows.map(r => {
+      const d = r.doctorId ? map.get(r.doctorId) : null;
+      return { ...r, doctor: d || null, doctorName: d ? `Dr. ${d.firstName} ${d.lastName}`.trim() : null };
+    });
   }
 
   async findOne(tenantId: string, id: string) {

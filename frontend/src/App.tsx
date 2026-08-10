@@ -333,6 +333,12 @@ function AppRoutes() {
 
         {/* ── Patient Portal — dedicated PatientLayout (no staff sidebar) ── */}
         <Route path="/app/patient" element={<ProtectedRoute><PatientLayout /></ProtectedRoute>}>
+          {/* Without an index the bare /app/patient URL matched this layout and
+              rendered an empty shell — the path="*" NotFoundPage below cannot
+              fire once the parent has matched, so it was a blank page rather
+              than a 404. /app solves this with RootRedirect; the portal has a
+              single obvious landing page, so redirect straight to it. */}
+          <Route index element={<Navigate to="/app/patient/portal" replace />} />
           <Route path="portal"        element={<RoleRoute roles={['PATIENT']}><PatientPortalPage /></RoleRoute>} />
           <Route path="appointments"  element={<RoleRoute roles={['PATIENT']}><PatientAppointmentsPage /></RoleRoute>} />
           <Route path="records"       element={<RoleRoute roles={['PATIENT']}><PatientMedicalRecordsPage /></RoleRoute>} />

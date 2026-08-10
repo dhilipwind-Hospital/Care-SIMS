@@ -116,6 +116,11 @@ export default function PrescriptionsPage() {
     const baseName = drug.brandName || drug.genericName || drug.name || '';
     const name = [baseName, drug.strength, drug.dosageForm].filter(Boolean).join(' ');
     updateItem(idx, 'drugName', name);
+    // Without the catalog id the pharmacy cannot match this line to a batch
+    // (stock reads "Unknown") and billing falls back to the flat default price.
+    // The backend DTO accepts drugId; this is the only place that knows it.
+    updateItem(idx, 'drugId', drug.id);
+    if (drug.genericName) updateItem(idx, 'genericName', drug.genericName);
     setDrugSearches(prev => { const a = [...prev]; a[idx] = name; return a; });
     setDrugResults(prev => ({ ...prev, [idx]: [] }));
     setDrugSelected(prev => ({ ...prev, [idx]: true }));
@@ -123,6 +128,9 @@ export default function PrescriptionsPage() {
 
   const clearDrug = (idx: number) => {
     updateItem(idx, 'drugName', '');
+    // Must clear alongside the name, else a stale catalog id ships with
+    // whatever free text the doctor types next.
+    updateItem(idx, 'drugId', '');
     setDrugSearches(prev => { const a = [...prev]; a[idx] = ''; return a; });
     setDrugSelected(prev => ({ ...prev, [idx]: false }));
   };

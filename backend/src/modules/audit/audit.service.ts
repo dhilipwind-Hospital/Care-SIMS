@@ -21,9 +21,19 @@ export class AuditService {
   }
 
   async getLogs(tenantId: string, query: any) {
-    const { actorId, eventType, targetType, locationId, from, to, page = 1, limit = 50 } = query;
+    const { q, actorId, eventType, targetType, locationId, from, to, page = 1, limit = 50 } = query;
     const skip = (Number(page) - 1) * Number(limit);
     const where: any = { tenantId };
+    // Free-text search across the human-readable columns. The page's search box
+    // previously had no server-side counterpart at all.
+    if (q && String(q).trim()) {
+      const term = String(q).trim();
+      where.OR = [
+        { actorName: { contains: term, mode: 'insensitive' } },
+        { description: { contains: term, mode: 'insensitive' } },
+        { targetType: { contains: term, mode: 'insensitive' } },
+      ];
+    }
     if (actorId) where.actorId = actorId;
     if (eventType) where.eventType = eventType;
     if (targetType) where.targetType = targetType;

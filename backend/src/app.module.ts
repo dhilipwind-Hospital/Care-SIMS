@@ -1,3 +1,5 @@
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -158,6 +160,12 @@ import { WsGatewayModule } from './modules/ws-gateway/ws-gateway.module';
     FeedbackModule,
     UploadsModule,
     SearchModule,
+  ],
+  providers: [
+    // The missing audit writer: records an OrgAuditLog row for every
+    // successful mutating request. AuditModule is already imported above and
+    // exports AuditService, so no further wiring is needed.
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
   ],
 })
 export class AppModule {}

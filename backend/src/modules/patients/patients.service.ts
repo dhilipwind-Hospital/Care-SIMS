@@ -357,9 +357,34 @@ export class PatientsService {
     return crypto.randomBytes(9).toString('base64').replace(/[+/=]/g, '').slice(0, 12);
   }
 
-  async findOne(tenantId: string, id: string) {
+  /**
+   * `actor` is passed only from the controller's read route. Internal callers
+   * (update, softDelete) reuse this as an existence check and deliberately
+   * omit it, so opening a chart logs once and a save does not log twice.
+   */
+  async findOne(tenantId: string, id: string, actor?: any) {
     const patient = await this.prisma.patient.findFirst({ where: { id, tenantId, isDeleted: false } });
     if (!patient) throw new NotFoundException('Patient not found');
+    if (actor?.sub) {
+      // Fire-and-forget so chart access is never slowed or blocked by auditing.
+      this.prisma.patientAccessLog.create({
+        data: {
+          tenantId,
+          patientId: patient.id,
+          patientName: `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
+          eventType: 'VIEW',
+          actorId: actor.sub,
+          actorName: actor.email || 'Unknown user',
+          actorRole: actor.systemRoleId || actor.roleId || 'UNKNOWN',
+          actorLocationId: actor.locationId || null,
+          accessLocationId: (patient as any).locationId || null,
+          isCrossLocation: !!(actor.locationId && (patient as any).locationId && actor.locationId !== (patient as any).locationId),
+          resourceType: 'PATIENT',
+          resourceId: patient.id,
+          hash: crypto.createHash('sha256').update(`${tenantId}:${patient.id}:${actor.sub}:${Date.now()}`).digest('hex'),
+        },
+      }).catch(() => { /* non-critical */ });
+    }
     return patient;
   }
 

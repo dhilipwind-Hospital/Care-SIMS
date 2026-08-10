@@ -33,7 +33,12 @@ export default function AuditPage() {
   const fetchLogs = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get('/audit/logs', { params: { event: action || undefined, page, limit: PAGE_SIZE } });
+      // The service reads `eventType` — the old `event` key was silently
+      // ignored, so the Action dropdown filtered nothing.
+      // `q` is a free-text match on actor name / description / entity. Binding
+      // the box to actorId (an exact UUID match) blanked the table on every
+      // keystroke.
+      const { data } = await api.get('/audit/logs', { params: { eventType: action || undefined, q: search.trim() || undefined, page, limit: PAGE_SIZE } });
       setLogs(data.data || []);
       setTotal(data.meta?.total || 0);
     } catch (err) { console.error('Failed to load audit logs:', err); toast.error('Failed to load audit logs'); } finally { setLoading(false); }
@@ -61,13 +66,13 @@ export default function AuditPage() {
     if (!logs.length) { toast.error('No data to export'); return; }
     exportTableToCsv([
       { header: 'Timestamp', key: 'createdAt', transform: (v: string) => v ? new Date(v).toLocaleString('en-IN') : '' },
-      { header: 'User', key: 'user', transform: (_: any, row: any) => row.user ? `${row.user.firstName || ''} ${row.user.lastName || ''}`.trim() : '' },
-      { header: 'Email', key: 'user', transform: (_: any, row: any) => row.user?.email || '' },
-      { header: 'Action', key: 'action' },
-      { header: 'Entity', key: 'entityType' },
-      { header: 'Entity ID', key: 'entityId' },
+      { header: 'User', key: 'actorName' },
+      { header: 'Role', key: 'actorRole' },
+      { header: 'Action', key: 'eventType' },
+      { header: 'Entity', key: 'targetType' },
+      { header: 'Entity ID', key: 'targetId' },
       { header: 'IP Address', key: 'ipAddress' },
-      { header: 'Details', key: 'details', transform: (v: any) => v ? JSON.stringify(v) : '' },
+      { header: 'Details', key: 'description' },
     ], logs, `audit-activity-log.csv`);
     toast.success('Activity log exported');
   };
@@ -80,7 +85,7 @@ export default function AuditPage() {
       { header: 'Patient ID', key: 'patientId' },
       { header: 'Accessed By', key: 'actorName' },
       { header: 'Role', key: 'actorRole' },
-      { header: 'Action', key: 'accessType' },
+      { header: 'Action', key: 'eventType' },
       { header: 'Description', key: 'description' },
       { header: 'Cross-Location', key: 'isCrossLocation', transform: (v: boolean) => v ? 'Yes' : 'No' },
     ], accessLogs, `patient-access-log.csv`);
@@ -154,16 +159,16 @@ export default function AuditPage() {
                   <tr key={log.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{new Date(log.createdAt).toLocaleString()}</td>
                     <td className="px-4 py-3 text-sm">
-                      <div className="font-medium text-gray-900">{log.user?.firstName} {log.user?.lastName}</div>
-                      <div className="text-xs text-gray-400">{log.user?.email}</div>
+                      <div className="font-medium text-gray-900">{log.actorName || '—'}</div>
+                      <div className="text-xs text-gray-400">{log.actorRole || ''}</div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${actionColor[log.action] || 'bg-gray-100 text-gray-600'}`}>{log.action}</span>
+                      <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${actionColor[log.eventType] || 'bg-gray-100 text-gray-600'}`}>{log.eventType}</span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{log.entityType}</td>
-                    <td className="px-4 py-3 text-xs font-mono text-gray-500 truncate max-w-[100px]">{log.entityId}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{log.targetType || '—'}</td>
+                    <td className="px-4 py-3 text-xs font-mono text-gray-500 truncate max-w-[100px]">{log.targetId || '—'}</td>
                     <td className="px-4 py-3 text-xs text-gray-500">{log.ipAddress || '—'}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500 max-w-[160px] truncate">{log.details ? JSON.stringify(log.details) : '—'}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500 max-w-[160px] truncate" title={log.description || ''}>{log.description || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -233,9 +238,9 @@ export default function AuditPage() {
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500">{log.actorRole || '—'}</td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${actionColor[log.accessType] || actionColor[log.action] || 'bg-gray-100 text-gray-600'}`}>{log.accessType || log.action || '—'}</span>
+                      <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${actionColor[log.eventType] || 'bg-gray-100 text-gray-600'}`}>{log.eventType || '—'}</span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-500 max-w-[200px] truncate">{log.description || log.resourceAccessed || '—'}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500 max-w-[200px] truncate">{log.accessReason || log.resourceType || '—'}</td>
                     <td className="px-4 py-3 text-xs">
                       {log.isCrossLocation ? (
                         <span className="px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-medium">Yes</span>

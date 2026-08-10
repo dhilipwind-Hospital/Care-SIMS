@@ -1097,6 +1097,10 @@ model OrgAuditLog {
   hash        String
   createdAt   DateTime @default(now()) @map("created_at")
 
+  // The table had no index beyond its PK. Free to add while it is empty;
+  // expensive once the interceptor starts filling it.
+  @@index([tenantId, createdAt])
+  @@index([tenantId, eventType])
   @@map("org_audit_logs")
 }
 
@@ -1124,6 +1128,7 @@ model PatientAccessLog {
 
   patient Patient @relation(fields: [patientId], references: [id])
 
+  @@index([tenantId, patientId, createdAt])
   @@map("patient_access_logs")
 }
 

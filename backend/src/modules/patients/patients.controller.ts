@@ -75,7 +75,7 @@ export class PatientsController {
 
   @Get(':id')
   @Roles('SYS_ORG_ADMIN', 'SYS_RECEPTIONIST', 'SYS_FRONT_OFFICE', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_NURSE', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE', 'SYS_PHARMACIST', 'SYS_PHARMACY_INCHARGE', 'SYS_BILLING', 'SYS_BILLING_MANAGER', 'SYS_LAB_TECHNICIAN', 'SYS_LAB_INCHARGE', 'SYS_RADIOLOGIST', 'SYS_OT_INCHARGE', 'SYS_OT_TECHNICIAN', 'SYS_BLOOD_BANK_INCHARGE', 'SYS_AMBULANCE_DRIVER', 'SYS_AMBULANCE_INCHARGE')
-  findOne(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.findOne(tid, id); }
+  findOne(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @CurrentUser() actor: any) { return this.svc.findOne(tid, id, actor); }
   @Put(':id') update(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: UpdatePatientDto) { return this.svc.update(tid, id, body); }
   @Get(':id/history') history(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getHistory(tid, id); }
   @Get(':id/access-log') accessLog(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getAccessLog(tid, id); }

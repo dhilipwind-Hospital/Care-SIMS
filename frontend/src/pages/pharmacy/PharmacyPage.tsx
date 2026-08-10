@@ -25,6 +25,10 @@ const STATUS_BADGE: Record<string, string> = {
 
 export default function PharmacyPage() {
   const [drugs,         setDrugs]         = useState<any[]>([]);
+  // `drugs` is page-scoped because it backs the paginated inventory table.
+  // KPIs, the barcode lookup and the Rx stock badge need the whole catalog, so
+  // they read `catalog` instead — otherwise a drug on page 2 reads "Unknown".
+  const [catalog,       setCatalog]       = useState<any[]>([]);
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
   const [loading,       setLoading]       = useState(true);
   const [tab,           setTab]           = useState<'dispense'|'inventory'>('dispense');
@@ -46,7 +50,7 @@ export default function PharmacyPage() {
 
   const handleBarcodeScan = (code: string) => {
     setShowScanner(false);
-    const match = drugs.find(d =>
+    const match = catalog.find(d =>
       d.barcode === code ||
       d.barcodeNumber === code ||
       d.sku === code ||
@@ -64,7 +68,7 @@ export default function PharmacyPage() {
 
   const handlePrintDispense = (r: any) => {
     const meds: any[] = r.items || r.medications || [];
-    const total = r.totalAmount || meds.reduce((s: number, m: any) => s + ((m.pricePerUnit || 0) * (m.quantity || 1)), 0);
+    const total = r.totalAmount || meds.reduce((s: number, m: any) => s + (Number(m.lineTotal ?? 0) || (m.unitPrice || m.pricePerUnit || 0) * (m.quantity || 1)), 0);
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pharmacy Dispense Record</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111;font-size:13px;}h1,h2{margin:0;}table{width:100%;border-collapse:collapse;}td,th{padding:7px 10px;border:1px solid #ddd;}th{background:#f3f4f6;font-weight:600;text-align:left;}@media print{body{padding:20px;}}</style></head><body>
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
       <div><h1 style="margin:0;font-size:22px;font-weight:900;color:#0F766E;">AYPHEN HMS</h1><h2 style="margin:4px 0 12px;font-size:16px;font-weight:700;">PHARMACY DISPENSE RECORD</h2></div>
@@ -73,8 +77,8 @@ export default function PharmacyPage() {
     <hr style="border:none;border-top:2px solid #0F766E;margin:12px 0;"/>
     <table style="margin-bottom:16px;">
       <tr><td style="width:25%;background:#f9fafb;font-weight:600;">Dispense #</td><td>${(r.id || '').slice(0,8).toUpperCase()}</td><td style="width:25%;background:#f9fafb;font-weight:600;">Date / Time</td><td>${r.createdAt ? new Date(r.createdAt).toLocaleString() : new Date().toLocaleString()}</td></tr>
-      <tr><td style="background:#f9fafb;font-weight:600;">Patient Name</td><td>${r.patient ? `${r.patient.firstName || ''} ${r.patient.lastName || ''}`.trim() : (r.patientId || '—')}</td><td style="background:#f9fafb;font-weight:600;">Doctor</td><td>${r.doctor ? `Dr. ${r.doctor.firstName || ''} ${r.doctor.lastName || ''}`.trim() : (r.doctorId || '—')}</td></tr>
-      <tr><td style="background:#f9fafb;font-weight:600;">Prescription #</td><td colspan="3">${r.prescriptionNumber || (r.prescriptionId || '').slice(0,8).toUpperCase() || '—'}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Patient Name</td><td>${r.patient ? `${r.patient.firstName || ''} ${r.patient.lastName || ''}`.trim() : (r.patientId || '—')}</td><td style="background:#f9fafb;font-weight:600;">Doctor</td><td>${r.doctorName || (r.doctor ? `Dr. ${r.doctor.firstName || ''} ${r.doctor.lastName || ''}`.trim() : '—')}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Prescription #</td><td colspan="3">${r.rxNumber || r.prescriptionNumber || (r.id || '').slice(0,8).toUpperCase() || '—'}</td></tr>
     </table>
     <div style="font-weight:700;margin-bottom:8px;color:#0F766E;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Medications Dispensed</div>
     <table style="margin-bottom:16px;">
@@ -106,17 +110,19 @@ export default function PharmacyPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [drugsRes, rxRes] = await Promise.all([
+      const [drugsRes, rxRes, catalogRes] = await Promise.all([
         api.get('/pharmacy/drugs', { params: { page: drugPage, limit: 20 } }),
         api.get('/prescriptions', { params: { page: rxPage, limit: 20 } }),
+        api.get('/pharmacy/drugs', { params: { page: 1, limit: 500 } }),
       ]);
       setDrugs(drugsRes.data.data || []);
+      setCatalog(catalogRes.data.data || []);
       setDrugTotal(drugsRes.data.meta?.total || 0);
       setRxTotal(rxRes.data.meta?.total || 0);
 
       // Fetch pharmacy revenue
       api.get('/reports/dashboard').then(({ data }) => {
-        const rev = data?.pharmacyRevenue ?? data?.todayRevenue ?? 0;
+        const rev = data?.pharmacyRevenueToday ?? data?.pharmacyRevenue ?? data?.todayRevenue ?? 0;
         setRevenueToday(`₹${Number(rev).toLocaleString('en-IN')}`);
       }).catch((err) => { console.error('Failed to fetch pharmacy revenue:', err); });
       const all: any[] = rxRes.data.data || [];
@@ -134,18 +140,23 @@ export default function PharmacyPage() {
 
   useEffect(() => { fetchData(); }, [rxPage, drugPage]);
 
-  const lowStock    = drugs.filter(d => d.batches?.some((b: any) => b.quantityInStock < 20)).length;
+  // stockStatus/totalStock are computed server-side against each drug's own
+  // reorderLevel. The previous version compared every batch to a hardcoded 20
+  // and treated a missing `batches` array as zero stock, so a fully stocked
+  // tenant reported every drug critical.
+  const lowStock    = catalog.filter(d => d.stockStatus === 'LOW_STOCK' || d.stockStatus === 'CRITICAL_STOCK').length;
   const dispensedToday = Object.keys(dispensed).length;
-  const outOfStock  = drugs.filter(d => {
-    const total = d.batches?.reduce((s: number, b: any) => s + b.quantityInStock, 0) || 0;
-    return total === 0;
-  }).length;
+  const outOfStock  = catalog.filter(d => d.stockStatus === 'OUT_OF_STOCK').length;
 
   const handleDispense = async () => {
     if (!selectedRx) return;
     setDispensing(true);
     try {
-      await api.post(`/pharmacy/prescriptions/${selectedRx.id}/dispense`, { notes: pharmNotes });
+      const { data: res } = await api.post(`/pharmacy/prescriptions/${selectedRx.id}/dispense`, { notes: pharmNotes });
+      // Stock is allocated FEFO server-side; anything it could not account for
+      // comes back here rather than failing the dispense outright.
+      const short: any[] = res?.shortfalls || [];
+      if (short.length) toast(`Dispensed with ${short.length} stock issue(s): ${short.map((x: any) => x.drugName).join(', ')}`, { icon: '⚠️' });
       setDispensed(d => ({ ...d, [selectedRx.id]: true }));
       setPharmNotes('');
       toast.success('Prescription dispensed');
@@ -182,8 +193,11 @@ export default function PharmacyPage() {
   // `medications` shape so older cached responses still render. Use rxItems(rx)
   // everywhere the UI reads the line array.
   const rxItems = (rx: any): any[] => (rx?.items || rx?.medications || []) as any[];
-  const totalAmount: number = rxItems(selectedRx).reduce(
-    (sum: number, m: any) => sum + (Number(m.pricePerUnit || m.unitPrice || 0)) * (Number(m.quantity || 1)),
+  // The server now prices each line with the same helper billing uses, so this
+  // total matches the invoice. The reduce is kept only as a fallback for
+  // responses cached before that field existed.
+  const totalAmount: number = Number(selectedRx?.totalAmount ?? 0) || rxItems(selectedRx).reduce(
+    (sum: number, m: any) => sum + (Number(m.lineTotal ?? 0) || Number(m.pricePerUnit || m.unitPrice || 0) * Number(m.quantity || 1)),
     0,
   );
 
@@ -277,7 +291,9 @@ export default function PharmacyPage() {
                           : 'hover:bg-gray-50'
                       }`}
                     >
-                      <td className="px-4 py-3 text-sm font-medium text-teal-700">{rx.prescriptionNumber || rx.id?.slice(0,8)}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-teal-700">{/* the column is rxNumber; prescriptionNumber does not exist, so this
+                          always fell through to the UUID fragment */}
+                        {rx.rxNumber || rx.prescriptionNumber || rx.id?.slice(0,8)}</td>
                       <td className="px-4 py-3">
                         <div className="text-sm font-medium text-gray-900">{rx.patient?.firstName} {rx.patient?.lastName}</div>
                         <div className="text-xs text-gray-400">{rx.patient?.patientId}</div>
@@ -362,8 +378,17 @@ export default function PharmacyPage() {
                       <div className="space-y-2">
                         {rxItems(selectedRx).map((med: any, i: number) => {
                           const medName = med.drugName || med.medicationName || med.name || `Med ${i + 1}`;
-                          const drug = drugs.find(d => d.id === med.drugId || d.genericName?.toLowerCase() === medName.toLowerCase() || d.name?.toLowerCase() === medName.toLowerCase());
-                          const stock = drug?.batches?.reduce((s: number, b: any) => s + b.quantityInStock, 0) || 0;
+                          // Doctors store a concatenated free-text drugName
+                          // ("Calpol 500 500mg TABLET"), so exact-equality on
+                          // brand/generic misses. Fall back to a containment
+                          // test before giving up and showing "Unknown".
+                          const ml = medName.toLowerCase();
+                          const drug = catalog.find(d => (med.drugId && d.id === med.drugId)
+                            || d.genericName?.toLowerCase() === ml
+                            || d.brandName?.toLowerCase() === ml)
+                            ?? catalog.find(d => (d.brandName && ml.includes(d.brandName.toLowerCase()))
+                            || (d.genericName && ml.includes(d.genericName.toLowerCase())));
+                          const stock = Number(drug?.totalStock ?? 0);
                           const stockBadge = !drug
                             ? 'bg-yellow-100 text-yellow-700'
                             : stock === 0

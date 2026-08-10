@@ -11,6 +11,10 @@ export default function OTLiveMonitorPage() {
   const [otStatus, setOtStatus] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [elapsed, setElapsed] = useState<Record<string, number>>({});
+  // In-flight guard: the complete handler used to be an inline async onClick
+  // with no disabled state, so a double-click sent two PATCHes. Keyed by
+  // booking so completing OT-1 never blocks OT-2.
+  const [completing, setCompleting] = useState<Set<string>>(new Set());
   const otStatusRef = useRef<any[]>([]);
   const elapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -23,6 +27,21 @@ export default function OTLiveMonitorPage() {
       otStatusRef.current = items;
     } catch (err) { console.error('Failed to load OT status:', err); toast.error('Failed to load OT status'); } finally { setLoading(false); }
   }, []);
+
+  const completeSurgery = async (bookingId: string) => {
+    if (completing.has(bookingId)) return;
+    setCompleting(prev => new Set(prev).add(bookingId));
+    try {
+      await api.patch(`/ot/bookings/${bookingId}/complete`, {});
+      toast.success('Surgery marked complete');
+      await fetchStatus();
+    } catch (err) {
+      console.error('Failed to complete surgery:', err);
+      toast.error('Failed to complete surgery');
+    } finally {
+      setCompleting(prev => { const n = new Set(prev); n.delete(bookingId); return n; });
+    }
+  };
 
   useEffect(() => { fetchStatus(); }, [fetchStatus]);
 
@@ -127,9 +146,15 @@ export default function OTLiveMonitorPage() {
                         )}
                       </div>
 
-                      <button onClick={async () => { try { await api.patch(`/ot/bookings/${ot.currentBooking.id}/complete`, {}); toast.success('Surgery marked complete'); fetchStatus(); } catch (err) { console.error('Failed to complete surgery:', err); toast.error('Failed to complete surgery'); } }}
-                        className="w-full py-2 rounded-lg text-sm font-semibold text-white" style={{ background: 'linear-gradient(135deg,#10B981,#059669)' }}>
-                        Mark Surgery Complete
+                      {/* Guarded against double-submit: without it two clicks
+                          raced two auto-billing runs and produced duplicate
+                          invoices. The server is idempotent now as well. */}
+                      <button
+                        disabled={completing.has(ot.currentBooking.id)}
+                        onClick={() => completeSurgery(ot.currentBooking.id)}
+                        className="w-full py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-60"
+                        style={{ background: 'linear-gradient(135deg,#10B981,#059669)' }}>
+                        {completing.has(ot.currentBooking.id) ? 'Completing…' : 'Mark Surgery Complete'}
                       </button>
                     </>
                   ) : ot.status === 'SETUP' && ot.nextBooking ? (

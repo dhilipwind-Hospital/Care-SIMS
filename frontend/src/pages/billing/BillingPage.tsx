@@ -66,6 +66,10 @@ export default function BillingPage() {
   const { user } = useAuth();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [totalInvoices, setTotalInvoices] = useState(0);
+  // Tenant-wide aggregates. The tiles used to be derived from the 20 invoices
+  // on the current page, so "Paid Today" was really an all-time figure and
+  // "Invoices Today" was a page row count.
+  const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -195,6 +199,7 @@ export default function BillingPage() {
       const { data } = await api.get('/billing/invoices', { params: { q: search || undefined, status: statusFilter || undefined, page, limit: 20 } });
       setInvoices(data.data || []);
       setTotalInvoices(data.meta?.total || 0);
+      api.get('/billing/stats').then(({ data: st }) => setStats(st)).catch(() => {});
     } catch (err) { toast.error('Failed to load invoices'); } finally { setLoading(false); }
   };
 
@@ -285,6 +290,12 @@ export default function BillingPage() {
     // payAmount to be set when the page has no amount input.
     const amt = Number(payAmount) > 0 ? Number(payAmount) : balance;
     if (amt <= 0) { toast('Nothing to collect', { icon: 'ℹ️' }); return; }
+    // Defence in depth — the server rejects this too. Not a silent clamp: the
+    // cashier is holding physical cash and needs to see the mismatch.
+    if (amt - balance > 0.005) {
+      toast.error(`Amount exceeds the outstanding balance of ₹${balance.toLocaleString('en-IN')}`);
+      return;
+    }
     setPaying(true);
     try {
       // If the invoice is still in DRAFT, finalize it before recording a
@@ -370,9 +381,12 @@ export default function BillingPage() {
     finally { setAddingItem(false); }
   };
 
-  const totalDue = invoices.reduce((s, i) => s + Math.max(0, Number(i.netTotal) - Number(i.paidAmount || 0)), 0);
-  const paidToday = invoices.filter(i => i.status === 'PAID').reduce((s, i) => s + Number(i.paidAmount || 0), 0);
-  const pending = invoices.filter(i => ['FINALIZED','PARTIAL'].includes(i.status)).length;
+  // Server aggregates when available; the page-scoped maths stays only as a
+  // fallback for the first render before /billing/stats resolves.
+  const totalDue = stats ? Number(stats.totalDue || 0) : invoices.reduce((s, i) => s + Math.max(0, Number(i.netTotal) - Number(i.paidAmount || 0)), 0);
+  const paidToday = stats ? Number(stats.collectedToday || 0) : invoices.filter(i => i.status === 'PAID').reduce((s, i) => s + Number(i.paidAmount || 0), 0);
+  const pending = stats ? Number(stats.pending || 0) : invoices.filter(i => ['FINALIZED','PARTIAL'].includes(i.status)).length;
+  const invoicesToday = stats ? Number(stats.invoicesToday || 0) : invoices.length;
 
   const balance = selected ? Math.max(0, Number(selected.netTotal || 0) - Number(selected.paidAmount || 0)) : 0;
 
@@ -555,10 +569,10 @@ export default function BillingPage() {
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-3 sm:px-6 pt-5">
-        <KpiCard label="Total Due" value={`₹${totalDue.toLocaleString()}`} icon={CreditCard} color="#0F766E" sub="Current invoice" />
-        <KpiCard label="Paid Today" value={`₹${paidToday.toLocaleString()}`} icon={DollarSign} color="#10B981" sub="All payments" />
+        <KpiCard label="Total Due" value={`₹${totalDue.toLocaleString('en-IN')}`} icon={CreditCard} color="#0F766E" sub="Outstanding across all invoices" />
+        <KpiCard label="Collected Today" value={`₹${paidToday.toLocaleString('en-IN')}`} icon={DollarSign} color="#10B981" sub="Payments received today" />
         <KpiCard label="Pending" value={pending} icon={Clock} color="#F59E0B" sub={`${pending > 0 ? pending + ' invoices' : 'All cleared'}`} />
-        <KpiCard label="Invoices Today" value={invoices.length} icon={FileText} color="#3B82F6" sub={invoices.length > 0 ? `${invoices.length} invoice${invoices.length > 1 ? 's' : ''}` : 'None yet'} />
+        <KpiCard label="Invoices Today" value={invoicesToday} icon={FileText} color="#3B82F6" sub={invoicesToday > 0 ? `${invoicesToday} invoice${invoicesToday > 1 ? 's' : ''}` : 'None yet'} />
       </div>
 
       {/* Revenue Overview Chart */}
@@ -1005,7 +1019,7 @@ export default function BillingPage() {
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Amount</label>
                     <div className="flex gap-2">
-                      <input type="number" min={0} step={1} value={payAmount} onChange={e => setPayAmount(e.target.value)}
+                      <input type="number" min={0} max={detailBalance} step={1} value={payAmount} onChange={e => setPayAmount(e.target.value)}
                         placeholder={String(detailBalance)}
                         className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                       <button type="button" onClick={() => setPayAmount(String(detailBalance))}

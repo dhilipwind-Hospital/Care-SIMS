@@ -30,7 +30,7 @@ export class PharmacyController {
 
   @Get('drugs/export')
   async exportCsv(@CurrentUser('tenantId') tid: string, @Query() q: any, @Res() res: Response) {
-    const { data } = await this.svc.getDrugs(tid, { ...q, page: 1, limit: 10000 });
+    const { data } = await this.svc.getDrugs(tid, { ...q, page: 1, limit: 10000, withBatches: false });
     const columns: CsvColumn[] = [
       { header: 'Drug Name', key: 'name' },
       { header: 'Generic Name', key: 'genericName' },

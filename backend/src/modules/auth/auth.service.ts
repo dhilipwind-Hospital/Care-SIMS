@@ -7,6 +7,7 @@ import * as crypto from 'crypto';
 import { authenticator } from 'otplib';
 import * as qrcode from 'qrcode';
 import { sendEmail } from '../../common/utils/mailer';
+import { AuditService } from '../audit/audit.service';
 
 // In-memory store for password reset tokens
 // Key: hashed token, Value: { email, userType, userId, expiresAt }
@@ -20,6 +21,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private config: ConfigService,
+    private audit: AuditService,
   ) {}
 
   async loginTenant(email: string, password: string, ipAddress?: string) {
@@ -163,7 +165,7 @@ export class AuthService {
         });
         if (!user) throw new UnauthorizedException();
         const tenant = await this.prisma.tenant.findUnique({ where: { id: user.tenantId } });
-        return this.buildTenantTokenResponse(user, tenant);
+        return this.buildTenantTokenResponse(user, tenant, false);
       }
       throw new UnauthorizedException('Invalid refresh token type');
     } catch {
@@ -307,10 +309,27 @@ export class AuthService {
     return { message: 'Password changed successfully' };
   }
 
-  private async buildTenantTokenResponse(user: any, tenant: any) {
+  private async buildTenantTokenResponse(user: any, tenant: any, recordLogin = true) {
     const enabledModules = await this.prisma.organizationFeature.findMany({
       where: { tenantId: user.tenantId, isEnabled: true },
     });
+
+    // The audit interceptor only sees authenticated mutating requests, and the
+    // login route is @Public with no req.user, so LOGIN has to be recorded here.
+    // Skipped for refreshToken: this helper also mints refreshed tokens, and
+    // logging there would file a "signed in" row every time an access token
+    // rolls over, burying real sign-ins in noise.
+    // Fire-and-forget: an audit failure must never block a sign-in.
+    if (recordLogin) this.audit.log(user.tenantId, {
+      eventType: 'LOGIN',
+      actorId: user.id,
+      actorName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+      actorRole: user.role?.systemRoleId || user.roleId || 'UNKNOWN',
+      targetType: 'AUTH',
+      targetId: user.id,
+      locationId: user.primaryLocationId,
+      description: `${user.email} signed in`,
+    }).catch(() => { /* non-critical */ });
 
     const payload = {
       sub: user.id,
@@ -828,7 +847,7 @@ export class AuthService {
       // Lock the invoice row FIRST so the balance we clamp against is current —
       // two simultaneous portal payments would otherwise both read a stale
       // paidAmount, both clamp to the full balance, and overpay.
-      await tx.$queryRaw`SELECT id FROM invoices WHERE id = ${invoiceId}::uuid AND tenant_id = ${tenantId}::uuid FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM invoices WHERE id = ${invoiceId} AND tenant_id = ${tenantId} FOR UPDATE`;
       const inv = await tx.invoice.findFirst({
         where: { id: invoiceId, tenantId, patientId: patient.id },
         include: { lineItems: true, payments: true },

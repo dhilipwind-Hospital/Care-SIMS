@@ -7,17 +7,60 @@ import { BillingService } from '../billing/billing.service';
 export class PharmacyService {
   constructor(private prisma: PrismaService, private billing: BillingService) {}
 
+  /**
+   * Every stock number on both pharmacy screens is derived from `batches`,
+   * `totalStock` and `stockStatus` — and none of the three were ever returned.
+   * The Rx panel therefore badged every drug "Out", the dashboard counted all
+   * 8 drugs as critical, and the inventory table showed 0 / ADEQUATE for stock
+   * that was actually 200 units. The projection below is the single place all
+   * of that is now computed.
+   *
+   * NOT scoped to the caller's location on purpose: the pharmacist's JWT
+   * location holds no batches while the stock sits at Main Campus, so filtering
+   * by it would report zero for a fully stocked tenant. Location-specific
+   * numbers stay on /pharmacy/stock, which takes an explicit locationId.
+   */
   async getDrugs(tenantId: string, query: any) {
-    const { q, category, page = 1, limit = 20 } = query;
+    const { q, category, page = 1, limit = 20, withBatches } = query;
     const skip = (Number(page) - 1) * Number(limit);
     const where: any = { tenantId, isActive: true };
     if (category) where.category = category;
     if (q) where.OR = [{ brandName: { contains: q, mode: 'insensitive' } }, { genericName: { contains: q, mode: 'insensitive' } }];
-    const [data, total] = await Promise.all([
-      this.prisma.drug.findMany({ where, skip, take: Number(limit), orderBy: { brandName: 'asc' } }),
+    // The CSV export pulls limit=10000 and renders no stock column, so it opts
+    // out rather than dragging every batch row along.
+    const includeBatches = withBatches !== false && String(withBatches) !== 'false';
+    const [rows, total] = await Promise.all([
+      this.prisma.drug.findMany({
+        where, skip, take: Number(limit), orderBy: { brandName: 'asc' },
+        ...(includeBatches
+          ? { include: { batches: { where: { status: 'ACTIVE' }, select: { id: true, batchNumber: true, quantityInStock: true, expiryDate: true, unitCost: true, locationId: true }, orderBy: { expiryDate: 'asc' as const } } } }
+          : {}),
+      }),
       this.prisma.drug.count({ where }),
     ]);
-    return { data, meta: { total, page: Number(page), limit: Number(limit) } };
+    return {
+      data: includeBatches ? rows.map(d => this.withStockStatus(d)) : rows,
+      meta: { total, page: Number(page), limit: Number(limit) },
+    };
+  }
+
+  /** Expired stock is not dispensable, so it is excluded from the sellable total. */
+  private withStockStatus(drug: any) {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const soon = new Date(today); soon.setDate(soon.getDate() + 90);
+    const batches: any[] = drug.batches || [];
+    const sellable = batches.filter(b => !b.expiryDate || new Date(b.expiryDate) >= today);
+    const totalStock = sellable.reduce((s, b) => s + Number(b.quantityInStock || 0), 0);
+    const reorder = Number(drug.reorderLevel ?? 0);
+    const expiringSoon = sellable.some(b => Number(b.quantityInStock || 0) > 0 && b.expiryDate && new Date(b.expiryDate) <= soon);
+    // Shortage always outranks expiry — an out-of-stock drug is not "expiring".
+    const stockStatus =
+      totalStock === 0 ? 'OUT_OF_STOCK'
+      : reorder > 0 && totalStock <= Math.ceil(reorder / 2) ? 'CRITICAL_STOCK'
+      : reorder > 0 && totalStock <= reorder ? 'LOW_STOCK'
+      : expiringSoon ? 'EXPIRING_SOON'
+      : 'ADEQUATE';
+    return { ...drug, totalStock, expiringSoon, stockStatus };
   }
 
   async createDrug(tenantId: string, dto: any) {
@@ -76,23 +119,105 @@ export class PharmacyService {
     type Dispensed = { batchId: string; quantity: number; drugId: string; drugName: string; unitCost: number | null };
     const dispensedDetails: Dispensed[] = [];
 
+    // Items the pharmacist handed over but that inventory could not account for.
+    const shortfalls: Array<{ drugName: string; requested: number; dispensed: number; reason: string }> = [];
+
+    const explicit = Array.isArray(dto.dispensedItems) && dto.dispensedItems.length > 0;
+    // Catalog lookup is immutable reference data — kept outside the transaction
+    // so an unbounded findMany never eats the interactive-transaction budget.
+    const catalog = explicit
+      ? []
+      : await this.prisma.drug.findMany({ where: { tenantId, isActive: true }, select: { id: true, brandName: true, genericName: true } });
+
     await this.prisma.$transaction(async (tx) => {
-      for (const item of dto.dispensedItems || []) {
-        const batch = await tx.drugBatch.findFirst({
-          where: { id: item.batchId, tenantId, quantityInStock: { gte: item.quantity } },
-          include: { drug: { select: { brandName: true } } },
-        });
-        if (!batch) throw new BadRequestException(`Insufficient stock for batch ${item.batchId}`);
-        await tx.drugBatch.update({ where: { id: item.batchId }, data: { quantityInStock: { decrement: item.quantity } } });
-        dispensedDetails.push({
-          batchId: batch.id,
-          quantity: Number(item.quantity),
-          drugId: batch.drugId,
-          drugName: (batch as any).drug?.brandName || 'Medication',
-          unitCost: batch.unitCost != null ? Number(batch.unitCost) : null,
-        });
+      // Claim the prescription first. The status pre-check above runs outside
+      // the transaction, so two concurrent dispenses could both pass it and
+      // both decrement stock. Only the request whose updateMany matches a
+      // not-yet-DISPENSED row proceeds; the loser rolls back untouched.
+      // Prescription.notes already holds the DOCTOR's clinical note (written by
+      // prescriptions.service.create from the Rx form), so the pharmacist's
+      // note is appended under a label rather than overwriting it. Dispense can
+      // only ever win this claim once, so it cannot append twice.
+      const pharmNote = typeof dto.notes === 'string' ? dto.notes.trim() : '';
+      const mergedNotes = pharmNote
+        ? [(rx as any).notes, `[Pharmacy] ${pharmNote}`].filter(Boolean).join('\n')
+        : undefined;
+      const claim = await tx.prescription.updateMany({
+        where: { id: prescriptionId, tenantId, status: { not: 'DISPENSED' } },
+        data: {
+          status: 'DISPENSED',
+          ...(mergedNotes !== undefined ? { notes: mergedNotes } : {}),
+        },
+      });
+      if (claim.count === 0) throw new BadRequestException('Already dispensed');
+
+      if (explicit) {
+        // Caller named exact batches — keep the original strict behaviour,
+        // including the hard failure on insufficient stock.
+        for (const item of dto.dispensedItems) {
+          const batch = await tx.drugBatch.findFirst({
+            where: { id: item.batchId, tenantId, quantityInStock: { gte: item.quantity } },
+            include: { drug: { select: { brandName: true } } },
+          });
+          if (!batch) throw new BadRequestException(`Insufficient stock for batch ${item.batchId}`);
+          await tx.drugBatch.update({ where: { id: item.batchId }, data: { quantityInStock: { decrement: item.quantity } } });
+          dispensedDetails.push({
+            batchId: batch.id,
+            quantity: Number(item.quantity),
+            drugId: batch.drugId,
+            drugName: (batch as any).drug?.brandName || 'Medication',
+            unitCost: batch.unitCost != null ? Number(batch.unitCost) : null,
+          });
+        }
+      } else {
+        // The Dispense button posts only { notes }, so this loop used to run
+        // zero times: stock was never decremented yet the Rx was still marked
+        // DISPENSED. Allocate first-expiry-first-out from the Rx itself.
+        //
+        // Deliberately non-fatal: legacy Rx items carry drugId = null and match
+        // the catalog only by name, so throwing here would block dispensing
+        // outright. Anything inventory cannot account for is returned as a
+        // shortfall for the pharmacist to reconcile.
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        for (const it of (rx as any).items || []) {
+          const requested = it.quantity != null ? Math.ceil(Number(it.quantity)) : 0;
+          if (requested <= 0) continue;
+          const drugId = it.drugId || this.matchDrugByName(catalog, it.drugName)?.id;
+          if (!drugId) { shortfalls.push({ drugName: it.drugName, requested, dispensed: 0, reason: 'No matching drug in catalog' }); continue; }
+          const batches = await tx.drugBatch.findMany({
+            where: { tenantId, drugId, status: 'ACTIVE', quantityInStock: { gt: 0 }, expiryDate: { gte: today } },
+            orderBy: { expiryDate: 'asc' },
+            include: { drug: { select: { brandName: true } } },
+          });
+          let remaining = requested;
+          for (const b of batches) {
+            if (remaining <= 0) break;
+            const take = Math.min(remaining, b.quantityInStock);
+            // Conditional decrement: if a concurrent dispense already drained
+            // this batch the update matches nothing and we fall through to the
+            // next one, so stock can never go negative.
+            const res = await tx.drugBatch.updateMany({
+              where: { id: b.id, quantityInStock: { gte: take } },
+              data: { quantityInStock: { decrement: take } },
+            });
+            if (res.count === 0) continue;
+            dispensedDetails.push({
+              batchId: b.id,
+              quantity: take,
+              drugId: b.drugId,
+              drugName: (b as any).drug?.brandName || it.drugName || 'Medication',
+              unitCost: b.unitCost != null ? Number(b.unitCost) : null,
+            });
+            remaining -= take;
+          }
+          if (remaining > 0) shortfalls.push({ drugName: it.drugName, requested, dispensed: requested - remaining, reason: 'Insufficient stock on hand' });
+        }
       }
-      await tx.prescription.update({ where: { id: prescriptionId }, data: { status: 'DISPENSED' } });
+
+      // Line status stayed PENDING forever, so the MAR and the Rx detail view
+      // never reflected that the medication had actually been handed over.
+      // (Status and the pharmacist's notes were already written by the claim.)
+      await tx.prescriptionItem.updateMany({ where: { prescriptionId }, data: { status: 'DISPENSED' } });
     });
 
     // Route billing through the shared Rx-level helper. If the doctor already
@@ -116,7 +241,27 @@ export class PharmacyService {
       console.error('[pharmacy→billing] Failed to add pharmacy charges to invoice:', err);
     }
 
-    return { message: 'Prescription dispensed successfully' };
+    return {
+      message: 'Prescription dispensed successfully',
+      dispensed: dispensedDetails.map(d => ({ drugName: d.drugName, quantity: d.quantity, batchId: d.batchId })),
+      shortfalls,
+    };
+  }
+
+  /**
+   * Doctors store a concatenated free-text drugName ("Calpol 500 500mg
+   * TABLET"), so exact equality misses. Try exact brand/generic first, then
+   * longest containment so "Calpol 500" beats a stray "500".
+   */
+  private matchDrugByName(catalog: Array<{ id: string; brandName: string; genericName: string | null }>, drugName?: string | null) {
+    if (!drugName) return null;
+    const n = drugName.toLowerCase().trim();
+    const exact = catalog.find(d => d.brandName?.toLowerCase() === n || d.genericName?.toLowerCase() === n);
+    if (exact) return exact;
+    const partial = catalog
+      .filter(d => (d.brandName && n.includes(d.brandName.toLowerCase())) || (d.genericName && n.includes(d.genericName.toLowerCase())))
+      .sort((a, b) => (b.brandName?.length || 0) - (a.brandName?.length || 0));
+    return partial[0] || null;
   }
 
   async getLowStockAlerts(tenantId: string, locationId: string) {

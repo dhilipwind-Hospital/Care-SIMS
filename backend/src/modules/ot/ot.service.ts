@@ -613,7 +613,23 @@ export class OTService {
     if (dto.complications !== undefined) data.complications = dto.complications;
     if (dto.drainInserted !== undefined) data.drainInserted = dto.drainInserted;
     if (dto.drainType !== undefined) data.drainType = dto.drainType;
-    const updated = await this.prisma.oTBooking.update({ where: { id, tenantId }, data });
+    // Claim the completion atomically. Two overlapping requests (a double-click
+    // on Live Monitor, which had no in-flight guard) both used to pass the
+    // not-found check, both fire autoBillOTCompletion, and race
+    // addChargeToOpenVisit's check-then-create — which is how one knee
+    // replacement ended up on two DRAFT invoices. Only the request whose
+    // updateMany matched a non-COMPLETED row runs the side-effects.
+    const claim = await this.prisma.oTBooking.updateMany({
+      where: { id, tenantId, status: { not: 'COMPLETED' } },
+      data,
+    });
+    const updated = await this.prisma.oTBooking.findFirst({ where: { id, tenantId } });
+    if (!updated) throw new NotFoundException('OT Booking not found');
+    if (claim.count === 0) {
+      // Already completed by the other request — return the row unchanged and
+      // fire nothing, so no second invoice, discharge summary, Rx or lab order.
+      return updated;
+    }
     this.ws.emitToTenant(tenantId, 'ot:status:changed', { action: 'completed', booking: updated });
 
     // Itemised auto-billing — one line item per cost component. Each uses a
