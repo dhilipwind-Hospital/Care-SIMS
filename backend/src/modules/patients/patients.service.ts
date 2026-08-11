@@ -449,15 +449,18 @@ export class PatientsService {
 
   async getHistory(tenantId: string, id: string) {
     await this.findOne(tenantId, id);
-    const [consultations, prescriptions, labOrders, vitals, admissions, invoices] = await Promise.all([
+    const [consultations, prescriptions, labOrders, vitals, admissions, invoices, referrals] = await Promise.all([
       this.prisma.consultation.findMany({ where: { tenantId, patientId: id }, orderBy: { createdAt: 'desc' }, take: 20 }),
       this.prisma.prescription.findMany({ where: { tenantId, patientId: id }, orderBy: { createdAt: 'desc' }, take: 20, include: { items: true } }),
       this.prisma.labOrder.findMany({ where: { tenantId, patientId: id }, orderBy: { orderedAt: 'desc' }, take: 20, include: { items: true } }),
       this.prisma.vital.findMany({ where: { tenantId, patientId: id }, orderBy: { recordedAt: 'desc' }, take: 20 }),
       this.prisma.admission.findMany({ where: { tenantId, patientId: id }, orderBy: { createdAt: 'desc' }, take: 10 }),
       this.prisma.invoice.findMany({ where: { tenantId, patientId: id }, orderBy: { createdAt: 'desc' }, take: 20 }),
+      // Referrals were missing entirely, so a clinician opening the chart had
+      // no way to see the patient had been referred anywhere.
+      this.prisma.referral.findMany({ where: { tenantId, patientId: id }, orderBy: { createdAt: 'desc' }, take: 20 }),
     ]);
-    return { consultations, prescriptions, labOrders, vitals, admissions, invoices };
+    return { consultations, prescriptions, labOrders, vitals, admissions, invoices, referrals };
   }
 
   async getAccessLog(tenantId: string, id: string) {

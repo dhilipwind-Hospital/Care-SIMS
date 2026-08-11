@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { UserPlus, Search, Eye, X, ArrowLeft, ArrowRightCircle, Pencil, History, Stethoscope, Pill, FlaskConical, BedDouble, FileText, Activity, Camera, Loader2, ScrollText, MapPin } from 'lucide-react';
+import { UserPlus, Search, Eye, X, ArrowLeft, ArrowRightCircle, Pencil, History, Stethoscope, Pill, FlaskConical, BedDouble, FileText, Activity, Camera, Loader2, ScrollText, MapPin, GitBranch
+} from 'lucide-react';
 import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
@@ -982,6 +983,7 @@ export default function PatientsPage() {
                 { key: 'vitals', label: 'Vitals', icon: <Activity size={14} /> },
                 { key: 'admissions', label: 'Admissions', icon: <BedDouble size={14} /> },
                 { key: 'invoices', label: 'Invoices', icon: <FileText size={14} /> },
+                { key: 'referrals', label: 'Referrals', icon: <GitBranch size={14} /> },
               ].map(tab => (
                 <button key={tab.key} onClick={() => setHistoryTab(tab.key)}
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
@@ -1152,6 +1154,41 @@ export default function PatientsPage() {
                             {a.dischargedAt && <div><span className="text-gray-400">Discharged:</span> <span className="text-gray-700">{new Date(a.dischargedAt).toLocaleDateString()}</span></div>}
                             {a.bedNumber && <div><span className="text-gray-400">Bed:</span> <span className="text-gray-700">{a.bedNumber}</span></div>}
                             {a.reason && <div className="col-span-2"><span className="text-gray-400">Reason:</span> <span className="text-gray-700">{a.reason}</span></div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Referrals — the chart had no view of where a patient had
+                      been referred, even though the records existed. */}
+                  {historyTab === 'referrals' && (
+                    <div className="space-y-3">
+                      {(historyData.referrals || []).length === 0 ? (
+                        <EmptyState icon={<GitBranch size={24} className="text-gray-400" />} title="No referrals" description="This patient has not been referred to another department." />
+                      ) : historyData.referrals.map((r: any) => (
+                        <div key={r.id} className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-semibold text-gray-900 font-mono">{r.referralNumber || r.id.slice(0, 8)}</span>
+                            <div className="flex items-center gap-1.5">
+                              {r.urgency && r.urgency !== 'ROUTINE' && (
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${r.urgency === 'EMERGENCY' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>{r.urgency}</span>
+                              )}
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                r.status === 'COMPLETED' ? 'bg-green-50 text-green-700'
+                                : r.status === 'ACCEPTED' ? 'bg-teal-50 text-teal-700'
+                                : r.status === 'DECLINED' || r.status === 'CANCELLED' ? 'bg-red-50 text-red-700'
+                                : 'bg-amber-50 text-amber-700'}`}>{r.status}</span>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div><span className="text-gray-400">To:</span> <span className="text-gray-700">{r.referredToDeptName || '—'}</span></div>
+                            <div><span className="text-gray-400">Raised:</span> <span className="text-gray-700">{new Date(r.createdAt).toLocaleDateString()}</span></div>
+                            {r.referringDoctorName && <div><span className="text-gray-400">By:</span> <span className="text-gray-700">{r.referringDoctorName}</span></div>}
+                            {r.referredToDoctorName && <div><span className="text-gray-400">Doctor:</span> <span className="text-gray-700">{r.referredToDoctorName}</span></div>}
+                            {r.reason && <div className="col-span-2"><span className="text-gray-400">Reason:</span> <span className="text-gray-700">{r.reason}</span></div>}
+                            {r.declinedReason && <div className="col-span-2"><span className="text-gray-400">Declined because:</span> <span className="text-gray-700">{r.declinedReason}</span></div>}
+                            {r.consultationNotes && <div className="col-span-2"><span className="text-gray-400">Outcome:</span> <span className="text-gray-700">{r.consultationNotes}</span></div>}
                           </div>
                         </div>
                       ))}

@@ -979,6 +979,7 @@ export class AuthService {
       payments,
       appointments,
       admissions,
+      referrals,
     ] = await Promise.all([
       this.prisma.triageRecord.findMany({ where, orderBy: { triageTime: 'desc' }, take: limit }),
       this.prisma.consultation.findMany({
@@ -1020,6 +1021,14 @@ export class AuthService {
         orderBy: { admissionDate: 'desc' },
         take: limit,
       }),
+      // A patient could be referred to another department and never see it on
+      // their own timeline. Declined/cancelled referrals are omitted — the
+      // portal shows the patient their care, not internal churn.
+      this.prisma.referral.findMany({
+        where: { ...where, status: { notIn: ['CANCELLED', 'DECLINED'] } },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+      }),
     ]);
 
     // Fetch doctor display names for any consultation / prescription /
@@ -1039,7 +1048,7 @@ export class AuthService {
 
     type Event = {
       id: string;
-      type: 'APPOINTMENT' | 'TRIAGE' | 'CONSULT' | 'PRESCRIPTION' | 'LAB_ORDER' | 'LAB_RESULT' | 'INVOICE' | 'PAYMENT' | 'ADMISSION';
+      type: 'APPOINTMENT' | 'TRIAGE' | 'CONSULT' | 'PRESCRIPTION' | 'LAB_ORDER' | 'LAB_RESULT' | 'INVOICE' | 'PAYMENT' | 'ADMISSION' | 'REFERRAL';
       at: Date;
       title: string;
       summary?: string;
@@ -1165,6 +1174,24 @@ export class AuthService {
         summary: a.diagnosisOnAdmission || a.admissionType || 'Admitted',
         status: a.status,
         meta: { admissionId: a.id },
+      });
+    }
+
+    for (const r of referrals) {
+      events.push({
+        id: `referral-${r.id}`,
+        type: 'REFERRAL',
+        at: r.createdAt,
+        title: r.referredToDeptName ? `Referred to ${r.referredToDeptName}` : 'Referral',
+        summary: r.reason,
+        status: r.status,
+        meta: {
+          referralId: r.id,
+          referralNumber: r.referralNumber,
+          urgency: r.urgency,
+          toDoctor: r.referredToDoctorName || null,
+          byDoctor: r.referringDoctorName || null,
+        },
       });
     }
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { GitBranch, Clock, CheckCircle, Users, GitPullRequest, Pencil, Trash2, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TopBar from '../../components/layout/TopBar';
@@ -22,7 +23,20 @@ export default function ReferralPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
   const [formError, setFormError] = useState('');
+  // Deep link from the doctor's consultation: /app/referral?patientId=…&patientName=…
+  // opens the form with the patient already chosen, so a doctor doesn't have to
+  // leave the consult and search for them again.
+  const [searchParams] = useSearchParams();
+  const linkedPatientId = searchParams.get('patientId') || '';
+  const linkedPatientName = searchParams.get('patientName') || '';
+
   const [viewMode, setViewMode] = useState<'all' | 'mine'>('all');
+  // Decline and Complete both PATCHed with no body, so declinedReason and
+  // consultationNotes were always stored null even though the columns and the
+  // service support them. Capture the outcome before sending.
+  const [outcome, setOutcome] = useState<{ id: string; mode: 'decline' | 'complete' } | null>(null);
+  const [outcomeText, setOutcomeText] = useState('');
+  const [outcomeSaving, setOutcomeSaving] = useState(false);
 
   const handlePrintReferral = (r: any) => {
     const urgencyColor = (u: string) => u === 'EMERGENCY' ? '#DC2626' : u === 'URGENT' ? '#EA580C' : '#16A34A';
@@ -80,6 +94,12 @@ export default function ReferralPage() {
   };
   useEffect(() => { fetchData(); }, [viewMode]);
 
+  useEffect(() => {
+    if (!linkedPatientId) return;
+    setForm(f => ({ ...f, patientId: linkedPatientId }));
+    setShowForm(true);
+  }, [linkedPatientId]);
+
   const resetForm = () => {
     setForm({ ...emptyForm });
     setEditingId(null);
@@ -135,8 +155,27 @@ export default function ReferralPage() {
   };
 
   const acceptReferral = async (id: string) => { try { await api.patch(`/referrals/${id}/accept`); toast.success('Referral accepted'); fetchData(); } catch (err) { toast.error('Failed to accept referral'); } };
-  const declineReferral = async (id: string) => { try { await api.patch(`/referrals/${id}/decline`); toast.success('Referral declined'); fetchData(); } catch (err) { toast.error('Failed to decline referral'); } };
-  const completeReferral = async (id: string) => { try { await api.patch(`/referrals/${id}/complete`); toast.success('Referral completed'); fetchData(); } catch (err) { toast.error('Failed to complete referral'); } };
+  const submitOutcome = async () => {
+    if (!outcome) return;
+    const text = outcomeText.trim();
+    // A decline that records no reason is not auditable; an outcome note on a
+    // completed referral is useful but not mandatory.
+    if (outcome.mode === 'decline' && !text) { toast.error('Please give a reason for declining'); return; }
+    setOutcomeSaving(true);
+    try {
+      if (outcome.mode === 'decline') {
+        await api.patch(`/referrals/${outcome.id}/decline`, { reason: text });
+        toast.success('Referral declined');
+      } else {
+        await api.patch(`/referrals/${outcome.id}/complete`, { consultationNotes: text || undefined });
+        toast.success('Referral completed');
+      }
+      setOutcome(null); setOutcomeText('');
+      fetchData();
+    } catch (err) {
+      toast.error(outcome.mode === 'decline' ? 'Failed to decline referral' : 'Failed to complete referral');
+    } finally { setOutcomeSaving(false); }
+  };
   const handleDelete = async (id: string) => { if (!confirm('Delete this referral?')) return; try { await api.delete(`/referrals/${id}`); toast.success('Referral deleted'); fetchData(); } catch (err) { toast.error('Failed to delete referral'); } };
 
   return (
@@ -171,6 +210,7 @@ export default function ReferralPage() {
               value={form.patientId}
               onChange={(id) => setForm({ ...form, patientId: id })}
               placeholder="Search patient…"
+              initialLabel={linkedPatientName || undefined}
               label="Patient"
               required
               endpoint="/patients"
@@ -223,17 +263,50 @@ export default function ReferralPage() {
               {r.status === 'PENDING' && <>
                 <button onClick={() => editRecord(r)} className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 font-medium" title="Edit referral"><Pencil size={13} className="inline mr-0.5" />Edit</button>
                 <button onClick={() => acceptReferral(r.id)} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium">Accept</button>
-                <button onClick={() => declineReferral(r.id)} className="text-xs px-2 py-1 bg-red-50 text-red-700 rounded-md hover:bg-red-100 font-medium">Decline</button>
+                <button onClick={() => { setOutcome({ id: r.id, mode: 'decline' }); setOutcomeText(''); }} className="text-xs px-2 py-1 bg-red-50 text-red-700 rounded-md hover:bg-red-100 font-medium">Decline</button>
                 <button onClick={() => handleDelete(r.id)} className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600" title="Delete referral"><Trash2 size={14} /></button>
               </>}
               {r.status === 'ACCEPTED' && (
-                <button onClick={() => completeReferral(r.id)} className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">Complete</button>
+                <button onClick={() => { setOutcome({ id: r.id, mode: 'complete' }); setOutcomeText(''); }} className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">Complete</button>
               )}
               <button onClick={() => handlePrintReferral(r)} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"><Printer size={11} />Print</button>
             </div>
           </td>
         </tr>
       ))}</tbody></table>
+      {outcome && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+             role="dialog" aria-modal="true" aria-label={outcome.mode === 'decline' ? 'Decline referral' : 'Complete referral'}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-3">
+            <h3 className="font-semibold text-gray-900">
+              {outcome.mode === 'decline' ? 'Decline referral' : 'Complete referral'}
+            </h3>
+            <p className="text-sm text-gray-500">
+              {outcome.mode === 'decline'
+                ? 'Record why this referral is being declined. This is stored on the referral record.'
+                : 'Add the consultation outcome for this referral. Optional.'}
+            </p>
+            <textarea
+              autoFocus
+              rows={4}
+              value={outcomeText}
+              onChange={e => setOutcomeText(e.target.value)}
+              placeholder={outcome.mode === 'decline' ? 'Reason for declining *' : 'Consultation notes'}
+              className="hms-input w-full"
+            />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => { setOutcome(null); setOutcomeText(''); }}
+                className="px-4 py-2 rounded-lg border text-gray-600">Cancel</button>
+              <button onClick={submitOutcome} disabled={outcomeSaving}
+                className="px-4 py-2 rounded-lg text-white font-medium disabled:opacity-60"
+                style={{ background: outcome.mode === 'decline' ? '#B91C1C' : 'var(--accent)' }}>
+                {outcomeSaving ? 'Saving…' : outcome.mode === 'decline' ? 'Decline' : 'Complete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Pagination page={page} totalPages={Math.ceil(referrals.length / 20)} onPageChange={setPage} totalItems={referrals.length} pageSize={20} />
       </div>
     </div>

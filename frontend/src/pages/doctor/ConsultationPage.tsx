@@ -317,6 +317,15 @@ export default function ConsultationPage() {
                     {patient ? `${patient.firstName} ${patient.lastName}` : 'Loading…'}
                   </span>
                   {patient?.patientId && <span className="text-xs text-teal-600 font-mono bg-teal-50 px-2 py-0.5 rounded">{patient.patientId}</span>}
+                  {/* Referral was reachable only from the sidebar, so a doctor
+                      deciding to refer had to leave the consult and search for
+                      the patient again. This carries them across. */}
+                  <button
+                    onClick={() => navigate(`/app/referral?patientId=${patientId}&patientName=${encodeURIComponent(`${patient?.firstName || ''} ${patient?.lastName || ''}`.trim())}`)}
+                    className="text-xs px-2 py-1 rounded-md bg-cyan-50 text-cyan-700 hover:bg-cyan-100 font-medium ml-2"
+                    title="Refer this patient to another department">
+                    Refer
+                  </button>
                   <button onClick={() => { setPatientId(null); setPatient(null); }} className="text-xs text-gray-400 hover:text-red-500 ml-1"><X size={13} /></button>
                 </div>
                 <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500">

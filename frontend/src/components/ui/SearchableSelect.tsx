@@ -23,6 +23,12 @@ interface SearchableSelectProps {
   mapOption?: (item: any) => SelectOption;
   /** Query param name for search (default: 'q') */
   searchParam?: string;
+  /**
+   * Display text for a value supplied up-front (e.g. a deep link that already
+   * knows the patient). Without it the control shows its placeholder even
+   * though `value` is set, which reads as "nothing selected".
+   */
+  initialLabel?: string;
   className?: string;
 }
 
@@ -37,13 +43,14 @@ export default function SearchableSelect({
   endpoint,
   mapOption,
   searchParam = 'q',
+  initialLabel,
   className = '',
 }: SearchableSelectProps) {
   const [search, setSearch] = useState('');
   const [results, setResults] = useState<SelectOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
-  const [selectedLabel, setSelectedLabel] = useState('');
+  const [selectedLabel, setSelectedLabel] = useState(initialLabel || '');
   const ref = useRef<HTMLDivElement>(null);
 
   // Close on outside click

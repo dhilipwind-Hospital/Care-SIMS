@@ -1,14 +1,15 @@
 import { useEffect, useState, useMemo } from 'react';
 import {
   Activity, FileText, Pill, FlaskConical, CreditCard, CheckCircle,
-  AlertTriangle, Calendar, Stethoscope, BedDouble, RefreshCw,
+  AlertTriangle, Calendar, Stethoscope, BedDouble, RefreshCw, GitBranch,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../lib/api';
 
 type EventType =
   | 'APPOINTMENT' | 'TRIAGE' | 'CONSULT' | 'PRESCRIPTION'
-  | 'LAB_ORDER'   | 'LAB_RESULT' | 'INVOICE' | 'PAYMENT' | 'ADMISSION';
+  | 'LAB_ORDER'   | 'LAB_RESULT' | 'INVOICE' | 'PAYMENT' | 'ADMISSION'
+  | 'REFERRAL';
 
 interface TimelineEvent {
   id: string;
@@ -38,6 +39,7 @@ const EVENT_STYLE: Record<EventType, {
   INVOICE:      { icon: CreditCard,    iconBg: 'bg-slate-100',   iconColor: 'text-slate-700',   ring: 'ring-slate-200',   label: 'Invoice' },
   PAYMENT:      { icon: CheckCircle,   iconBg: 'bg-green-100',   iconColor: 'text-green-700',   ring: 'ring-green-200',   label: 'Payment' },
   ADMISSION:    { icon: BedDouble,     iconBg: 'bg-rose-100',    iconColor: 'text-rose-700',    ring: 'ring-rose-200',    label: 'Admission' },
+  REFERRAL:     { icon: GitBranch,     iconBg: 'bg-cyan-100',    iconColor: 'text-cyan-700',    ring: 'ring-cyan-200',    label: 'Referral' },
 };
 
 const TRIAGE_BADGE: Record<string, string> = {
@@ -109,6 +111,7 @@ export default function PatientTimelinePage() {
     { key: 'PRESCRIPTION', label: 'Rx' },
     { key: 'LAB_RESULT',   label: 'Lab Results' },
     { key: 'INVOICE',      label: 'Bills' },
+    { key: 'REFERRAL',     label: 'Referrals' },
   ];
 
   return (
