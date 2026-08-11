@@ -187,6 +187,13 @@ export default function PatientsPage() {
         preExistingConditions: form.preExistingConditions || undefined,
         currentMedications: form.currentMedications || undefined,
         idNumber: form.idNumber || undefined,
+        // These four were collected by the form, accepted by the DTO, and then
+        // dropped because Patient had no columns for them — staff typed data
+        // that silently vanished. Columns added 2026-08-11.
+        middleName: form.middleName || undefined,
+        maritalStatus: form.maritalStatus || undefined,
+        idType: form.idType || undefined,
+        paymentMode: form.paymentMode || undefined,
         emergencyContactName: form.emergencyContactName || undefined,
         emergencyContactPhone: form.emergencyPhone || undefined,
         emergencyRelationship: form.emergencyRelationship || undefined,

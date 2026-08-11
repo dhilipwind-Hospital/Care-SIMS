@@ -419,11 +419,17 @@ model Patient {
   locationId       String    @map("location_id")
   registrationType String    @default("WALKIN") @map("registration_type")
   firstName        String    @map("first_name")
+  middleName       String?   @map("middle_name")
   lastName         String    @map("last_name")
+  maritalStatus    String?   @map("marital_status")
   dateOfBirth      DateTime? @map("date_of_birth")
   ageYears         Int?      @map("age_years")
   gender           String
   bloodGroup       String?   @map("blood_group")
+  // nationalId is the ID *number*; idType records which document it is
+  // (Aadhaar / PAN / Passport …). The form always collected both, but only the
+  // number had a column, so the type was discarded on every registration.
+  idType           String?   @map("id_type")
   nationalId       String?   @map("national_id")
   photoUrl         String?   @map("photo_url")
   mobile           String
@@ -438,6 +444,7 @@ model Patient {
   pastSurgeries    String?   @map("past_surgeries")
   familyHistory    String?   @map("family_history")
   insurance        Json?
+  paymentMode      String?   @map("payment_mode")
   registeredById   String?   @map("registered_by")
   // Cached Gemini summary shown on consultation page. Doctor can refresh
   // explicitly; we don't auto-invalidate to keep cost predictable. The

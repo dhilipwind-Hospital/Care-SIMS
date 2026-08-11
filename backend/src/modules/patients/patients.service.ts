@@ -230,11 +230,14 @@ export class PatientsService {
             locationId,
             registrationType: dto.registrationType || 'WALKIN',
             firstName: dto.firstName,
+            middleName: dto.middleName || null,
             lastName: dto.lastName || '',
+            maritalStatus: dto.maritalStatus || null,
             dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : null,
             ageYears: dto.ageYears,
             gender: dto.gender || 'OTHER',
             bloodGroup: dto.bloodGroup,
+            idType: dto.idType || null,
             nationalId: dto.nationalId || dto.idNumber,
             mobile,
             alternatePhone: dto.alternatePhone,
@@ -250,6 +253,7 @@ export class PatientsService {
             pastSurgeries: dto.pastSurgeries,
             familyHistory: dto.familyHistory,
             insurance: insuranceJson,
+            paymentMode: dto.paymentMode || null,
             registeredById,
           },
         });
@@ -404,6 +408,10 @@ export class PatientsService {
     if (dto.gender !== undefined) data.gender = dto.gender;
     if (dto.bloodGroup !== undefined) data.bloodGroup = dto.bloodGroup;
     if (dto.nationalId !== undefined) data.nationalId = dto.nationalId;
+    if (dto.middleName !== undefined) data.middleName = dto.middleName || null;
+    if (dto.maritalStatus !== undefined) data.maritalStatus = dto.maritalStatus || null;
+    if (dto.idType !== undefined) data.idType = dto.idType || null;
+    if (dto.paymentMode !== undefined) data.paymentMode = dto.paymentMode || null;
     if (dto.mobile !== undefined) data.mobile = dto.mobile;
     if (dto.alternatePhone !== undefined) data.alternatePhone = dto.alternatePhone;
     if (dto.email !== undefined) data.email = dto.email;
