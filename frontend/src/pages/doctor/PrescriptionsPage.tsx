@@ -9,7 +9,7 @@ import { SkeletonTableRow } from '../../components/ui/Skeleton';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 
-const EMPTY_ITEM = { drugName: '', dosage: '', frequency: 'OD', durationDays: 7, route: 'ORAL', instructions: '' };
+const EMPTY_ITEM = { drugName: '', dosage: '', frequency: 'OD', durationDays: 7, quantity: 1, route: 'ORAL', instructions: '' };
 
 export default function PrescriptionsPage() {
   const { user } = useAuth();
@@ -136,7 +136,7 @@ export default function PrescriptionsPage() {
   };
 
   const addItem = () => {
-    setForm(f => ({ ...f, items: [...f.items, { drugName: '', dosage: '', frequency: '', durationDays: 7, route: 'ORAL', instructions: '' }] }));
+    setForm(f => ({ ...f, items: [...f.items, { ...EMPTY_ITEM, frequency: '' }] }));
     setDrugSearches(prev => [...prev, '']);
   };
   const removeItem = (i: number) => {
@@ -153,6 +153,11 @@ export default function PrescriptionsPage() {
     if (!form.patientId) { toast.error('Please select a patient'); return; }
     if (!form.items.length || form.items.some(it => !it.drugName?.trim())) {
       toast.error('Add at least one drug with a name'); return;
+    }
+    // A line with no quantity cannot be dispensed — the pharmacy has nothing to
+    // count out — so refuse it here rather than let it fail silently later.
+    if (form.items.some(it => !Number(it.quantity) || Number(it.quantity) < 1)) {
+      toast.error('Every drug needs a quantity of at least 1'); return;
     }
     setSubmitting(true);
     try {
@@ -416,6 +421,12 @@ export default function PrescriptionsPage() {
                           className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                           {['ORAL','IV','IM','SC','TOPICAL','INHALATION','SUBLINGUAL'].map(r => <option key={r}>{r}</option>)}
                         </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Qty</label>
+                        <input type="number" min="1" required value={item.quantity}
+                          onChange={e => updateItem(i,'quantity',Number(e.target.value))}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Days</label>

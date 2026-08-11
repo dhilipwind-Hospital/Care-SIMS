@@ -181,7 +181,14 @@ export class PharmacyService {
         const today = new Date(); today.setHours(0, 0, 0, 0);
         for (const it of (rx as any).items || []) {
           const requested = it.quantity != null ? Math.ceil(Number(it.quantity)) : 0;
-          if (requested <= 0) continue;
+          if (requested <= 0) {
+            // Older prescriptions (and any written before the Rx form captured
+            // a quantity) have none. Previously this line was skipped in
+            // silence, so the pharmacist saw "dispensed successfully" with no
+            // stock movement and no warning. Surface it instead.
+            shortfalls.push({ drugName: it.drugName, requested: 0, dispensed: 0, reason: 'No quantity on the prescription' });
+            continue;
+          }
           const drugId = it.drugId || this.matchDrugByName(catalog, it.drugName)?.id;
           if (!drugId) { shortfalls.push({ drugName: it.drugName, requested, dispensed: 0, reason: 'No matching drug in catalog' }); continue; }
           const batches = await tx.drugBatch.findMany({

@@ -87,11 +87,37 @@ export class LabService {
     if (status) where.status = status;
     if (priority) where.priority = priority;
     if (date) { const d = new Date(date); const n = new Date(d); n.setDate(d.getDate() + 1); where.orderedAt = { gte: d, lt: n }; }
-    const [data, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       this.prisma.labOrder.findMany({ where, skip, take: Number(limit), orderBy: { orderedAt: 'desc' }, include: { items: true, patient: { select: { patientId: true, firstName: true, lastName: true } } } }),
       this.prisma.labOrder.count({ where }),
     ]);
-    return { data, meta: { total, page: Number(page), limit: Number(limit) } };
+    return { data: await this.withDoctor(tenantId, rows), meta: { total, page: Number(page), limit: Number(limit) } };
+  }
+
+  /**
+   * LabOrder.doctorId is a bare String with no Prisma @relation and can point
+   * at either a TenantUser (in-house) or a DoctorRegistry row (affiliated), so
+   * the DOCTOR column on the lab worklist rendered "—" for every order — the
+   * lab could not see who had requested the test.
+   *
+   * Seventh occurrence of this pattern (OT surgeon, appointment doctor and
+   * department, queue doctor, referral patient, prescription doctor).
+   * One extra query per page, not per row.
+   */
+  private async withDoctor(tenantId: string, rows: any[]) {
+    if (!rows.length) return rows;
+    const ids = [...new Set(rows.map(r => r.doctorId).filter(Boolean))] as string[];
+    if (!ids.length) return rows.map(r => ({ ...r, doctor: null, doctorName: null }));
+    const [users, registry] = await Promise.all([
+      this.prisma.tenantUser.findMany({ where: { id: { in: ids }, tenantId }, select: { id: true, firstName: true, lastName: true } }),
+      this.prisma.doctorRegistry.findMany({ where: { id: { in: ids } }, select: { id: true, firstName: true, lastName: true } }),
+    ]);
+    // TenantUser wins if an id somehow resolves in both tables.
+    const map = new Map<string, any>([...registry, ...users].map(d => [d.id, d] as [string, any]));
+    return rows.map(r => {
+      const d = r.doctorId ? map.get(r.doctorId) : null;
+      return { ...r, doctor: d || null, doctorName: d ? `Dr. ${d.firstName} ${d.lastName}`.trim() : null };
+    });
   }
 
   async getOrder(tenantId: string, id: string) {
