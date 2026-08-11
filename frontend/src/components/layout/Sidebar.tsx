@@ -99,11 +99,18 @@ export const navByRole: Record<string, NavItem[]> = {
     { label: 'Sample Processing', icon: FlaskConical, path: '/app/lab',          module: 'MOD_LAB_FULL' },
     { label: 'Test Results',      icon: FileText,     path: '/app/lab/results',  module: 'MOD_LAB_FULL' },
     { label: 'Quality Control',   icon: Shield,       path: '/app/lab/qc',       module: 'MOD_LAB_QC' },
+    // /app/radiology is guarded roles={['DOCTOR','LAB','ADMIN']} — imaging was
+    // permitted for lab staff but had no entry point.
+    { label: 'Radiology',         icon: ScanLine,     path: '/app/radiology',    module: 'MOD_RADIOLOGY' },
     { label: 'Reports',           icon: BarChart3,    path: '/app/admin/reports', module: 'MOD_REPORTS' },
     { label: 'Notifications',     icon: Bell,         path: '/app/notifications' },
   ],
   BILLING: [
     { label: 'Billing & Invoices', icon: CreditCard, path: '/app/billing',       module: 'MOD_BILL_OPD' },
+    // /app/insurance is guarded roles={['BILLING','RECEPTION','ADMIN']} — the
+    // role was permitted but only reception and admin had the link, so claims
+    // work was unreachable for the people who actually do it.
+    { label: 'Insurance/TPA',      icon: ShieldCheck, path: '/app/insurance',     module: 'MOD_INSURANCE' },
     { label: 'Reports',            icon: BarChart3,   path: '/app/admin/reports', module: 'MOD_REPORTS' },
     { label: 'Notifications',      icon: Bell,        path: '/app/notifications' },
   ],
@@ -115,6 +122,9 @@ export const navByRole: Record<string, NavItem[]> = {
     { label: 'Operation Theatre',     icon: Scissors,        path: '/app/ot',           module: 'MOD_OT_SCHEDULE' },
     { label: 'OT Live Monitor',       icon: Monitor,         path: '/app/ot/live',      module: 'MOD_OT_SCHEDULE' },
     { label: 'OT Equipment',          icon: Wrench,          path: '/app/ot/equipment', module: 'MOD_OT_SCHEDULE' },
+    // /app/cssd is guarded roles={['NURSE','OT','ADMIN']} — sterile supply is
+    // where OT instruments are processed, but OT had no link to it.
+    { label: 'CSSD',                  icon: Shield,          path: '/app/cssd' },
     { label: 'Notifications',         icon: Bell,            path: '/app/notifications' },
   ],
   ADMIN: [
