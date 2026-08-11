@@ -46,6 +46,50 @@ export default function MARPage() {
   // Schedule Medication
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [scheduleForm, setScheduleForm] = useState({ ...emptyScheduleForm });
+  // A dispensed inpatient prescription does not create MAR rows, so the nurse
+  // schedules each dose here. The link back to the prescription used to be a
+  // raw UUID text box, which meant it was never populated — offer the
+  // patient's actual prescribed drugs instead.
+  const [rxItems, setRxItems] = useState<any[]>([]);
+  const [rxLoading, setRxLoading] = useState(false);
+
+  const loadRxForAdmission = async (admissionId: string) => {
+    setRxItems([]);
+    if (!admissionId) return;
+    setRxLoading(true);
+    try {
+      const { data: adm } = await api.get(`/admissions/${admissionId}`);
+      const patientId = adm?.patientId || adm?.patient?.id;
+      if (!patientId) return;
+      const { data } = await api.get('/prescriptions', { params: { patientId, limit: 50 } });
+      const items = (data.data || []).flatMap((rx: any) =>
+        (rx.items || []).map((it: any) => ({
+          id: it.id,
+          rxNumber: rx.rxNumber,
+          status: rx.status,
+          drugName: it.drugName,
+          dosage: it.dosage || '',
+          route: it.route || 'ORAL',
+          frequency: it.frequency || 'OD',
+        })),
+      );
+      setRxItems(items);
+    } catch { /* the nurse can still type the drug by hand */ }
+    finally { setRxLoading(false); }
+  };
+
+  const applyRxItem = (itemId: string) => {
+    const it = rxItems.find(x => x.id === itemId);
+    if (!it) { setScheduleForm(f => ({ ...f, prescriptionItemId: '' })); return; }
+    setScheduleForm(f => ({
+      ...f,
+      prescriptionItemId: it.id,
+      drugName: it.drugName || f.drugName,
+      dosage: it.dosage || f.dosage,
+      route: it.route || f.route,
+      frequency: it.frequency || f.frequency,
+    }));
+  };
   const [scheduleError, setScheduleError] = useState('');
 
   // 5-Rights checklist popup
@@ -496,7 +540,7 @@ export default function MARPage() {
             />
             <SearchableSelect
               value={scheduleForm.admissionId}
-              onChange={(id) => setScheduleForm({ ...scheduleForm, admissionId: id })}
+              onChange={(id) => { setScheduleForm({ ...scheduleForm, admissionId: id, prescriptionItemId: '' }); loadRxForAdmission(id); }}
               placeholder="Search admission *"
               endpoint="/admissions"
               searchParam="q"
@@ -510,7 +554,20 @@ export default function MARPage() {
             <select className="hms-input" value={scheduleForm.frequency} onChange={e => setScheduleForm({ ...scheduleForm, frequency: e.target.value })}>
               <option value="OD">OD (Once daily)</option><option value="BD">BD (Twice daily)</option><option value="TDS">TDS (Thrice daily)</option><option value="QDS">QDS (Four times daily)</option><option value="SOS">SOS (As needed)</option><option value="STAT">STAT (Immediately)</option>
             </select>
-            <input className="hms-input" placeholder="Prescription Item ID" value={scheduleForm.prescriptionItemId} onChange={e => setScheduleForm({ ...scheduleForm, prescriptionItemId: e.target.value })} />
+            <select className="hms-input" value={scheduleForm.prescriptionItemId}
+              onChange={e => applyRxItem(e.target.value)}
+              title="Fills the drug, dose, route and frequency from the prescription">
+              <option value="">
+                {rxLoading ? 'Loading prescriptions…'
+                  : rxItems.length ? 'From prescription (optional)…'
+                  : scheduleForm.admissionId ? 'No prescriptions for this patient' : 'Pick an admission first'}
+              </option>
+              {rxItems.map(it => (
+                <option key={it.id} value={it.id}>
+                  {it.drugName}{it.dosage ? ` · ${it.dosage}` : ''} — {it.rxNumber} ({it.status})
+                </option>
+              ))}
+            </select>
             <div><label className="text-xs text-gray-500 mb-1 block">Scheduled Date & Time *</label><input className="hms-input w-full" type="datetime-local" value={scheduleForm.scheduledTime} onChange={e => setScheduleForm({ ...scheduleForm, scheduledTime: e.target.value })} /></div>
           </div>
           <textarea className="hms-input w-full" placeholder="Notes" rows={2} value={scheduleForm.notes} onChange={e => setScheduleForm({ ...scheduleForm, notes: e.target.value })} />
