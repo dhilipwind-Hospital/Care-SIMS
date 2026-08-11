@@ -16,6 +16,7 @@ export class ReferralController {
   @Patch(':id') update(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.update(tid, id, body); }
   @Get('my-referrals') myReferrals(@CurrentUser('tenantId') tid: string, @CurrentUser('sub') uid: string) { return this.svc.myReferrals(tid, uid); }
   @Get(':id') getOne(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getOne(tid, id); }
+  @Patch(':id/appointment') linkAppointment(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body('appointmentId') appointmentId: string | null) { return this.svc.linkAppointment(tid, id, appointmentId); }
   @Patch(':id/accept') accept(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.accept(tid, id); }
   @Patch(':id/decline') decline(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body('reason') reason: string) { return this.svc.decline(tid, id, reason); }
   @Patch(':id/complete') complete(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.complete(tid, id, body); }

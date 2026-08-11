@@ -12,7 +12,10 @@ import Pagination from '../../components/ui/Pagination';
 import { SkeletonTableRow, SkeletonKpiRow } from '../../components/ui/Skeleton';
 import { useAuth } from '../../context/AuthContext';
 
-const emptyForm = { patientId: '', toDepartmentId: '', toDepartmentName: '', toDoctorId: '', toDoctorName: '', reason: '', urgency: 'ROUTINE', clinicalNotes: '' };
+const emptyForm = { patientId: '', toDepartmentId: '', toDepartmentName: '', toDoctorId: '', toDoctorName: '',
+  reason: '', urgency: 'ROUTINE', clinicalNotes: '',
+  // Columns the schema always had but nothing ever wrote.
+  referralType: 'INTERNAL', diagnosis: '', toLocationId: '', extFacility: '', extDoctor: '' };
 
 export default function ReferralPage() {
   const { user } = useAuth();
@@ -37,6 +40,32 @@ export default function ReferralPage() {
   const [outcome, setOutcome] = useState<{ id: string; mode: 'decline' | 'complete' } | null>(null);
   const [outcomeText, setOutcomeText] = useState('');
   const [outcomeSaving, setOutcomeSaving] = useState(false);
+  // Referral.appointmentId existed from the start but nothing ever wrote it,
+  // so a referral could not be tied to the visit it produced.
+  const [apptLink, setApptLink] = useState<any>(null);
+  const [apptOptions, setApptOptions] = useState<any[]>([]);
+  const [apptChoice, setApptChoice] = useState('');
+  const [apptSaving, setApptSaving] = useState(false);
+
+  const openApptLink = async (r: any) => {
+    setApptLink(r); setApptChoice(r.appointmentId || ''); setApptOptions([]);
+    try {
+      const { data } = await api.get('/appointments', { params: { patientId: r.patientId, limit: 50 } });
+      setApptOptions(data.data || []);
+    } catch { toast.error('Could not load appointments for this patient'); }
+  };
+
+  const saveApptLink = async () => {
+    if (!apptLink) return;
+    setApptSaving(true);
+    try {
+      await api.patch(`/referrals/${apptLink.id}/appointment`, { appointmentId: apptChoice || null });
+      toast.success(apptChoice ? 'Appointment linked' : 'Appointment unlinked');
+      setApptLink(null); fetchData();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to link appointment');
+    } finally { setApptSaving(false); }
+  };
 
   const handlePrintReferral = (r: any) => {
     const urgencyColor = (u: string) => u === 'EMERGENCY' ? '#DC2626' : u === 'URGENT' ? '#EA580C' : '#16A34A';
@@ -62,6 +91,8 @@ export default function ReferralPage() {
     <table style="margin-bottom:16px;">
       <tr><td style="width:25%;background:#f9fafb;font-weight:600;">Referral #</td><td>${r.referralNumber || (r.id || '').slice(0,8).toUpperCase()}</td><td style="width:25%;background:#f9fafb;font-weight:600;">Date</td><td>${r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '—'}</td></tr>
       <tr><td style="background:#f9fafb;font-weight:600;">Patient Name</td><td>${r.patientName || '—'}</td><td style="background:#f9fafb;font-weight:600;">Patient ID</td><td>${r.patientMrn || '—'}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Referred To</td><td>${[r.referredToDeptName, r.referredToDoctorName].filter(Boolean).join(' — ') || '—'}${r.referredToLocationName ? ` (${r.referredToLocationName})` : ''}</td><td style="background:#f9fafb;font-weight:600;">Type</td><td>${r.referralType === 'EXTERNAL' ? 'External' : 'Internal'}${r.urgency && r.urgency !== 'ROUTINE' ? ` · ${r.urgency}` : ''}</td></tr>
+      <tr><td style="background:#f9fafb;font-weight:600;">Diagnosis</td><td colspan="3">${r.diagnosis || '—'}</td></tr>
       <tr><td style="background:#f9fafb;font-weight:600;">Age / Gender</td><td>${r.patientAge != null ? r.patientAge + 'y' : '—'}${r.patient?.gender ? ' / ' + r.patient.gender : ''}</td><td style="background:#f9fafb;font-weight:600;">Contact</td><td>${r.patient?.mobile || '—'}</td></tr>
       <tr><td style="background:#f9fafb;font-weight:600;">Diagnosis</td><td>${r.diagnosis || '—'}</td><td style="background:#f9fafb;font-weight:600;">Urgency</td><td><span style="color:${urgencyColor(r.urgency)};font-weight:700;">${r.urgency || 'ROUTINE'}</span></td></tr>
     </table>
@@ -117,6 +148,11 @@ export default function ReferralPage() {
       reason: r.reason || '',
       urgency: r.urgency || 'ROUTINE',
       clinicalNotes: r.clinicalSummary || '',
+      referralType: r.referralType || 'INTERNAL',
+      diagnosis: r.diagnosis || '',
+      toLocationId: r.referredToLocationId || '',
+      extFacility: r.referralType === 'EXTERNAL' ? (r.referredToDeptName || '') : '',
+      extDoctor: r.referralType === 'EXTERNAL' ? (r.referredToDoctorName || '') : '',
     });
     setEditingId(r.id);
     setShowForm(true);
@@ -124,19 +160,27 @@ export default function ReferralPage() {
   };
 
   const handleSubmit = async () => {
+    const isExternal = form.referralType === 'EXTERNAL';
     if (!form.patientId) { setFormError('Please select a patient'); return; }
-    if (!form.toDepartmentId) { setFormError('Please select a department'); return; }
+    // An external referral goes to a facility outside this organisation, so
+    // there is no department id to pick — the destination is free text.
+    if (!isExternal && !form.toDepartmentId) { setFormError('Please select a department'); return; }
+    if (isExternal && !form.extFacility.trim()) { setFormError('Please name the facility or department being referred to'); return; }
     if (!form.reason.trim()) { setFormError('Reason is required'); return; }
     setFormError('');
     // Map UI field names to the backend's referral schema (referredToDept*/clinicalSummary).
     const payload: Record<string, any> = {
       patientId: form.patientId,
-      referredToDeptId: form.toDepartmentId || undefined,
-      referredToDeptName: form.toDepartmentName || undefined,
-      referredToDoctorId: form.toDoctorId || undefined,
-      referredToDoctorName: form.toDoctorName || undefined,
+      referralType: form.referralType,
+      // External destinations have no ids — only names.
+      referredToDeptId: isExternal ? undefined : (form.toDepartmentId || undefined),
+      referredToDeptName: isExternal ? form.extFacility.trim() : (form.toDepartmentName || undefined),
+      referredToDoctorId: isExternal ? undefined : (form.toDoctorId || undefined),
+      referredToDoctorName: isExternal ? (form.extDoctor.trim() || undefined) : (form.toDoctorName || undefined),
+      referredToLocationId: isExternal ? null : (form.toLocationId || null),
       reason: form.reason,
       urgency: form.urgency,
+      diagnosis: form.diagnosis.trim() || undefined,
       clinicalSummary: form.clinicalNotes || undefined,
     };
     try {
@@ -205,6 +249,19 @@ export default function ReferralPage() {
       {showForm && (
         <div className="hms-card p-5 space-y-4"><h3 className="font-semibold text-gray-900">{editingId ? 'Edit Referral' : 'New Referral'}</h3>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
+          {/* Internal = another department in this organisation. External = a
+              facility outside it, which has no ids to pick, only names. */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">Referral type</span>
+            {(['INTERNAL', 'EXTERNAL'] as const).map(t => (
+              <button key={t} type="button"
+                onClick={() => setForm({ ...form, referralType: t })}
+                className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
+                  form.referralType === t ? 'bg-teal-600 text-white border-teal-600' : 'border-gray-200 text-gray-600 hover:border-teal-400'}`}>
+                {t === 'INTERNAL' ? 'Internal' : 'External'}
+              </button>
+            ))}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <SearchableSelect
               value={form.patientId}
@@ -217,6 +274,13 @@ export default function ReferralPage() {
               searchParam="q"
               mapOption={(p: any) => ({ id: p.id, label: `${p.firstName} ${p.lastName}`, sub: p.patientId })}
             />
+            {form.referralType === 'EXTERNAL' ? (
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Facility / Department<span className="text-red-500 ml-0.5">*</span></label>
+                <input className="hms-input w-full" placeholder="e.g. Apollo Cardiology"
+                  value={form.extFacility} onChange={e => setForm({ ...form, extFacility: e.target.value })} />
+              </div>
+            ) : (
             <SearchableSelect
               value={form.toDepartmentId}
               onChange={(id, opt) => setForm({ ...form, toDepartmentId: id, toDepartmentName: opt?.label || '' })}
@@ -225,7 +289,14 @@ export default function ReferralPage() {
               required
               endpoint="/org/departments"
               mapOption={(d: any) => ({ id: d.id, label: d.name, sub: d.code })}
-            />
+            />)}
+            {form.referralType === 'EXTERNAL' ? (
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">External Doctor</label>
+                <input className="hms-input w-full" placeholder="e.g. Dr. S. Menon"
+                  value={form.extDoctor} onChange={e => setForm({ ...form, extDoctor: e.target.value })} />
+              </div>
+            ) : (
             <SearchableSelect
               value={form.toDoctorId}
               onChange={(id, opt) => setForm({ ...form, toDoctorId: id, toDoctorName: opt?.label || '' })}
@@ -234,7 +305,22 @@ export default function ReferralPage() {
               endpoint="/doctors"
               searchParam="q"
               mapOption={(d: any) => ({ id: d.id, label: `Dr. ${d.firstName} ${d.lastName}`, sub: d.pgSpecialization || d.specialization })}
-            />
+            />)}
+            {form.referralType === 'INTERNAL' && (
+              <SearchableSelect
+                value={form.toLocationId}
+                onChange={(id) => setForm({ ...form, toLocationId: id })}
+                placeholder="Same site…"
+                label="To Location"
+                endpoint="/org/locations"
+                mapOption={(l: any) => ({ id: l.id, label: l.name, sub: l.city || l.code })}
+              />
+            )}
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Diagnosis</label>
+              <input className="hms-input w-full" placeholder="Working diagnosis"
+                value={form.diagnosis} onChange={e => setForm({ ...form, diagnosis: e.target.value })} />
+            </div>
             <select className="hms-input" value={form.urgency} onChange={e => setForm({ ...form, urgency: e.target.value })}><option value="ROUTINE">Routine</option><option value="URGENT">Urgent</option><option value="EMERGENCY">Emergency</option></select>
             <input className="hms-input col-span-2" placeholder="Reason *" value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} />
           </div><textarea className="hms-input w-full" placeholder="Clinical Notes" rows={2} value={form.clinicalNotes} onChange={e => setForm({ ...form, clinicalNotes: e.target.value })} />
@@ -254,7 +340,14 @@ export default function ReferralPage() {
             <div className="font-medium text-gray-900">{r.patientName || '—'}</div>
             {r.patientMrn && <div className="text-xs text-gray-400">{r.patientMrn}</div>}
           </td>
-          <td className="p-3">{r.referredToDeptName || r.referredToDeptId || '—'}</td>
+          <td className="p-3">
+            <div>{r.referredToDeptName || r.referredToDeptId || '—'}</div>
+            <div className="text-xs text-gray-400">
+              {r.referralType === 'EXTERNAL' && <span className="text-cyan-700 font-medium">External</span>}
+              {r.referralType === 'EXTERNAL' && r.referredToLocationName ? ' · ' : ''}
+              {r.referredToLocationName || ''}
+            </div>
+          </td>
           <td className="p-3 max-w-[150px] truncate">{r.reason}</td>
           <td className="p-3"><StatusBadge status={r.urgency || 'ROUTINE'} /></td>
           <td className="p-3"><StatusBadge status={r.status} /></td>
@@ -269,11 +362,48 @@ export default function ReferralPage() {
               {r.status === 'ACCEPTED' && (
                 <button onClick={() => { setOutcome({ id: r.id, mode: 'complete' }); setOutcomeText(''); }} className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 font-medium">Complete</button>
               )}
+              {['PENDING', 'ACCEPTED'].includes(r.status) && (
+                <button onClick={() => openApptLink(r)}
+                  className="text-xs px-2 py-1 bg-cyan-50 text-cyan-700 rounded-md hover:bg-cyan-100 font-medium">
+                  {r.appointmentId ? 'Appt \u2713' : 'Link Appt'}
+                </button>
+              )}
               <button onClick={() => handlePrintReferral(r)} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 font-medium flex items-center gap-1"><Printer size={11} />Print</button>
             </div>
           </td>
         </tr>
       ))}</tbody></table>
+      {apptLink && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+             role="dialog" aria-modal="true" aria-label="Link appointment">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-3">
+            <h3 className="font-semibold text-gray-900">Link appointment</h3>
+            <p className="text-sm text-gray-500">
+              Tie {apptLink.referralNumber} to the appointment booked for {apptLink.patientName || 'this patient'}.
+            </p>
+            {apptOptions.length === 0 ? (
+              <p className="text-sm text-gray-400">No appointments found for this patient.</p>
+            ) : (
+              <select className="hms-input w-full" value={apptChoice} onChange={e => setApptChoice(e.target.value)}>
+                <option value="">&mdash; Not linked &mdash;</option>
+                {apptOptions.map((a: any) => (
+                  <option key={a.id} value={a.id}>
+                    {new Date(a.appointmentDate).toLocaleDateString()} {a.appointmentTime || ''} · {a.status}
+                  </option>
+                ))}
+              </select>
+            )}
+            <div className="flex justifyate-end gap-2 justify-end">
+              <button onClick={() => setApptLink(null)} className="px-4 py-2 rounded-lg border text-gray-600">Cancel</button>
+              <button onClick={saveApptLink} disabled={apptSaving}
+                className="px-4 py-2 rounded-lg text-white font-medium disabled:opacity-60" style={{ background: 'var(--accent)' }}>
+                {apptSaving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {outcome && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
              role="dialog" aria-modal="true" aria-label={outcome.mode === 'decline' ? 'Decline referral' : 'Complete referral'}>

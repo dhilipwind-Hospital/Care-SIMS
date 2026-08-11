@@ -9,7 +9,14 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 @ApiTags('Locations') @ApiBearerAuth('access-token') @UseGuards(JwtAuthGuard, RolesGuard) @Roles('SYS_ORG_ADMIN') @Controller('org/locations')
 export class LocationsController {
   constructor(private svc: LocationsService) {}
-  @Get() findAll(@CurrentUser('tenantId') tid: string) { return this.svc.findAll(tid); }
+  // Reading the org's own site list is reference data that clinical and front
+  // desk screens need (appointment location filter, cross-location referral).
+  // It was admin-only, so those screens silently 403'd for everyone else.
+  // Mirrors the same override already used for the pharmacy drug catalog.
+  @Get()
+  @Roles('SYS_ORG_ADMIN', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_RECEPTIONIST', 'SYS_NURSE',
+         'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE', 'SYS_BILLING', 'SYS_LAB_TECH', 'SYS_PHARMACIST')
+  findAll(@CurrentUser('tenantId') tid: string) { return this.svc.findAll(tid); }
   @Post() create(@CurrentUser('tenantId') tid: string, @Body() body: any) { return this.svc.create(tid, body); }
   @Get(':id') findOne(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.findOne(tid, id); }
   @Put(':id') update(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: any) { return this.svc.update(tid, id, body); }

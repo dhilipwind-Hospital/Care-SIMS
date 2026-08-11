@@ -32,6 +32,19 @@ export class ReferralService {
         })
       : [];
     const map = new Map<string, any>(patients.map(p => [p.id, p] as [string, any]));
+
+    // Same batched treatment for the two other bare ids a referral can carry:
+    // the target site of a cross-location referral, and the appointment it
+    // produced. Both are plain Strings with no @relation.
+    const locIds = [...new Set(rows.map(r => r.referredToLocationId).filter(Boolean))] as string[];
+    const apptIds = [...new Set(rows.map(r => r.appointmentId).filter(Boolean))] as string[];
+    const [locations, appointments] = await Promise.all([
+      locIds.length ? this.prisma.tenantLocation.findMany({ where: { id: { in: locIds }, tenantId } }) : Promise.resolve([]),
+      apptIds.length ? this.prisma.appointment.findMany({ where: { id: { in: apptIds }, tenantId } }) : Promise.resolve([]),
+    ]);
+    const locMap = new Map<string, any>(locations.map(l => [l.id, l] as [string, any]));
+    const apptMap = new Map<string, any>(appointments.map(a => [a.id, a] as [string, any]));
+
     return rows.map(r => {
       const p = r.patientId ? map.get(r.patientId) : null;
       const age = p?.ageYears ?? (p?.dateOfBirth
@@ -43,6 +56,8 @@ export class ReferralService {
         patientName: p ? `${p.firstName} ${p.lastName}`.trim() : null,
         patientMrn: p?.patientId || null,
         patientAge: age,
+        referredToLocationName: r.referredToLocationId ? (locMap.get(r.referredToLocationId)?.name || null) : null,
+        appointment: r.appointmentId ? (apptMap.get(r.appointmentId) || null) : null,
       };
     });
   }
@@ -53,15 +68,40 @@ export class ReferralService {
       prefix: 'REF-',
       tenantId,
       callback: async (tx, referralNumber) => {
-        return tx.referral.create({ data: { tenantId, referralNumber, locationId: dto.locationId, patientId: dto.patientId, referringDoctorId: dto.referringDoctorId || '', referringDoctorName: dto.referringDoctorName || '', referredToDoctorId: dto.referredToDoctorId, referredToDoctorName: dto.referredToDoctorName, referredToDeptId: dto.referredToDeptId, referredToDeptName: dto.referredToDeptName, referralType: dto.referralType||'INTERNAL', urgency: dto.urgency||'ROUTINE', reason: dto.reason, clinicalSummary: dto.clinicalSummary, diagnosis: dto.diagnosis, status: 'PENDING' } });
+        return tx.referral.create({ data: { tenantId, referralNumber, locationId: dto.locationId, patientId: dto.patientId, referringDoctorId: dto.referringDoctorId || '', referringDoctorName: dto.referringDoctorName || '', referredToDoctorId: dto.referredToDoctorId, referredToDoctorName: dto.referredToDoctorName, referredToDeptId: dto.referredToDeptId, referredToDeptName: dto.referredToDeptName, referredToLocationId: dto.referredToLocationId || null, referralType: dto.referralType||'INTERNAL', urgency: dto.urgency||'ROUTINE', reason: dto.reason, clinicalSummary: dto.clinicalSummary, diagnosis: dto.diagnosis, status: 'PENDING' } });
       },
     });
   }
-  async update(tenantId: string, id: string, dto: any) { const r = await this.prisma.referral.findFirst({ where: { id, tenantId } }); if (!r) throw new NotFoundException('Referral not found'); if (r.status !== 'PENDING') throw new BadRequestException('Only PENDING referrals can be edited'); return this.prisma.referral.update({ where: { id, tenantId }, data: { referredToDoctorId: dto.referredToDoctorId, referredToDoctorName: dto.referredToDoctorName, referredToDeptId: dto.referredToDeptId, referredToDeptName: dto.referredToDeptName, urgency: dto.urgency, reason: dto.reason, clinicalSummary: dto.clinicalSummary, diagnosis: dto.diagnosis } }); }
+  async update(tenantId: string, id: string, dto: any) { const r = await this.prisma.referral.findFirst({ where: { id, tenantId } }); if (!r) throw new NotFoundException('Referral not found'); if (r.status !== 'PENDING') throw new BadRequestException('Only PENDING referrals can be edited'); return this.prisma.referral.update({ where: { id, tenantId }, data: { referredToDoctorId: dto.referredToDoctorId, referredToDoctorName: dto.referredToDoctorName, referredToDeptId: dto.referredToDeptId, referredToDeptName: dto.referredToDeptName, referredToLocationId: dto.referredToLocationId ?? undefined, referralType: dto.referralType ?? undefined, urgency: dto.urgency, reason: dto.reason, clinicalSummary: dto.clinicalSummary, diagnosis: dto.diagnosis } }); }
   async myReferrals(tenantId: string, doctorId: string) {
     const rows = await this.prisma.referral.findMany({ where: { tenantId, OR: [{ referringDoctorId: doctorId }, { referredToDoctorId: doctorId }] }, orderBy: { createdAt: 'desc' }, take: 500 });
     return this.withPatient(tenantId, rows);
   }
+  /**
+   * Links the appointment booked as a result of this referral. The column
+   * existed from the start but nothing ever wrote it, so a referral could
+   * never be tied to the visit it produced.
+   *
+   * Allowed while PENDING or ACCEPTED — a referral that has already been
+   * completed, declined or cancelled is closed. Passing null unlinks.
+   */
+  async linkAppointment(tenantId: string, id: string, appointmentId: string | null) {
+    const referral = await this.prisma.referral.findFirst({ where: { id, tenantId } });
+    if (!referral) throw new NotFoundException('Referral not found');
+    if (!['PENDING', 'ACCEPTED'].includes(referral.status)) {
+      throw new BadRequestException('Only pending or accepted referrals can be linked to an appointment');
+    }
+    if (appointmentId) {
+      const appt = await this.prisma.appointment.findFirst({ where: { id: appointmentId, tenantId } });
+      if (!appt) throw new NotFoundException('Appointment not found');
+      // Guard against attaching another patient's appointment to this referral.
+      if (appt.patientId !== referral.patientId) {
+        throw new BadRequestException('That appointment belongs to a different patient');
+      }
+    }
+    return this.prisma.referral.update({ where: { id, tenantId }, data: { appointmentId: appointmentId || null } });
+  }
+
   async getOne(tenantId: string, id: string) {
     const r = await this.prisma.referral.findFirst({ where: { id, tenantId } });
     if (!r) throw new NotFoundException('Referral not found');
