@@ -48,7 +48,11 @@ test('MAR schedules a dose from a real prescription', async ({ page }) => {
   if (appeared) {
     console.log('admission:', (await opt.innerText()).split('\n')[0]);
     await opt.click();
-    await page.waitForTimeout(4000);
+    // Wait for the picker to SETTLE — reading it mid-fetch just catches
+    // "Loading prescriptions…" and proves nothing.
+    const rxSelect = page.locator('select').filter({ hasText: /prescription|admission first|Loading/i }).first();
+    await expect(rxSelect).not.toContainText(/Loading prescriptions/i, { timeout: 25000 });
+    await page.waitForTimeout(500);
     await page.screenshot({ path: 'shots/mar-03-rx-loaded.png', fullPage: true });
     for (let i = 0; i < await selects.count(); i++) {
       const opts = await selects.nth(i).locator('option').allInnerTexts();
