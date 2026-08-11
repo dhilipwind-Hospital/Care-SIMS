@@ -74,8 +74,15 @@ export default function MARPage() {
         })),
       );
       setRxItems(items);
-    } catch { /* the nurse can still type the drug by hand */ }
-    finally { setRxLoading(false); }
+    } catch (err: any) {
+      // Never fail silently here: a swallowed 403 looked identical to "this
+      // patient has no prescriptions", which is a dangerous thing to imply on
+      // a medication screen.
+      const code = err?.response?.status;
+      toast.error(code === 403
+        ? 'Not permitted to read this patient\'s prescriptions'
+        : 'Could not load prescriptions — type the drug manually');
+    } finally { setRxLoading(false); }
   };
 
   const applyRxItem = (itemId: string) => {

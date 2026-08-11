@@ -17,9 +17,19 @@ import { CreatePrescriptionDto } from './dto/create-prescription.dto';
 @Controller('prescriptions')
 export class PrescriptionsController {
   constructor(private svc: PrescriptionsService) {}
-  @Get() findAll(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.findAll(tid, q); }
+  // Ward nurses administer these drugs, so they must be able to READ what was
+  // prescribed — without this the MAR cannot offer a patient's prescribed
+  // items and the nurse re-types the drug from memory. Read-only: writing,
+  // cancelling and sending to pharmacy stay with doctors and pharmacy.
+  @Get()
+  @Roles('SYS_ORG_ADMIN', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_HOD', 'SYS_PHARMACIST',
+         'SYS_PHARMACY_INCHARGE', 'SYS_NURSE', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE')
+  findAll(@CurrentUser('tenantId') tid: string, @Query() q: any) { return this.svc.findAll(tid, q); }
   @Post() create(@CurrentUser('tenantId') tid: string, @CurrentUser('locationId') lid: string, @Body() body: CreatePrescriptionDto) { return this.svc.create(tid, { ...body, locationId: (body as any).locationId || lid }); }
-  @Get(':id') findOne(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.findOne(tid, id); }
+  @Get(':id')
+  @Roles('SYS_ORG_ADMIN', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_HOD', 'SYS_PHARMACIST',
+         'SYS_PHARMACY_INCHARGE', 'SYS_NURSE', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE')
+  findOne(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.findOne(tid, id); }
   @Patch(':id/send-to-pharmacy') send(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.sendToPharmacy(tid, id); }
   @Post(':id/send-pharmacy') sendAlias(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.sendToPharmacy(tid, id); }
   @Patch(':id/status') updateStatus(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body('status') status: string) { return this.svc.updatePrescriptionStatus(tid, id, status); }
