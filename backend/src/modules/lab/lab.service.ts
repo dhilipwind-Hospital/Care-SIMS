@@ -81,7 +81,9 @@ export class LabService {
   async getOrders(tenantId: string, query: any) {
     const { patientId, locationId, status, priority, date, page = 1, limit = 20 } = query;
     const skip = (Number(page) - 1) * Number(limit);
-    const where: any = { tenantId };
+    // Orders belonging to a removed patient stay in the database for audit but
+    // must not sit on the laboratory's active worklist.
+    const where: any = { tenantId, patient: { is: { isDeleted: false } } };
     if (patientId) where.patientId = patientId;
     if (locationId) where.locationId = locationId;
     if (status) where.status = status;

@@ -28,7 +28,9 @@ export class QueueService {
 
   async getTodayQueue(tenantId: string, locationId: string, doctorId?: string, date?: string) {
     const queueDate = startOfDayUtc(date);
-    const where: any = { tenantId, locationId, queueDate };
+    // A patient removed via soft delete must drop off the live board; without
+    // this their cancelled tokens keep appearing in today's queue.
+    const where: any = { tenantId, locationId, queueDate, patient: { is: { isDeleted: false } } };
     if (doctorId) where.doctorId = doctorId;
     const tokens = await this.prisma.queueToken.findMany({
       where,
