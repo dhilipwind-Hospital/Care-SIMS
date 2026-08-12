@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Care-SIMS — End-to-End Demo Flow</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm 14mm; }
+  :root{
+    --ink:#12211F; --muted:#5D6E6B; --line:#D6E0DD; --accent:#0F766E;
+    --soft:#EEF5F3; --warn:#8A5A12; --warnbg:#FDF6EA;
+    --ui:"Helvetica Neue",Arial,sans-serif;
+    --mono:"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--ui);color:var(--ink);font-size:9.6pt;line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  h1{font-size:20pt;margin:0 0 2mm;letter-spacing:-.4pt;font-weight:700}
+  .sub{margin:0;color:var(--muted);font-size:9.5pt}
+  .meta{margin-top:2.5mm;font-family:var(--mono);font-size:7.8pt;color:var(--muted)}
+  .meta b{color:var(--ink)}
+  header{border-bottom:2pt solid var(--accent);padding-bottom:3mm;margin-bottom:5mm}
+  h2{font-size:11.5pt;margin:0 0 2.5mm;color:var(--accent);letter-spacing:-.2pt;
+     border-bottom:.5pt solid var(--line);padding-bottom:1.2mm}
+  section{margin-bottom:5mm}
+  table{width:100%;border-collapse:collapse;font-size:8.6pt}
+  th{text-align:left;font-family:var(--mono);font-size:7pt;letter-spacing:.4pt;text-transform:uppercase;
+     color:var(--muted);border-bottom:.6pt solid var(--line);padding:1.6mm 1.8mm}
+  td{padding:1.5mm 1.8mm;border-bottom:.4pt solid var(--line);vertical-align:top}
+  tr{page-break-inside:avoid}
+  .mono{font-family:var(--mono);font-size:8.1pt}
+  .station{border:.5pt solid var(--line);border-radius:2mm;padding:2.6mm 3mm;margin-bottom:2.6mm;page-break-inside:avoid}
+  .sh{display:flex;align-items:baseline;gap:2.5mm;margin-bottom:1.5mm}
+  .num{font-family:var(--mono);font-weight:700;color:var(--accent);font-size:9.5pt}
+  .title{font-weight:700;font-size:9.8pt}
+  .who{margin-left:auto;font-family:var(--mono);font-size:7.6pt;color:var(--muted);
+       background:var(--soft);padding:.5mm 1.6mm;border-radius:6pt}
+  ol,ul{margin:0;padding-left:4.5mm}
+  li{margin-bottom:.8mm}
+  .note{margin:1.5mm 0 0;padding-left:2.2mm;border-left:1.2pt solid var(--accent);color:var(--muted);font-size:8.4pt}
+  .warn{background:var(--warnbg);border:.5pt solid #E4C48A;border-radius:2mm;padding:2.4mm 3mm;margin-bottom:3mm;page-break-inside:avoid}
+  .warn b{color:var(--warn)}
+  code{font-family:var(--mono);font-size:8.1pt;background:var(--soft);padding:.2mm 1mm;border-radius:1mm}
+  .pb{page-break-before:always}
+  footer{margin-top:4mm;border-top:.5pt solid var(--line);padding-top:2mm;
+         font-family:var(--mono);font-size:7.4pt;color:var(--muted)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:3mm}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Care-SIMS — End-to-End Demo Flow</h1>
+  <p class="sub">Organization creation through to collecting payment. Every login and behaviour below was verified against the live system.</p>
+  <div class="meta"><b>App</b> care-sims.vercel.app &nbsp;·&nbsp; <b>Demo org</b> Sims Box &nbsp;·&nbsp; <b>Password for every account</b> Demo@1234</div>
+</header>
+
+<section>
+  <h2>Logins</h2>
+  <table>
+    <thead><tr><th style="width:20%">Role</th><th style="width:30%">Email</th><th>Does what</th></tr></thead>
+    <tbody>
+      <tr><td>Platform admin</td><td class="mono">in backend/.env</td><td>Creates the organization</td></tr>
+      <tr><td>Org admin</td><td class="mono">admin@simsbox.demo</td><td>Locations, departments, staff, features, audit</td></tr>
+      <tr><td>Reception</td><td class="mono">reception@simsbox.demo</td><td>Registers the patient and starts the queue</td></tr>
+      <tr><td>Nurse</td><td class="mono">nurse@simsbox.demo</td><td>Triage, vitals, medication administration</td></tr>
+      <tr><td>Doctor</td><td class="mono">doctor@simsbox.demo</td><td>Consults, prescribes, orders labs, refers</td></tr>
+      <tr><td>Lab technician</td><td class="mono">lab@simsbox.demo</td><td>Sample, results, validation</td></tr>
+      <tr><td>Pharmacist</td><td class="mono">pharmacy@simsbox.demo</td><td>Dispenses against the prescription</td></tr>
+      <tr><td>Billing</td><td class="mono">billing@simsbox.demo</td><td>Finalises the invoice, collects payment</td></tr>
+      <tr><td>Patient</td><td class="mono">patient@simsbox.demo</td><td>Own timeline, prescriptions and bills</td></tr>
+    </tbody>
+  </table>
+  <p class="note">Everyone signs in on the same <code>/login</code> page. It auto-detects staff, then platform, then doctor — so the doctor works there too even though she is a registry record rather than a staff account. The patient uses <code>/patient/login</code> and then picks the hospital.</p>
+</section>
+
+<section>
+  <h2>Part 1 · Create and configure the hospital</h2>
+
+  <div class="station">
+    <div class="sh"><span class="num">01</span><span class="title">Register the organization</span><span class="who">Platform admin</span></div>
+    <ol>
+      <li>Organizations → <b>Register Organization</b>. Four steps: Organization Details → Location &amp; Contact → Subscription &amp; Features → Review &amp; Register.</li>
+      <li><b>Next</b> stays disabled until a legal name is entered. Step 3 offers 52 feature toggles.</li>
+      <li>Registering provisions one org-admin user, one location and 36 enabled features.</li>
+    </ol>
+    <p class="note">The org admin is created last inside the same request. Wait until the org's user list is non-empty before resetting demo passwords, or the admin keeps a random temporary one.</p>
+  </div>
+
+  <div class="station">
+    <div class="sh"><span class="num">02</span><span class="title">Put a doctor on the registry</span><span class="who">Platform admin</span></div>
+    <ol>
+      <li><b>Register</b> the doctor, <b>Verify</b> them, <b>Affiliate</b> them to the organization and a location, then set a <b>schedule</b>.</li>
+      <li>The registry lists doctors with VERIFIED / PENDING status and filter tabs for All · Pending · Verified · Rejected · Suspended.</li>
+    </ol>
+    <p class="note">The registry is global across every organization. Entries are archived rather than deleted, because prescriptions, lab orders, referrals and OT bookings reference the doctor by id.</p>
+  </div>
+
+  <div class="station">
+    <div class="sh"><span class="num">03</span><span class="title">Locations, departments, staff</span><span class="who">admin@simsbox.demo</span></div>
+    <ol>
+      <li><b>Locations</b> — Sims Box runs two: Main Campus (where stock lives) and Branch Clinic.</li>
+      <li><b>Departments</b> — General Medicine, Pediatrics, Pharmacy, Laboratory, Emergency. A department needs only a name and code.</li>
+      <li><b>Users &amp; Staff → Add User</b> — name, email, role, primary location and departments. Departments are what scope a nurse's triage queue.</li>
+    </ol>
+  </div>
+</section>
+
+<section class="pb">
+  <h2>Part 2 · The patient journey</h2>
+
+  <div class="station">
+    <div class="sh"><span class="num">04</span><span class="title">Register the patient</span><span class="who">Reception</span></div>
+    <ol>
+      <li><b>Register Patient</b> → demographics, then visit details: chief complaint, preferred doctor, department.</li>
+      <li>Press <b>✓ Register Patient &amp; Generate Token</b>. This saves <em>and</em> queues in one action — the row shows <b>Awaiting triage</b> with a token number.</li>
+    </ol>
+    <p class="note">There is no separate send-to-triage step. The row's Triage button is greyed out with "Already in today's workflow".</p>
+  </div>
+
+  <div class="station">
+    <div class="sh"><span class="num">05</span><span class="title">Triage</span><span class="who">Nurse</span></div>
+    <ol>
+      <li><b>Triage</b> lists patients waiting, filtered to the nurse's own departments.</li>
+      <li>Pick an acuity: <b>Emergency · Critical · Urgent · Semi-Urgent · Routine</b>.</li>
+      <li>Record vitals — BP Systolic and Diastolic are separate fields, plus Heart Rate, Temp, SpO₂, Respiratory Rate, Weight, Height, Pain.</li>
+      <li><b>Complete Triage &amp; Assign Doctor</b>.</li>
+    </ol>
+    <p class="note">Acuity drives the queue: choosing Urgent flips the patient's queue token to URGENT so they sort ahead of earlier arrivals.</p>
+  </div>
+
+  <div class="station">
+    <div class="sh"><span class="num">06</span><span class="title">Consultation</span><span class="who">Doctor</span></div>
+    <ol>
+      <li><b>My Queue</b> → patient → tabs Overview · SOAP Notes · Orders · History.</li>
+      <li><b>Lab Order</b> on the Orders tab: priority, test name, category, urgency, clinical notes → <b>Place Lab Order</b>.</li>
+      <li><b>Refer</b> beside the patient's name opens the referral form with them already selected — Internal or External, department or free-text facility, destination site, diagnosis, urgency.</li>
+      <li><b>Write Prescription</b>: pick each drug <em>from the catalog</em> and set dosage, frequency, route, days and <b>Qty</b>, then <b>Send to Pharmacy</b>.</li>
+    </ol>
+    <p class="note">Picking from the catalog is what lets the pharmacy match stock and price the line. Qty is required — without it the pharmacy has nothing to count out.</p>
+  </div>
+
+  <div class="station">
+    <div class="sh"><span class="num">07</span><span class="title">Laboratory</span><span class="who">Lab technician</span></div>
+    <ol>
+      <li>The worklist names the ordering doctor on every row.</li>
+      <li class="mono">ORDERED → Mark Collected → SAMPLE COLLECTED → Start Processing → IN PROGRESS → Enter Results → RESULTED → ✓ Validate → VALIDATED</li>
+      <li><b>Enter Results</b> opens a row per test: Result (required), Unit, Reference Range, Flag, Remarks → <b>Submit Results</b>.</li>
+      <li>Once validated the row offers <b>Print Report</b>.</li>
+    </ol>
+  </div>
+
+  <div class="station">
+    <div class="sh"><span class="num">08</span><span class="title">Pharmacy — dispense</span><span class="who">Pharmacist</span></div>
+    <ol>
+      <li>The queue shows the prescription number, prescribing doctor and a live stock badge per drug.</li>
+      <li>Select the prescription, review medications and total, add Pharmacist Notes, then <b>Dispense Medications</b>.</li>
+    </ol>
+    <p class="note">The strongest thing to demo: stock is allocated first-expiry-first-out and really drops — dispensing 4 of a 200 batch leaves 196. Anything the pharmacy cannot account for comes back as a named shortfall rather than a false success. The pharmacist's note is appended to the doctor's, never overwriting it.</p>
+  </div>
+
+  <div class="station">
+    <div class="sh"><span class="num">09</span><span class="title">Ward medication record — optional</span><span class="who">Nurse</span></div>
+    <ol>
+      <li><b>Medication Admin → Schedule Medication</b>, search the admission, then pick from that patient's prescribed drugs.</li>
+      <li>Drug, dose, route and frequency fill themselves and the dose is linked to the prescription it came from.</li>
+    </ol>
+    <p class="note">Dispensing deliberately does not auto-create these rows — choosing an administration time is the nurse's call.</p>
+  </div>
+
+  <div class="station">
+    <div class="sh"><span class="num">10</span><span class="title">Billing</span><span class="who">Billing</span></div>
+    <ol>
+      <li>Consultation, lab and pharmacy charges have already rolled onto the patient's open visit invoice.</li>
+      <li>Search by invoice number or patient name, open the invoice, <b>Finalize</b>, then <b>Collect Payment</b>.</li>
+    </ol>
+    <p class="note">Worth demonstrating: type more than the balance. It is refused with the exact outstanding figure, on the server as well as in the browser. The tiles are true tenant-wide figures — Collected Today means today.</p>
+  </div>
+
+  <div class="station">
+    <div class="sh"><span class="num">11</span><span class="title">Patient portal</span><span class="who">Patient</span></div>
+    <ol>
+      <li>Sign in, <b>Choose Your Hospital</b> → Sims Box → Continue.</li>
+      <li><b>Timeline</b> shows the whole visit in order: appointment, triage, consultation, prescription, lab order, lab result, referral, invoice, payment, admission.</li>
+      <li>Prescriptions filter by Dispensed; Lab Reports, Billing and Vitals History alongside.</li>
+    </ol>
+    <p class="note">Declined and cancelled referrals are withheld here on purpose — the portal shows a patient their care, not internal churn.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Before you present</h2>
+  <div class="warn">
+    <b>Wake the backend first.</b> It sleeps when idle and a cold start can exceed the app's own 30-second timeout, which looks exactly like a failed login. Load any page once and wait before you begin.
+  </div>
+  <div class="two">
+    <ul>
+      <li><b>Skeletons, not empty tables.</b> Grey placeholder bars are the loading state — give lists a moment.</li>
+      <li><b>Search boxes are debounced.</b> Patient, drug, department and admission pickers fetch as you type; wait for the name before clicking.</li>
+    </ul>
+    <ul>
+      <li><b>Doctors order labs from the consultation</b>, not the Lab Orders menu — that opens the laboratory's own processing screen.</li>
+      <li><b>Stock lives at Main Campus</b> while the pharmacist's account sits at Branch Clinic. Stock figures are org-wide on purpose.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>Password for every account listed is Demo@1234 · Platform admin credentials live in backend/.env, not in this document.</footer>
+
+</body>
+</html>
