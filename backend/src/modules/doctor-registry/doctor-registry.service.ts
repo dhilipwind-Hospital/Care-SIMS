@@ -9,7 +9,10 @@ export class DoctorRegistryService {
   async getDoctors(query: any) {
     const { q, specialty, ayphenStatus, page = 1, limit = 20 } = query;
     const skip = (Number(page) - 1) * Number(limit);
-    const where: any = {};
+    // Archived doctors drop out of pickers and lists. Lookups by id elsewhere
+    // (prescriptions, lab orders, referrals, OT) deliberately do NOT filter on
+    // this, so historical records keep resolving to a name.
+    const where: any = { isArchived: false };
     if (specialty) where.specialties = { has: specialty };
     if (ayphenStatus) where.ayphenStatus = ayphenStatus;
     if (q) where.OR = [
@@ -60,6 +63,50 @@ export class DoctorRegistryService {
     });
     const { passwordHash: _pw, mfaSecret: _mfa, ...safe } = doc as any;
     return safe;
+  }
+
+  /**
+   * Archive a registry entry. Never a hard delete: the row is global across
+   * every organization and is referenced by prescriptions, lab orders,
+   * referrals and OT bookings through bare doctorId strings with no foreign
+   * key, so removing it would leave those records pointing at nothing.
+   *
+   * Refuses while the doctor is still actively affiliated anywhere — detach
+   * them from the organization first, otherwise a live clinic loses a doctor
+   * out from under it.
+   */
+  async archiveDoctor(id: string, adminId?: string) {
+    const doctor = await this.prisma.doctorRegistry.findUnique({ where: { id } });
+    if (!doctor) throw new NotFoundException('Doctor not found');
+    if ((doctor as any).isArchived) {
+      return { message: 'Doctor already archived', id, name: `${doctor.firstName} ${doctor.lastName}` };
+    }
+    const active = await this.prisma.doctorOrgAffiliation.findMany({
+      where: { doctorId: id, isActive: true },
+      include: { tenant: { select: { tradeName: true, legalName: true } } },
+    });
+    if (active.length) {
+      const orgs = active.map(a => a.tenant?.tradeName || a.tenant?.legalName || a.tenantId).join(', ');
+      throw new BadRequestException(
+        `Doctor is still actively affiliated with ${orgs}. Deactivate those affiliations before archiving.`,
+      );
+    }
+    await this.prisma.doctorRegistry.update({
+      where: { id },
+      data: { isArchived: true, archivedAt: new Date() } as any,
+    });
+    return { message: 'Doctor archived', id, name: `${doctor.firstName} ${doctor.lastName}`, archivedBy: adminId || null };
+  }
+
+  /** Undo an archive — the whole point of not hard-deleting. */
+  async restoreDoctor(id: string) {
+    const doctor = await this.prisma.doctorRegistry.findUnique({ where: { id } });
+    if (!doctor) throw new NotFoundException('Doctor not found');
+    await this.prisma.doctorRegistry.update({
+      where: { id },
+      data: { isArchived: false, archivedAt: null } as any,
+    });
+    return { message: 'Doctor restored', id, name: `${doctor.firstName} ${doctor.lastName}` };
   }
 
   async updateDoctor(id: string, dto: any) {

@@ -89,6 +89,9 @@ export class AuthService {
   async loginDoctor(email: string, password: string) {
     const doctor = await this.prisma.doctorRegistry.findUnique({ where: { email } });
     if (!doctor) throw new UnauthorizedException('Invalid credentials');
+    // Archived registry entries keep resolving for historical records but must
+    // not be able to sign in.
+    if ((doctor as any).isArchived) throw new UnauthorizedException('Invalid credentials');
     if (doctor.ayphenStatus !== 'VERIFIED') throw new UnauthorizedException(`Account status: ${doctor.ayphenStatus}`);
 
     const valid = await bcrypt.compare(password, doctor.passwordHash);

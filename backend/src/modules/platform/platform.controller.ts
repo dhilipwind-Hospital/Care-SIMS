@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { PlatformService } from './platform.service';
+import { DoctorRegistryService } from '../doctor-registry/doctor-registry.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PlatformGuard } from '../../common/guards/platform.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -10,7 +11,10 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 @UseGuards(JwtAuthGuard, PlatformGuard)
 @Controller('platform')
 export class PlatformController {
-  constructor(private platformService: PlatformService) {}
+  constructor(
+    private platformService: PlatformService,
+    private doctorRegistry: DoctorRegistryService,
+  ) {}
 
   @Get('organizations')
   listOrgs(@Query() query: any) { return this.platformService.listOrganizations(query); }
@@ -118,4 +122,16 @@ export class PlatformController {
 
   @Patch('doctors/:id/reject')
   rejectDoctor(@Param('id') id: string, @Body() body: { reason: string }, @CurrentUser('sub') adminId: string) { return this.platformService.rejectDoctor(id, body.reason, adminId); }
+
+  // Archive rather than delete: a registry entry is global across every
+  // organization and is referenced by prescriptions, lab orders, referrals and
+  // OT bookings through bare doctorId strings, so removing the row would leave
+  // all of those resolving to nothing.
+  @Delete('doctors/:id')
+  archiveDoctor(@Param('id') id: string, @CurrentUser('sub') adminId: string) {
+    return this.doctorRegistry.archiveDoctor(id, adminId);
+  }
+
+  @Patch('doctors/:id/restore')
+  restoreDoctor(@Param('id') id: string) { return this.doctorRegistry.restoreDoctor(id); }
 }

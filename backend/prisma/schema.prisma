@@ -177,6 +177,14 @@ model DoctorRegistry {
   bio                   String?
   linkedinUrl           String?   @map("linkedin_url")
   ayphenStatus          String    @default("PENDING") @map("ayphen_status")
+  // Archive flag. A registry entry is global across every organization and is
+  // referenced by prescriptions, lab orders, referrals and OT bookings through
+  // bare doctorId strings with no foreign key, so deleting a row would leave
+  // those records resolving to nothing (exactly the dangling id seen on the
+  // OT-generated prescription). Archiving hides the doctor from pickers and
+  // lists while every historical lookup by id keeps working.
+  isArchived            Boolean   @default(false) @map("is_archived")
+  archivedAt            DateTime? @map("archived_at")
   verifiedById          String?   @map("verified_by")
   verifiedAt            DateTime? @map("verified_at")
   rejectionReason       String?   @map("rejection_reason")
