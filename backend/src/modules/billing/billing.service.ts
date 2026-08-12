@@ -383,9 +383,21 @@ export class BillingService {
   }
 
   async getInvoices(tenantId: string, query: any) {
-    const { patientId, locationId, status, type, page = 1, limit = 20 } = query;
+    const { q, patientId, locationId, status, type, page = 1, limit = 20 } = query;
     const skip = (Number(page) - 1) * Number(limit);
     const where: any = { tenantId };
+    // The "Search invoice or patient" box has always sent `q`, but nothing read
+    // it — typing anything returned the unfiltered list, so the control looked
+    // functional and did nothing.
+    if (q && String(q).trim()) {
+      const term = String(q).trim();
+      where.OR = [
+        { invoiceNumber: { contains: term, mode: 'insensitive' } },
+        { patient: { is: { firstName: { contains: term, mode: 'insensitive' } } } },
+        { patient: { is: { lastName: { contains: term, mode: 'insensitive' } } } },
+        { patient: { is: { patientId: { contains: term, mode: 'insensitive' } } } },
+      ];
+    }
     if (patientId) where.patientId = patientId;
     if (locationId) where.locationId = locationId;
     if (status) where.status = status;
