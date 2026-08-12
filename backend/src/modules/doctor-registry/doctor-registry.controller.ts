@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Put, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { RegisterDoctorDto } from './dto/register-doctor.dto';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { DoctorRegistryService } from './doctor-registry.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -20,7 +21,7 @@ export class DoctorRegistryController {
 
   @Post('register')
   @Public()
-  register(@Body() body: any) { return this.svc.register(body); }
+  register(@Body() body: RegisterDoctorDto) { return this.svc.register(body); }
 
   @Get('affiliations/tenant')
   @Roles('SYS_ORG_ADMIN', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_RECEPTIONIST', 'SYS_FRONT_OFFICE', 'SYS_BILLING', 'SYS_BILLING_MANAGER', 'SYS_NURSE', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE')
