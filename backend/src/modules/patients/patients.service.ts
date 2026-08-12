@@ -447,6 +447,30 @@ export class PatientsService {
     return this.prisma.patient.update({ where: { id }, data });
   }
 
+  /**
+   * Patient.isDeleted has been filtered on every read since the schema was
+   * written, but nothing ever set it — so a duplicate or mistaken registration
+   * could never be removed from the list. Soft delete only: the row and all its
+   * clinical history stay intact (lab orders, invoices and access logs hold real
+   * foreign keys to it), it simply stops appearing in searches and worklists.
+   */
+  async softDelete(tenantId: string, id: string, actorId?: string, reason?: string) {
+    const patient = await this.prisma.patient.findFirst({ where: { id, tenantId } });
+    if (!patient) throw new NotFoundException('Patient not found');
+    if (patient.isDeleted) return { message: 'Patient already removed', patientId: patient.patientId };
+    await this.prisma.patient.update({
+      where: { id },
+      data: { isDeleted: true, deletedAt: new Date() },
+    });
+    // Pull any still-open queue token so the patient does not linger in today's
+    // worklists after being removed.
+    await this.prisma.queueToken.updateMany({
+      where: { tenantId, patientId: id, status: { in: ['WAITING', 'CALLED'] } },
+      data: { status: 'CANCELLED' },
+    }).catch(() => { /* queue tidy-up is best effort */ });
+    return { message: 'Patient removed', patientId: patient.patientId, reason: reason || null, removedBy: actorId || null };
+  }
+
   async getHistory(tenantId: string, id: string) {
     await this.findOne(tenantId, id);
     const [consultations, prescriptions, labOrders, vitals, admissions, invoices, referrals] = await Promise.all([

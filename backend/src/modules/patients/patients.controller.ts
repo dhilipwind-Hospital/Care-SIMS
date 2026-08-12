@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Res, } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Res, Delete } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
 import { PatientsService } from './patients.service';
@@ -76,6 +76,17 @@ export class PatientsController {
   @Get(':id')
   @Roles('SYS_ORG_ADMIN', 'SYS_RECEPTIONIST', 'SYS_FRONT_OFFICE', 'SYS_DOCTOR', 'SYS_SENIOR_DOCTOR', 'SYS_NURSE', 'SYS_WARD_NURSE', 'SYS_CHARGE_NURSE', 'SYS_PHARMACIST', 'SYS_PHARMACY_INCHARGE', 'SYS_BILLING', 'SYS_BILLING_MANAGER', 'SYS_LAB_TECHNICIAN', 'SYS_LAB_INCHARGE', 'SYS_RADIOLOGIST', 'SYS_OT_INCHARGE', 'SYS_OT_TECHNICIAN', 'SYS_BLOOD_BANK_INCHARGE', 'SYS_AMBULANCE_DRIVER', 'SYS_AMBULANCE_INCHARGE')
   findOne(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @CurrentUser() actor: any) { return this.svc.findOne(tid, id, actor); }
+  // Soft delete — admin only. The record is preserved; it just leaves the
+  // active lists. The global audit interceptor records who did it.
+  @Delete(':id')
+  @Roles('SYS_ORG_ADMIN')
+  remove(
+    @CurrentUser('tenantId') tid: string,
+    @Param('id') id: string,
+    @CurrentUser('sub') uid: string,
+    @Body('reason') reason?: string,
+  ) { return this.svc.softDelete(tid, id, uid, reason); }
+
   @Put(':id') update(@CurrentUser('tenantId') tid: string, @Param('id') id: string, @Body() body: UpdatePatientDto) { return this.svc.update(tid, id, body); }
   @Get(':id/history') history(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getHistory(tid, id); }
   @Get(':id/access-log') accessLog(@CurrentUser('tenantId') tid: string, @Param('id') id: string) { return this.svc.getAccessLog(tid, id); }
