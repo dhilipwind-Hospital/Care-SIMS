@@ -15,6 +15,12 @@ const PAGE_SIZE = 20;
 
 // Kept in sync with LabResultsPage.FLAG_OPTIONS so cross-page reports
 // and audit exports share the same flag vocabulary.
+// Must stay in step with backend/src/common/constants/lab-flags.ts — the two
+// halves of the critical-result response previously tested different subsets,
+// so one of them always stayed silent.
+const CRITICAL_FLAGS = ['CRITICAL', 'CRITICAL_HIGH', 'CRITICAL_LOW', 'PANIC', 'HH', 'LL'];
+const isCriticalFlag = (f?: string | null) => !!f && CRITICAL_FLAGS.includes(String(f).toUpperCase());
+
 const FLAG_OPTIONS = [
   { value: 'NORMAL', label: 'Normal' },
   { value: 'H', label: 'High' },
@@ -278,7 +284,7 @@ export default function LabPage() {
             || r.referenceRange
             || '—';
           return `
-          <tr class="${['HH','LL','CRITICAL'].includes(flag) ? 'critical-row' : ''}">
+          <tr class="${isCriticalFlag(flag) ? 'critical-row' : ''}">
             <td>${r.testName || r.name || '—'}</td>
             <td style="${flagColor[flag] || flagColor.NORMAL}"><strong>${r.resultValue || r.value || '—'}</strong></td>
             <td>${r.resultUnit || r.unit || '—'}</td>
@@ -295,7 +301,7 @@ export default function LabPage() {
       <strong>Lab Notes:</strong> ${order.notes || order.labNotes}
     </div>` : ''}
 
-    ${results.some((r: any) => ['HH','LL','CRITICAL'].includes(r.flag || r.abnormalFlag)) ? `
+    ${results.some((r: any) => isCriticalFlag(r.flag || r.abnormalFlag)) ? `
     <div style="background:#fff1f2;border:1px solid #fecaca;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#dc2626;font-weight:600">
       ⚠ CRITICAL VALUES PRESENT — Physician has been notified
     </div>` : ''}

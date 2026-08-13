@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { isCriticalFlag } from '../../common/constants/lab-flags';
 import { PrismaService } from '../../database/prisma.service';
 import { generateSequentialId } from '../../common/utils/id-generator';
 import { sendEmail } from '../../common/utils/mailer';
@@ -135,7 +136,7 @@ export class LabService {
 
   async enterResult(tenantId: string, orderId: string, dto: any, techId: string) {
     const order = await this.getOrder(tenantId, orderId);
-    const hasCritical = dto.items?.some((i: any) => i.flag === 'CRITICAL' || i.flag === 'CRITICAL_HIGH' || i.flag === 'CRITICAL_LOW' || i.flag === 'PANIC');
+    const hasCritical = dto.items?.some((i: any) => isCriticalFlag(i.flag));
     const result = await this.prisma.labResult.create({
       data: { tenantId, labOrderId: orderId, locationId: dto.locationId, notes: dto.notes, isCritical: hasCritical || false, status: 'PENDING_VALIDATION', items: { create: dto.items.map((i: any, idx: number) => ({ testName: i.testName, resultValue: i.resultValue, resultUnit: i.resultUnit, refRangeLow: i.refRangeLow, refRangeHigh: i.refRangeHigh, refRangeText: i.refRangeText, flag: i.flag, method: i.method, analyzer: i.analyzer, sortOrder: idx })) } },
       include: { items: true },
@@ -143,7 +144,7 @@ export class LabService {
 
     // Non-blocking: if any result is critical, email the ordering doctor
     if (hasCritical) {
-      const criticalItems = dto.items.filter((i: any) => ['CRITICAL', 'CRITICAL_HIGH', 'CRITICAL_LOW', 'PANIC'].includes(i.flag));
+      const criticalItems = dto.items.filter((i: any) => isCriticalFlag(i.flag));
       const patientName = order.patient ? `${(order.patient as any).firstName} ${(order.patient as any).lastName}` : 'Unknown Patient';
       Promise.all([
         this.prisma.labOrder.findFirst({ where: { id: orderId }, select: { doctorId: true } }),
